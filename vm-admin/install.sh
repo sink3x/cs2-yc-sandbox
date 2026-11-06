@@ -42,7 +42,8 @@ chgrp cs2admin /etc/cs2-admin/secrets.env && chmod 0640 /etc/cs2-admin/secrets.e
 
 # ---- initial panel users (never overwrite: passwords changed in the panel must survive reboots) -----
 if [ -s "$STAMP/panel-users" ]; then
-  while IFS=: read -r name pw; do
+  # "|| [ -n ... ]": the list has no trailing newline, and plain `read` would silently drop the last user.
+  while IFS=: read -r name pw || [ -n "${name:-}" ]; do
     [ -n "${name:-}" ] || continue
     if CS2ADMIN_VAR="$VARDIR" NAME="$name" node -e '
       const u = (() => { try { return require(process.env.CS2ADMIN_VAR + "/users.json").users; } catch { return {}; } })();

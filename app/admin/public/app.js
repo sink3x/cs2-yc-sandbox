@@ -20,7 +20,7 @@ async function api(method, path, body) {
     method, headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'cs2panel' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (r.status === 401 && path !== '/me') { showLogin(); throw new Error('Нужен вход'); }
+  if (r.status === 401 && path !== '/me') { showLogin(); throw new Error(path === '/login' ? 'Неверный логин или пароль' : 'Нужен вход'); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
