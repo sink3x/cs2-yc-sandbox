@@ -9,14 +9,57 @@ const { readBody, readJsonBody, send, matchRoute } = require('../lib/http');
 const { readJson, writeJsonAtomic, loadEnvFile, makeLogger, sleep } = require('../lib/util');
 const { PRESETS, MAPS, CATALOG } = require('../lib/presets');
 const { YandexCompute } = require('../lib/yc');
+const { CatalogCache } = require('../lib/catalog');
+const practice = require('../lib/practice');
 
 const log = makeLogger('admin');
 const ETC = process.env.CS2ADMIN_ETC || '/etc/cs2-admin';
 const VAR = process.env.CS2ADMIN_VAR || '/var/lib/cs2-admin';
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const NAME_OK = /^[a-z0-9_-]{1,32}$/;
+function validateUserPresets(input) {
+  const bad = (m) => Object.assign(new Error(m), { status: 400 });
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw bad('presets: объект');
+  const out = {};
+  const ids = Object.keys(input);
+  if (ids.length > 40) throw bad('presets: не больше 40');
+  for (const id of ids) {
+    const p = input[id];
+    if (!NAME_OK.test(id)) throw bad(`id пресета: a-z, 0-9, _ и - (до 32): ${id}`);
+    const cvars = {};
+    const entries = Object.entries((p && p.cvars) || {});
+    if (entries.length > 100) throw bad('cvars: не больше 100');
+    for (const [k, v] of entries) {
+      if (!practice.CVAR_NAME.test(k)) throw bad(`bad cvar: ${k}`);
+      if (!/^[A-Za-z0-9_.,:+\-/ ]{0,64}$/.test(String(v))) throw bad(`bad value for ${k}`);
+      cvars[k] = String(v);
+    }
+    const label = String((p && p.label) || id).slice(0, 40);
+    if (/[<>]/.test(label)) throw bad('label: без < >');
+    out[id] = { label, note: String((p && p.note) || '').slice(0, 120).replace(/[<>]/g, ''), gameType: Number(p && p.gameType) || 0, gameMode: Number(p && p.gameMode) || 0, cvars };
+  }
+  return out;
+}
+const IMG_HOSTS = /^https:\/\/(community\.akamai\.steamstatic\.com|cdn\.steamstatic\.com|raw\.githubusercontent\.com)\//;
+function validateCustomSkins(input) {
+  const bad = (m) => Object.assign(new Error(m), { status: 400 });
+  if (!Array.isArray(input) || input.length > 300) throw bad('skins: массив до 300');
+  return input.map((s) => {
+    const def = Number(s && s.def); const paint = Number(s && s.paint);
+    if (!Number.isInteger(def) || def < 1 || def > 99999) throw bad('def: 1–99999');
+    if (!Number.isInteger(paint) || paint < 1 || paint > 99999) throw bad('paint ID: 1–99999');
+    const name = String((s && s.name) || '').trim();
+    if (!name || name.length > 40 || /[<>]/.test(name)) throw bad('name: 1–40 символов, без < >');
+    const img = String((s && s.img) || '');
+    if (img && !IMG_HOSTS.test(img)) throw bad('img: только steamstatic или raw.githubusercontent.com (https)');
+    const weaponName = String((s && s.weaponName) || '').slice(0, 40).replace(/[<>]/g, '');
+    const kind = ['weapon', 'knife', 'glove'].includes(s && s.kind) ? s.kind : 'weapon';
+    return { def, paint, name, img, weaponName, kind, weaponId: String((s && s.weaponId) || '').replace(/[^a-z0-9_]/g, '').slice(0, 48) };
+  });
+}
 const DEFAULT_SETTINGS = { autoStopIdleMinutes: 30, startupGraceMinutes: 20 };
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/png', '.png': 'image/png', '.jpg': 'image/jpeg' };
 
 function createApp(deps = {}) {
   const config = deps.config || readJson(path.join(ETC, 'config.json'), {});
@@ -29,6 +72,9 @@ function createApp(deps = {}) {
   const sessions = deps.sessions || new Sessions({ now });
   const limiter = deps.limiter || new FailureLimiter({ now });
 
+  const userPresetsFile = deps.userPresetsFile || path.join(VAR, 'user-presets.json');
+  const customSkinsFile = deps.customSkinsFile || path.join(VAR, 'custom-skins.json');
+  const catalogCache = deps.catalogCache || new CatalogCache({ file: path.join(VAR, 'skin-catalog.json') });
   const loadUsers = () => (readJson(usersFile, { users: {} }).users) || {};
   const loadSettings = () => ({ ...DEFAULT_SETTINGS, ...readJson(settingsFile, {}) });
 
@@ -119,7 +165,26 @@ function createApp(deps = {}) {
   const routes = [
     ['GET', '/api/me', async ({ user }) => ({ user })],
     ['GET', '/api/overview', async () => overview()],
-    ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG })],
+    ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS })],
+    ['GET', '/api/user-presets', async () => ({ presets: readJson(userPresetsFile, {}) })],
+    ['PUT', '/api/user-presets', async ({ body, user, ip }) => { const v = validateUserPresets(body.presets); writeJsonAtomic(userPresetsFile, v); audit(user, ip, 'user-presets', Object.keys(v)); return { presets: v }; }],
+    ['GET', '/api/custom-skins', async () => ({ skins: readJson(customSkinsFile, []) })],
+    ['PUT', '/api/custom-skins', async ({ body, user, ip }) => { const v = validateCustomSkins(body.skins); writeJsonAtomic(customSkinsFile, v); audit(user, ip, 'custom-skins', v.length); return { skins: v }; }],
+    ['GET', '/api/skins/catalog', async () => ({ ...(await catalogCache.get()), custom: readJson(customSkinsFile, []) })],
+    ['GET', '/api/skins/players', async () => agent('GET', '/skins/players')],
+    ['GET', '/api/skins/loadout/:steamid', async ({ params }) => agent('GET', `/skins/loadout/${encodeURIComponent(params.steamid)}`)],
+    ['POST', '/api/skins/apply/:steamid', async ({ params, body, user, ip }) => { audit(user, ip, 'skins.apply', { steamid: params.steamid, ops: (body.ops || []).map((o) => o.op) }); return agent('POST', `/skins/apply/${encodeURIComponent(params.steamid)}`, { ops: body.ops }); }],
+    ['POST', '/api/skins/reload', async ({ user, ip }) => { audit(user, ip, 'skins.reload'); return agent('POST', '/skins/reload', {}); }],
+    ['POST', '/api/practice', async ({ body, user, ip }) => {
+      const commands = practice.buildCommands(String(body.action || ''), body);
+      audit(user, ip, 'practice', { action: body.action, n: commands.length });
+      return agent('POST', '/rcon-batch', { commands }, 30000);
+    }],
+    ['POST', '/api/practice/read', async () => {
+      const names = [...practice.READABLE];
+      const { outputs } = await agent('POST', '/rcon-batch', { commands: names }, 30000);
+      return { values: Object.fromEntries(names.map((n, i) => [n, practice.parseCvarOutput(n, outputs[i])]).filter(([, v]) => v !== null)) };
+    }],
     ['POST', '/api/vm/start', async ({ user, ip }) => startVm(user, ip)],
     ['POST', '/api/vm/stop', async ({ user, ip }) => stopVm(user, ip)],
     ['GET', '/api/state', async () => agent('GET', '/state')],
@@ -181,7 +246,7 @@ function createApp(deps = {}) {
 
   const SEC_HEADERS = {
     'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://raw.githubusercontent.com; frame-ancestors 'none'",
   };
 
   function clientIp(req) {
@@ -200,7 +265,7 @@ function createApp(deps = {}) {
         const name = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
         const f = staticFile(name);
         if (!f) return send(res, 404, 'not found', SEC_HEADERS);
-        return send(res, 200, f.body, { ...SEC_HEADERS, 'Content-Type': f.type });
+        return send(res, 200, f.body, { ...SEC_HEADERS, 'Content-Type': f.type, ...(/^image\//.test(f.type) ? { 'Cache-Control': 'public, max-age=86400' } : {}) });
       }
       if (url.pathname === '/api/login' && req.method === 'POST') {
         const body = await readJsonBody(req);

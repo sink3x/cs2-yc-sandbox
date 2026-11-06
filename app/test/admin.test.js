@@ -26,6 +26,7 @@ async function setup({ vmStatus = 'RUNNING', agentImpl } = {}) {
   const app = createApp({
     config: { instanceId: 'i1', agentUrl: 'http://x', publicPort: 0 }, secrets: { AGENT_TOKEN: 't' }, compute, agent,
     usersFile: path.join(dir, 'users.json'), settingsFile: path.join(dir, 'settings.json'), auditFile: path.join(dir, 'audit.log'),
+    userPresetsFile: path.join(dir, 'user-presets.json'), customSkinsFile: path.join(dir, 'custom-skins.json'), catalogCache: { get: async () => ({}) },
   });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${app.server.address().port}`;
@@ -121,9 +122,39 @@ test('settings validate input; audit log records actions; static files served wi
     const page = await fetch(`http://127.0.0.1:${t.app.server.address().port}/`);
     assert.equal(page.status, 200);
     assert.match(page.headers.get('content-security-policy'), /default-src 'self'/);
-    const js = await fetch(`http://127.0.0.1:${t.app.server.address().port}/app.js`);
+    const html = await page.text();
+    const scripts = [...html.matchAll(/<script src="(\/[^"]+)"/g)].map((m) => m[1]);
+    assert.ok(scripts.length >= 8);
+    for (const src of scripts) assert.equal((await fetch(`http://127.0.0.1:${t.app.server.address().port}${src}`)).status, 200, src);
+    const js = await fetch(`http://127.0.0.1:${t.app.server.address().port}/core.js`);
     assert.equal(js.status, 200);
     const trav = await fetch(`http://127.0.0.1:${t.app.server.address().port}/..%2f..%2fetc%2fpasswd`);
     assert.equal(trav.status, 404);
+  } finally { t.close(); }
+});
+
+test('skin, practice and preset routes validate and proxy to the agent', async () => {
+  const seen = [];
+  const t = await setup({ agentImpl: async (method, p, body) => { seen.push([method, p, body]); if (p === '/rcon-batch') return { outputs: body.commands.map(() => '"sv_cheats" = "1" ( def. "0" )') }; return { ok: true }; } });
+  try {
+    const cookie = await t.login();
+    assert.equal((await t.req('POST', '/api/practice', { action: 'bot-add', team: 'ct', count: 2 }, cookie)).status, 403, 'CSRF header required');
+    const r = await t.req('POST', '/api/practice', { action: 'bot-add', team: 'ct', count: 2 }, cookie, CSRF);
+    assert.equal(r.status, 200);
+    assert.deepEqual(seen.at(-1), ['POST', '/rcon-batch', { commands: ['bot_add_ct', 'bot_add_ct'] }]);
+    assert.equal((await t.req('POST', '/api/practice', { action: 'say', text: 'a; quit' }, cookie, CSRF)).status, 400);
+    const rd = await t.req('POST', '/api/practice/read', {}, cookie, CSRF);
+    assert.equal(rd.json.values.sv_cheats, '1');
+    await t.req('POST', '/api/skins/apply/76561198000000100', { ops: [{ op: 'reset' }] }, cookie, CSRF);
+    assert.deepEqual(seen.at(-1), ['POST', '/skins/apply/76561198000000100', { ops: [{ op: 'reset' }] }]);
+    const bad = await t.req('PUT', '/api/custom-skins', { skins: [{ def: 7, paint: 1, name: 'x', img: 'https://evil.example/a.png' }] }, cookie, CSRF);
+    assert.equal(bad.status, 400);
+    const ok = await t.req('PUT', '/api/custom-skins', { skins: [{ def: 7, paint: 9999, name: 'Мой', img: 'https://raw.githubusercontent.com/a/b.png', kind: 'weapon' }] }, cookie, CSRF);
+    assert.equal(ok.json.skins[0].paint, 9999);
+    assert.equal((await t.req('GET', '/api/custom-skins', undefined, cookie)).json.skins.length, 1);
+    const up = await t.req('PUT', '/api/user-presets', { presets: { 'my-1': { label: 'Мой', cvars: { sv_cheats: '1' } } } }, cookie, CSRF);
+    assert.equal(up.json.presets['my-1'].cvars.sv_cheats, '1');
+    assert.equal((await t.req('PUT', '/api/user-presets', { presets: { 'Bad Id': { cvars: {} } } }, cookie, CSRF)).status, 400);
+    assert.equal((await t.req('PUT', '/api/user-presets', { presets: { ok: { cvars: { 'x;y': '1' } } } }, cookie, CSRF)).status, 400);
   } finally { t.close(); }
 });

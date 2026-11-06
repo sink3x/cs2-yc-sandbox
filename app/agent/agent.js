@@ -13,6 +13,8 @@ const { readBody, readJsonBody, send, matchRoute } = require('../lib/http');
 const { readJson, writeJsonAtomic, safeEqual, makeLogger, sleep, randomToken } = require('../lib/util');
 const { applyState, patchWeaponPaints } = require('./apply');
 const backup = require('./backup');
+const skins = require('./skins').createSkinsService();
+const { parseOnlinePlayers, isSteamId } = require('./skins');
 
 const log = makeLogger('agent');
 const secrets = E.loadSecrets();
@@ -153,6 +155,24 @@ const routes = [
     if (!cmd || cmd.length > 500 || /[\r\n\0]/.test(cmd)) throw Object.assign(new Error('bad command'), { status: 400 });
     return { output: (await rconRun([cmd], 15000))[0] };
   }],
+  ['POST', '/rcon-batch', async ({ body }) => {
+    const cmds = Array.isArray(body.commands) ? body.commands.map(String) : [];
+    if (!cmds.length || cmds.length > 25 || cmds.some((c) => !c.trim() || c.length > 500 || /[\r\n\0]/.test(c))) throw Object.assign(new Error('bad commands'), { status: 400 });
+    return { outputs: await rconRun(cmds, 20000) };
+  }],
+  ['GET', '/skins/players', async () => {
+    const out = new Map();
+    try { for (const p of parseOnlinePlayers((await rconRun(['css_players'], 4000))[0])) out.set(p.steamid, { steamid: p.steamid, name: p.name, online: true }); } catch { /* server down */ }
+    let known = []; try { known = await skins.knownPlayers(); } catch { /* db down */ }
+    for (const id of known) out.set(id, { ...(out.get(id) || { steamid: id, name: null, online: false }), hasLoadout: true });
+    return { players: [...out.values()] };
+  }],
+  ['GET', '/skins/loadout/:steamid', async ({ params }) => skins.loadout(params.steamid)],
+  ['POST', '/skins/apply/:steamid', async ({ params, body }) => {
+    if (!isSteamId(params.steamid)) throw Object.assign(new Error('bad steamid'), { status: 400 });
+    return skins.apply(params.steamid, body.ops);
+  }],
+  ['POST', '/skins/reload', async () => ({ output: (await rconRun(['css_plugins reload WeaponPaints'], 10000))[0] })],
   ['POST', '/service/:action', async ({ params }) => systemctl(params.action)],
   ['POST', '/update', async () => {
     fs.writeFileSync(E.files.forceUpdate, new Date().toISOString());
