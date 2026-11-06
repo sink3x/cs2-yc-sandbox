@@ -11,8 +11,13 @@ write_files:
     permissions: "0644"
     encoding: b64
     content: ${unit_b64}
+# bootcmd runs on EVERY boot. Older images shipped a bootstrap unit ordered After=cloud-final.service, which forms an
+# ordering cycle with multi-user.target on reboot (systemd then silently drops the unit and everything ordered after it).
+# Strip that ordering and start the unit, so already-created VMs heal themselves.
+bootcmd:
+  - [sh, -c, "[ -f /etc/systemd/system/cs2-bootstrap.service ] && sed -i 's/ cloud-final.service/ cloud-config.service/' /etc/systemd/system/cs2-bootstrap.service && systemctl daemon-reload && systemctl start --no-block cs2-bootstrap.service || true"]
 runcmd:
   - [systemctl, daemon-reload]
   - [systemctl, enable, cs2-bootstrap.service]
-  # --no-block: the unit is ordered After=cloud-final.service, a blocking start from runcmd would deadlock
+  # --no-block: a blocking start from runcmd would wait for cloud-config/cloud-final and could deadlock
   - [systemctl, start, --no-block, cs2-bootstrap.service]

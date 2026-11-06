@@ -1,6 +1,6 @@
 [Unit]
 Description=Fetch application bundle and configuration from instance metadata
-After=network-online.target cloud-final.service
+After=network-online.target cloud-config.service
 Wants=network-online.target
 Before=cs2-admin.service caddy.service
 
