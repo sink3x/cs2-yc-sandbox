@@ -114,7 +114,7 @@ function skinsView(redraw) {
   gridUpdate();
 
   return h('div', {}, h('h2', {}, 'Скины, ножи, перчатки, агенты'),
-    h('div', { class: 'card' }, h('div', { class: 'row' }, 'Игрок:', sel, h('button', { class: 'btn', onclick: act(async () => { await loadPlayers(); await loadLoadout(); redraw(); }, 'Список обновлён') }, '↻')),
+    h('div', { class: 'card' }, h('div', { class: 'row' }, 'Игрок:', sel, h('button', { class: 'btn', onclick: act(async () => { await loadPlayers(); await loadLoadout(); redraw(); }, 'Список обновлён') }, '')),
       h('div', { class: 'row' }, manual, h('button', { class: 'btn', onclick: openManual }, 'Открыть по SteamID')),
       warn() ? h('div', { class: 'warn small' }, warn()) : h('div', { class: 'muted small' }, `${player && player.name ? player.name + ' · ' : ''}${K.steamid}. Скины попадают в базу сразу; в игре игрок пишет !wp (или перезаходит). Новые игроки появляются в списке после первого входа и выбора скина или через ввод SteamID.`)),
     h('div', { class: 'skin-layout' },
@@ -179,7 +179,7 @@ function previewPanel(redraw, L) {
     h('div', { style: 'margin-top:8px' }, h('b', {}, s.paint === 0 ? `${s.weapon.name} (ваниль)` : `${s.weapon.name} | ${s.name}`), h('div', { class: 'small', style: `color:${s.rar.c}` }, s.rar.n)),
     s.paint === 0 ? h('div', { class: 'hint' }, 'Ваниль — нож без скина.') : h('div', {},
       h('div', { class: 'row' }, 'Износ', wearIn, wearNum), h('div', { class: 'chips' }, WEAR_PRESETS.map(([t, w]) => h('span', { class: 'chip', onclick: () => { const v = Math.min(Math.max(w, s.min), s.max); wearIn.value = v; wearNum.value = v.toFixed(3); upd(); } }, t))),
-      h('div', { class: 'row' }, 'Паттерн', seedIn, h('button', { class: 'btn', title: 'Случайный', onclick: () => { seedIn.value = Math.floor(Math.random() * 1001); upd(); } }, '🎲')),
+      h('div', { class: 'row' }, 'Паттерн', seedIn, h('button', { class: 'btn', title: 'Случайный', onclick: () => { seedIn.value = Math.floor(Math.random() * 1001); upd(); } }, 'Случайный')),
       kind === 'weapon' ? h('div', {}, h('div', { class: 'row' }, tagIn), s.st ? h('div', { class: 'row' }, h('label', { class: 'switch' }, stIn, 'StatTrak™'), cntIn, 'убийств') : null) : null),
     meta, h('div', { class: 'row' }, teamSel),
     h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: act(async () => { need(); await applyOps(ops(), 'Надето'); redraw(); }) }, kind === 'weapon' ? 'Надеть скин' : kind === 'knife' ? 'Надеть нож' : 'Надеть перчатки'),
@@ -193,14 +193,14 @@ function loadoutPanel(redraw, L) {
   const cells = [];
   for (const x of L.skins) { const n = nm(x.def, x.paint); cells.push(h('div', { class: 'li', title: `${n.t}\nfloat ${x.wear ?? '—'}, паттерн ${x.seed ?? '—'}${x.nametag ? `, «${x.nametag}»` : ''}`, onclick: () => { const s = findSkin(x.def, x.paint); if (s) { K.sel = { skin: s }; initEdit(); Object.assign(E, { wear: x.wear ?? 0.01, seed: x.seed ?? 0, nametag: x.nametag, stattrak: !!x.stattrak, count: x.stattrakCount }); K.tab = s.weapon.cat; K.weapon = s.weapon.def; redraw(); } } },
     skinImg(n.img, n.t), h('div', {}, `${x.team === 2 ? 'T' : x.team === 3 ? 'CT' : ''} ${n.t.split(' | ')[0]}`))); }
-  for (const k of L.knives) cells.push(h('div', { class: 'li', title: 'Нож: ' + k.knife }, '🔪', h('div', {}, `${k.team === 2 ? 'T' : 'CT'} ${k.knife.replace('weapon_knife_', '').replace('weapon_', '')}`)));
-  for (const g of L.gloves) { const w = K.weapons.find((x) => x.def === g.def); cells.push(h('div', { class: 'li', title: 'Перчатки' }, '🧤', h('div', {}, `${g.team === 2 ? 'T' : 'CT'} ${w ? w.name : g.def}`))); }
-  if (L.agents.ct) cells.push(h('div', { class: 'li' }, '🕵️', h('div', {}, 'Агент CT')));
-  if (L.agents.t) cells.push(h('div', { class: 'li' }, '🕵️', h('div', {}, 'Агент T')));
-  for (const m of L.music) { const mm = K.cat.music.find((x) => x.id === m.id); cells.push(h('div', { class: 'li', title: mm ? mm.name : '' }, '🎵', h('div', {}, mm ? mm.name.slice(0, 18) : `№${m.id}`))); }
+  for (const k of L.knives) cells.push(h('div', { class: 'li', title: 'Нож: ' + k.knife }, h('b', {}, 'Нож'), h('div', {}, `${k.team === 2 ? 'T' : 'CT'} ${k.knife.replace('weapon_knife_', '').replace('weapon_', '')}`)));
+  for (const g of L.gloves) { const w = K.weapons.find((x) => x.def === g.def); cells.push(h('div', { class: 'li', title: 'Перчатки' }, h('b', {}, 'Перчатки'), h('div', {}, `${g.team === 2 ? 'T' : 'CT'} ${w ? w.name : g.def}`))); }
+  if (L.agents.ct) cells.push(h('div', { class: 'li' }, h('b', {}, 'Агент'), h('div', {}, 'CT')));
+  if (L.agents.t) cells.push(h('div', { class: 'li' }, h('b', {}, 'Агент'), h('div', {}, 'T')));
+  for (const m of L.music) { const mm = K.cat.music.find((x) => x.id === m.id); cells.push(h('div', { class: 'li', title: mm ? mm.name : '' }, h('b', {}, 'Музыка'), h('div', {}, mm ? mm.name.slice(0, 18) : `№${m.id}`))); }
   return h('div', { class: 'card' }, h('h3', {}, 'Сейчас надето'), cells.length ? h('div', { class: 'load' }, cells) : h('div', { class: 'muted small' }, 'Пока ничего — у игрока стандартные предметы.'),
     h('div', { class: 'row' },
-      h('button', { class: 'btn', onclick: act(async () => { const r = await api('POST', '/skins/reload'); toast('Плагин скинов перезагружен' + (r.output ? '' : ''), 's'); }) }, '↻ Перезагрузить плагин'),
+      h('button', { class: 'btn', onclick: act(async () => { const r = await api('POST', '/skins/reload'); toast('Плагин скинов перезагружен' + (r.output ? '' : ''), 's'); }) }, 'Перезагрузить плагин'),
       h('button', { class: 'btn danger', onclick: act(async () => { if (!confirm('Снять ВСЕ скины, нож, перчатки, агентов и музыку у этого игрока?')) return; await applyOps([{ op: 'reset' }], 'Всё сброшено'); redraw(); }) }, 'Сбросить всё')));
 }
 
@@ -221,5 +221,5 @@ function customSkinForm(redraw) {
       if (!paint.value || !name.value.trim()) throw new Error('Укажите Paint ID и название');
       await save(list.concat([{ def: w.def, paint: Number(paint.value), name: name.value.trim(), img: img.value.trim(), weaponName: w.name, weaponId: w.id, kind: w.kind }]))();
     }) }, '＋ Добавить скин')),
-    list.length ? h('div', { class: 'chips' }, list.map((s, i) => h('span', { class: 'chip', title: 'Удалить', onclick: save(list.filter((_x, j) => j !== i)) }, `${s.weaponName || s.def} | ${s.name} (#${s.paint}) ✕`))) : null);
+    list.length ? h('div', { class: 'chips' }, list.map((s, i) => h('span', { class: 'chip', title: 'Удалить', onclick: save(list.filter((_x, j) => j !== i)) }, `${s.weaponName || s.def} | ${s.name} (#${s.paint}) `))) : null);
 }

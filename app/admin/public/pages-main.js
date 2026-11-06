@@ -38,7 +38,7 @@ function pageOverview() {
                 h('dt', {}, 'Нагрузка'), h('dd', {}, `${srv.load.join(' / ')} · своб. RAM ${srv.memory.freeMb} МБ`),
                 h('dt', {}, 'Диск данных'), h('dd', {}, srv.disk ? `свободно ${srv.disk.freeGb} из ${srv.disk.totalGb} ГБ` : '—')),
               h('div', { class: 'row' },
-                h('button', { class: 'btn', onclick: act(() => api('POST', '/service/restart'), 'CS2 перезапускается') }, '↻ Перезапустить CS2'),
+                h('button', { class: 'btn', onclick: act(() => api('POST', '/service/restart'), 'CS2 перезапускается') }, 'Перезапустить CS2'),
                 h('button', { class: 'btn', onclick: act(() => api('POST', '/service/stop'), 'CS2 остановлен') }, 'Стоп'),
                 h('button', { class: 'btn', onclick: act(() => api('POST', '/service/start'), 'CS2 запускается') }, 'Старт')),
               live ? h('div', { class: 'row' }, mapSel, h('button', { class: 'btn', onclick: act(() => api('POST', '/map', { map: mapSel.value }), 'Смена карты') }, 'Сменить карту')) : null))));
@@ -55,7 +55,7 @@ function pagePlugins() {
     const cb = h('input', { type: 'checkbox', checked: st.plugins[p.id] }); boxes[p.id] = cb;
     const i = inst[p.id];
     return h('tr', {}, h('td', {}, h('label', { class: 'switch' }, cb, h('b', {}, p.title))),
-      h('td', { class: 'muted' }, p.desc, p.risky ? h('div', { class: 'warn small' }, '⚠ может привести к блокировке GSLT-токена (правила Valve для серверов)') : null),
+      h('td', { class: 'muted' }, p.desc, p.risky ? h('div', { class: 'warn small' }, 'может привести к блокировке GSLT-токена (правила Valve для серверов)') : null),
       h('td', { class: 'small' }, i ? i.tag : h('span', { class: 'muted' }, 'не установлен')));
   });
   const flags = {};
@@ -90,7 +90,7 @@ function pageAdmins() {
       const flagSel = h('div', { class: 'chips' }, S.adminFlags.map((f) => { const on = a.flags.includes(f); return h('span', { class: 'chip', style: on ? 'border-color:var(--accent);color:var(--accent)' : '', onclick: () => { a.flags = on ? a.flags.filter((x) => x !== f) : a.flags.concat([f]); draw(); } }, f.replace('@css/', '')); }));
       return h('tr', {}, h('td', {}, h('input', { type: 'text', value: a.name, style: 'width:140px', oninput: (e) => { a.name = e.target.value; } })),
         h('td', {}, h('input', { type: 'text', value: a.steamid, style: 'width:180px', oninput: (e) => { a.steamid = e.target.value.trim(); } })), h('td', {}, flagSel),
-        h('td', {}, h('button', { class: 'btn danger', onclick: () => { list.splice(idx, 1); draw(); } }, '✕')));
+        h('td', {}, h('button', { class: 'btn danger', onclick: () => { list.splice(idx, 1); draw(); } }, '')));
     });
     box.replaceChildren(h('table', {}, h('thead', {}, head), h('tbody', {}, rows)));
   };

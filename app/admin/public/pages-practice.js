@@ -53,14 +53,14 @@ function practiceView(redraw) {
 
   // ---- приколы
   const funs = S.catalog.fun.filter((f) => !f.secret || secretsOn());
-  const funCard = (f) => h('button', { class: 'btn preset', disabled: !live, onclick: act(async () => { await prSend('fun', { id: f.id }); toast(`${f.title}: включено (до смены карты или сброса)`, 's'); await prRead(); redraw(); }) }, h('b', {}, `${f.icon} ${f.title}${f.secret ? ' 🔒' : ''}`), h('span', { class: 'muted small' }, f.note + (f.cheats ? ' Включает sv_cheats.' : '')));
+  const funCard = (f) => h('button', { class: 'btn preset', disabled: !live, onclick: act(async () => { await prSend('fun', { id: f.id }); toast(`${f.title}: включено (до смены карты или сброса)`, 's'); await prRead(); redraw(); }) }, h('b', {}, `${f.title}${f.secret ? ' (секрет)' : ''}`), h('span', { class: 'muted small' }, f.note + (f.cheats ? ' Включает sv_cheats.' : '')));
 
   const sayIn = h('input', { type: 'text', placeholder: 'Сообщение всем игрокам в чат', style: 'width:340px', maxlength: 120 });
   return h('div', {}, h('h2', {}, 'Тренировка, боты и приколы'),
     !live ? h('div', { class: 'banner' }, 'Сервер CS2 не запущен: управление ботами и cvar заработает после старта. Режим тренировки можно включить и без него (он применится при запуске).') : null,
     h('div', { class: 'card' }, h('h3', {}, 'Режим'), h('div', { class: 'row' },
-      h('button', { class: 'btn primary', onclick: act(async () => { if (!confirm('Включить тренировочный режим? Текущие cvar будут заменены пресетом.')) return; await api('POST', '/preset', { preset: 'practice', restart: false }); if (live) await api('POST', '/apply-live'); S.state = null; toast('Тренировка включена. В игре: .prac, .bot, .nade…', 's'); await prRead(); redraw(); }) }, '🎯 Включить тренировку'),
-      h('button', { class: 'btn', onclick: act(async () => { if (!confirm('Вернуть соревновательный режим?')) return; await api('POST', '/preset', { preset: 'competitive', restart: false }); if (live) await api('POST', '/apply-live'); S.state = null; toast('Соревновательный режим', 's'); await prRead(); redraw(); }) }, '🏆 Соревновательный'),
+      h('button', { class: 'btn primary', onclick: act(async () => { if (!confirm('Включить тренировочный режим? Текущие cvar будут заменены пресетом.')) return; await api('POST', '/preset', { preset: 'practice', restart: false }); if (live) await api('POST', '/apply-live'); S.state = null; toast('Тренировка включена. В игре: .prac, .bot, .nade…', 's'); await prRead(); redraw(); }) }, 'Включить тренировку'),
+      h('button', { class: 'btn', onclick: act(async () => { if (!confirm('Вернуть соревновательный режим?')) return; await api('POST', '/preset', { preset: 'competitive', restart: false }); if (live) await api('POST', '/apply-live'); S.state = null; toast('Соревновательный режим', 's'); await prRead(); redraw(); }) }, 'Соревновательный'),
       up ? h('span', { class: 'muted small' }, `Сейчас: ${up.map}, людей ${up.humans}, ботов ${up.bots}`) : null),
       h('div', { class: 'hint' }, 'Тренировка включает бесконечные деньги и патроны, траектории гранат и респавн. Чат-команды .prac, .bot, .spawn, .nade — на странице «Справка».')),
     h('div', { class: 'grid' },
@@ -69,14 +69,14 @@ function practiceView(redraw) {
         h('div', { class: 'row' }, botBtn('Убрать всех', 'bot-kick', () => ({}), 'danger'), botBtn('Убрать CT', 'bot-kick', () => ({ team: 'ct' })), botBtn('Убрать T', 'bot-kick', () => ({ team: 't' })), botBtn('Убить всех', 'bot-kill', () => ({}))),
         h('div', { class: 'hint' }, 'Сложность, «замерли», «только ножи» — в блоке настроек ниже.')),
       h('div', { class: 'card' }, h('h3', {}, 'Раунд и чат'),
-        h('div', { class: 'row' }, botBtn('↻ Рестарт раунда', 'restart', () => ({ delay: 1 })), botBtn('Закончить разминку', 'warmup-end', () => ({}))),
+        h('div', { class: 'row' }, botBtn('Рестарт раунда', 'restart', () => ({ delay: 1 })), botBtn('Закончить разминку', 'warmup-end', () => ({}))),
         h('div', { class: 'row' }, sayIn, h('button', { class: 'btn', disabled: !live, onclick: act(async () => { await prSend('say', { text: sayIn.value }); sayIn.value = ''; }, 'Отправлено') }, 'Сказать в чат')))),
-    h('div', { class: 'card' }, h('h3', {}, '🧟 Зомби-осада (на ботах)'),
+    h('div', { class: 'card' }, h('h3', {}, 'Зомби-осада (на ботах)'),
       h('div', { class: 'muted small' }, 'Люди за CT, зомби — боты T с ножами, быстрый респавн. Это имитация на штатных cvar без плагина; настоящий зомби-мод (заражение, классы) требует отдельного плагина — пока не ставлю, чтобы не ломать совместимость.'),
       h('div', { class: 'row' }, 'Зомби:', zRange, zNum), h('div', { class: 'row' }, zSeg),
       h('div', { class: 'row' }, h('button', { class: 'btn primary', disabled: !live, onclick: zStart }, '▶ Начать осаду'), h('button', { class: 'btn', disabled: !live, onclick: zStop }, '■ Закончить'))),
     h('div', { class: 'card' }, h('h3', {}, 'Приколы'), h('div', { class: 'grid' }, funs.map(funCard)),
-      h('div', { class: 'row' }, h('button', { class: 'btn danger', disabled: !live, onclick: act(async () => { await prSend('fun', { id: 'reset' }); toast('Всё вернул к стандарту (для 100% сброса смените карту)', 's'); await prRead(); redraw(); }) }, '↺ Сбросить все приколы')),
+      h('div', { class: 'row' }, h('button', { class: 'btn danger', disabled: !live, onclick: act(async () => { await prSend('fun', { id: 'reset' }); toast('Всё вернул к стандарту (для 100% сброса смените карту)', 's'); await prRead(); redraw(); }) }, 'Сбросить все приколы')),
       h('div', { class: 'hint' }, 'Приколы действуют, пока вы не сбросите их или не смените карту; в постоянные настройки они не пишутся.' + (secretsOn() ? '' : ' Говорят, есть и секретные режимы…'))),
     Object.entries(byGroup).map(([g, list]) => h('div', { class: 'card' }, h('h3', {}, g),
       h('div', { class: 'cv', style: 'grid-template-columns:1fr auto' }, list.map((t) => [h('label', { style: 'font-family:inherit;font-size:14px' }, t.title, h('small', {}, `${t.cvar}${t.hint ? ' — ' + t.hint : ''}`)), control(t)]))))
@@ -84,7 +84,7 @@ function practiceView(redraw) {
 }
 
 // ---------------------------------------------------------------- оформление
-const THEME_SWATCH = { tahoe: ['linear-gradient(90deg,#0a84ff,#6a5cff)', '#04062a'], cs: ['#f5a524', '#0e1116'], ct: ['#58a6ff', '#0b1119'], t: ['#ff8a3d', '#130f0c'], neon: ['#ff3df2', '#0a0713'], matrix: ['#35ff7a', '#020a05'], ice: ['#6fd6ff', '#0a1218'], sunset: ['#ff7a59', '#140d14'], forest: ['#7bd88f', '#0b130e'], sakura: ['#ff8fb8', '#150d12'], light: ['#d9820b', '#f2f4f7'], oled: ['#f5a524', '#000000'], rainbow: ['linear-gradient(90deg,#f55,#fa5,#ff5,#5f5,#5af,#a5f)', '#0e1116'] };
+const THEME_SWATCH = { auto: 'linear-gradient(90deg,#0b0b0c 50%,#f5f5f6 50%)', dark: '#0b0b0c', light: '#f5f5f6' };
 
 function pageLook() {
   const root = h('div', {});
@@ -94,18 +94,14 @@ function pageLook() {
 }
 function lookView(redraw) {
   const eff = effectiveLook(); const season = SEASONS[seasonNow()];
-  const themes = Object.entries(THEMES).filter(([k]) => k !== 'rainbow' || secretsOn());
-  const accent = h('input', { type: 'color', value: look.accent || '#f5a524' });
-  accent.addEventListener('change', () => saveLook({ accent: accent.value }));
+  const themes = Object.entries(THEMES);
   const dens = h('input', { type: 'range', min: 0.3, max: 2, step: 0.1, value: look.density }); dens.addEventListener('change', () => saveLook({ density: Number(dens.value) }));
   return h('div', {}, h('h2', {}, 'Оформление'),
     h('div', { class: 'card' }, h('h3', {}, 'Сезон'),
-      h('label', { class: 'switch' }, h('input', { type: 'checkbox', checked: look.auto, onchange: (e) => { saveLook({ auto: e.target.checked }); redraw(); } }), `Подстраивать оформление под время года (сейчас: ${season.name} → тема «${THEMES[season.theme]}», погода «${WEATHERS[season.weather]}»)`),
+      h('label', { class: 'switch' }, h('input', { type: 'checkbox', checked: look.auto, onchange: (e) => { saveLook({ auto: e.target.checked }); redraw(); } }), `Погода по времени года (сейчас: ${season.name} → «${WEATHERS[season.weather]}»)`),
       h('div', { class: 'hint' }, 'Погода и сезон — это эффекты панели. Погоду внутри самой CS2 сервер изменить не может: она часть клиентской графики и карты.')),
-    h('div', { class: 'card' }, h('h3', {}, 'Цветовая тема'), h('div', { class: 'grid' }, themes.map(([k, t]) => h('button', { class: `btn preset ${eff.theme === k ? 'on' : ''}`, disabled: look.auto, onclick: () => { saveLook({ theme: k }); redraw(); } },
-      h('span', { style: `display:inline-block;width:100%;height:22px;border-radius:6px;background:${THEME_SWATCH[k][0]};border:4px solid ${THEME_SWATCH[k][1]}` }), h('b', { style: 'margin-top:6px' }, t)))),
-      look.auto ? h('div', { class: 'hint' }, 'Выключите «подстраивать под время года», чтобы выбрать тему вручную.') : null,
-      h('div', { class: 'row' }, 'Свой акцентный цвет:', accent, h('button', { class: 'btn', onclick: () => { saveLook({ accent: '' }); redraw(); } }, 'Сбросить'))),
+    h('div', { class: 'card' }, h('h3', {}, 'Тема'), h('div', { class: 'grid' }, themes.map(([k, t]) => h('button', { class: `btn preset ${look.theme === k ? 'on' : ''}`, onclick: () => { saveLook({ theme: k }); redraw(); } },
+      h('span', { class: 'swatch', style: `background:${THEME_SWATCH[k]}` }), h('b', { style: 'margin-top:6px' }, t))))),
     h('div', { class: 'card' }, h('h3', {}, 'Погода интерфейса'),
       h('div', { class: 'seg', style: 'flex-wrap:wrap' }, Object.entries(WEATHERS).map(([k, t]) => h('button', { class: eff.weather === k ? 'on' : '', disabled: look.auto, onclick: () => { saveLook({ weather: k }); redraw(); } }, t))),
       h('div', { class: 'row' }, 'Густота:', dens),

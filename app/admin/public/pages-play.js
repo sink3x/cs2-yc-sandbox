@@ -111,8 +111,8 @@ function pageMaps() {
   const drawPresets = () => {
     const card = (k, p, builtin) => h('div', { class: `btn preset ${st.server.preset === k ? 'on' : ''}`, style: 'cursor:default' },
       h('b', {}, p.label), h('span', { class: 'muted small' }, p.note || `game_type ${p.gameType} / game_mode ${p.gameMode}`),
-      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => applyPreset(k, p, builtin) }, '👁 Предпросмотр и применение'),
-        !builtin ? h('button', { class: 'btn danger', title: 'Удалить свой пресет', onclick: act(async () => { if (!confirm(`Удалить пресет «${p.label}»?`)) return; const next = { ...userPresets }; delete next[k]; userPresets = (await api('PUT', '/user-presets', { presets: next })).presets; drawPresets(); }) }, '✕') : null));
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => applyPreset(k, p, builtin) }, 'Предпросмотр и применение'),
+        !builtin ? h('button', { class: 'btn danger', title: 'Удалить свой пресет', onclick: act(async () => { if (!confirm(`Удалить пресет «${p.label}»?`)) return; const next = { ...userPresets }; delete next[k]; userPresets = (await api('PUT', '/user-presets', { presets: next })).presets; drawPresets(); }) }, '') : null));
     presetBox.replaceChildren(...Object.entries(S.catalog.presets).map(([k, p]) => card(k, p, true)), ...Object.entries(userPresets).map(([k, p]) => card(k, p, false)));
   };
   const nameIn = h('input', { type: 'text', placeholder: 'Название своего пресета', maxlength: 40 });
@@ -142,15 +142,15 @@ function pageMaps() {
           h('div', { class: 'row' }, h('span', { class: 'tag' }, { bomb: 'бомба', hostage: 'заложники', workshop: 'воркшоп', other: 'прочее' }[kind]), live === m.id ? h('span', { class: 'tag okc' }, 'сейчас') : null, st.server.map === m.id ? h('span', { class: 'tag', style: 'color:var(--accent)' }, 'при старте') : null),
           h('div', { class: 'row' },
             h('button', { class: 'btn primary', onclick: act(() => api('POST', '/map', { map: m.id }), `Загружаю ${m.id}`) }, '▶ Играть'),
-            h('button', { class: 'btn', title: 'Сделать картой при запуске сервера', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { server: { map: m.id } } }); renderPage(); }, 'Карта при старте обновлена') }, '⚑'),
-            st.maps.some((x) => x.id === m.id) ? h('button', { class: 'btn danger', title: 'Убрать из списка', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((x) => x.id !== m.id) } }); renderPage(); }) }, '✕') : null)));
+            h('button', { class: 'btn', title: 'Сделать картой при запуске сервера', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { server: { map: m.id } } }); renderPage(); }, 'Карта при старте обновлена') }, 'Сделать стартовой'),
+            st.maps.some((x) => x.id === m.id) ? h('button', { class: 'btn danger', title: 'Убрать из списка', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((x) => x.id !== m.id) } }); renderPage(); }) }, '') : null)));
     }) : [h('div', { class: 'muted' }, 'Ничего не найдено.')]));
   };
   const search = h('input', { type: 'text', placeholder: 'Поиск карты (Dust, mirage, ID воркшопа…)', style: 'width:300px' });
   const searchW = autocomplete(search, (t) => rank(allMaps().map((m) => ({ value: m.id, label: `${m.label} — ${m.id}`, desc: (metaOf(m)[1] || '') })), t, (o) => `${o.value} ${o.label}`), { onPick: (o) => { query = o.value; drawMaps(); } });
   search.addEventListener('input', () => { query = search.value.trim().toLowerCase(); drawMaps(); });
   const tabs = h('div', { class: 'tabs' });
-  const drawTabs = () => tabs.replaceChildren(...[['all', 'Все'], ['bomb', 'Бомба'], ['hostage', 'Заложники'], ['workshop', 'Воркшоп'], ['fav', '★ Избранные']].map(([k, t]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; drawTabs(); drawMaps(); } }, t)));
+  const drawTabs = () => tabs.replaceChildren(...[['all', 'Все'], ['bomb', 'Бомба'], ['hostage', 'Заложники'], ['workshop', 'Воркшоп'], ['fav', 'Избранные']].map(([k, t]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; drawTabs(); drawMaps(); } }, t)));
   drawTabs(); drawMaps();
 
   // ---- воркшоп / своя карта
@@ -161,7 +161,7 @@ function pageMaps() {
     h('div', { class: 'card' }, h('h3', {}, 'Режимы игры'),
       h('div', { class: 'row' }, 'Карта при старте:', startMap, h('label', { class: 'switch' }, restart, 'сразу перезапускать CS2 при смене режима')),
       presetBox,
-      h('div', { class: 'row' }, nameIn, h('button', { class: 'btn', onclick: saveCurrent }, '💾 Сохранить текущие настройки как пресет')),
+      h('div', { class: 'row' }, nameIn, h('button', { class: 'btn', onclick: saveCurrent }, 'Сохранить текущие настройки как пресет')),
       h('div', { class: 'muted small' }, `Сейчас: пресет «${st.server.preset}», game_type ${st.server.gameType} / game_mode ${st.server.gameMode}, карта ${st.server.map}. Свои пресеты хранятся на панели и доступны всем админам.`)),
     h('div', { class: 'card' }, h('h3', {}, 'Карты'), h('div', { class: 'row' }, searchW, tabs), gridBox,
       h('h3', { style: 'margin-top:16px' }, 'Добавить свою или воркшоп-карту'),
@@ -190,8 +190,8 @@ function pageSettings() {
     const d = allDiff();
     bar.hidden = !d.length;
     if (!d.length) return;
-    bar.replaceChildren(h('div', { class: 'row' }, h('b', {}, `Несохранённых изменений: ${d.length}`), h('button', { class: 'btn', onclick: () => modal('Что изменится', diffTable(d)) }, '👁 Показать'),
-      h('button', { class: 'btn', onclick: () => modal('Предпросмотр overrides.cfg', h('pre', { class: 'console', style: 'height:auto;max-height:50vh' }, Object.entries(collect()).map(([k, v]) => `${k} "${v}"`).join('\n') || '(пусто)')) }, '📄 overrides.cfg'),
+    bar.replaceChildren(h('div', { class: 'row' }, h('b', {}, `Несохранённых изменений: ${d.length}`), h('button', { class: 'btn', onclick: () => modal('Что изменится', diffTable(d)) }, 'Показать'),
+      h('button', { class: 'btn', onclick: () => modal('Предпросмотр overrides.cfg', h('pre', { class: 'console', style: 'height:auto;max-height:50vh' }, Object.entries(collect()).map(([k, v]) => `${k} "${v}"`).join('\n') || '(пусто)')) }, 'overrides.cfg'),
       h('button', { class: 'btn primary', onclick: act(() => save(true), 'Сохранено и применено') }, 'Сохранить и применить сейчас'),
       h('button', { class: 'btn', onclick: act(() => save(false), 'Сохранено (применится при следующем старте карты)') }, 'Только сохранить'),
       h('button', { class: 'btn danger', onclick: () => renderPage() }, 'Отменить')));

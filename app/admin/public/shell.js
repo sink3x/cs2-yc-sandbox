@@ -2,9 +2,9 @@
 // Каркас: навигация, быстрый поиск (Ctrl+K), загрузка данных и запуск панели.
 
 const PAGES = {
-  overview: ['🏠 Обзор', pageOverview], skins: ['🎨 Скины', pageSkins], practice: ['🎯 Тренировка и приколы', pagePractice], maps: ['🗺 Карты и режимы', pageMaps],
-  console: ['⌨ Консоль', pageConsole], settings: ['⚙ Настройки', pageSettings], plugins: ['🧩 Плагины и флаги', pagePlugins], admins: ['🛡 Админы', pageAdmins],
-  look: ['🌈 Оформление', pageLook], backups: ['💾 Бэкапы и логи', pageBackups], help: ['❓ Справка', pageHelp], panel: ['🔑 Панель', pagePanel],
+  overview: ['Обзор', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка и приколы', pagePractice], maps: ['Карты и режимы', pageMaps],
+  console: ['Консоль', pageConsole], settings: ['Настройки', pageSettings], plugins: ['Плагины и флаги', pagePlugins], admins: ['Админы', pageAdmins],
+  look: ['Оформление', pageLook], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
 };
 const needsState = new Set(['maps', 'settings', 'plugins', 'admins']);
 const mainEl = h('main');
@@ -15,7 +15,7 @@ function go(page) { S.page = page; location.hash = page; renderPage(); }
 async function renderPage() {
   navEl.replaceChildren(h('h1', { onclick: () => document.dispatchEvent(new Event('logo-click')), style: 'cursor:pointer', title: 'sandbox-cs-1' }, 'sandbox', h('span', {}, '-cs-1')),
     ...Object.entries(PAGES).map(([k, [t]]) => h('button', { class: S.page === k ? 'on' : '', onclick: () => go(k) }, t)),
-    h('div', { class: 'sp' }), h('button', { onclick: openPalette, title: 'Ctrl+K' }, '🔍 Поиск (Ctrl+K)'), h('button', { onclick: async () => { await api('POST', '/logout'); showLogin(); } }, `Выйти (${S.user})`));
+    h('div', { class: 'sp' }), h('button', { onclick: openPalette, title: 'Ctrl+K' }, 'Поиск (Ctrl+K)'), h('button', { onclick: async () => { await api('POST', '/logout'); showLogin(); } }, `Выйти (${S.user})`));
   if (needsState.has(S.page) && !S.state) {
     mainEl.replaceChildren(h('div', { class: 'muted' }, 'Загрузка настроек…'));
     try { S.state = await api('GET', '/state'); S.pluginsMeta = S.state.plugins; S.adminFlags = S.state.admin_flags; } catch (e) {
@@ -34,8 +34,8 @@ function openPalette() {
   let items = []; let sel = 0;
   const all = () => [
     ...Object.entries(PAGES).map(([k, [t]]) => ({ key: `${t} ${k}`, label: `Перейти: ${t}`, run: () => go(k) })),
-    ...(S.catalog ? S.catalog.fun : []).filter((f) => !f.secret || secretsOn()).map((f) => ({ key: `прикол ${f.title} ${f.id}`, label: `Прикол: ${f.icon} ${f.title}`, desc: f.note, run: async () => { await api('POST', '/practice', { action: 'fun', id: f.id }); toast(`${f.title} включён`, 's'); } })),
-    ...Object.entries(THEMES).filter(([k]) => k !== 'rainbow' || secretsOn()).map(([k, t]) => ({ key: `тема ${t}`, label: `Тема: ${t}`, run: () => saveLook({ auto: false, theme: k }) })),
+    ...(S.catalog ? S.catalog.fun : []).filter((f) => !f.secret || secretsOn()).map((f) => ({ key: `прикол ${f.title} ${f.id}`, label: `Прикол: ${f.title}`, desc: f.note, run: async () => { await api('POST', '/practice', { action: 'fun', id: f.id }); toast(`${f.title} включён`, 's'); } })),
+    ...Object.entries(THEMES).map(([k, t]) => ({ key: `тема ${t}`, label: `Тема: ${t}`, run: () => saveLook({ theme: k }) })),
     ...COMMANDS.map(([c, d, a]) => ({ key: `${c} ${d}`, label: `Консоль: ${c}${a ? ' ' + a : ''}`, desc: d, run: async () => { if (a) { sessionStorage.setItem('rconPrefill', `${c} `); go('console'); } else { const r = await api('POST', '/rcon', { command: c }); toast((r.output || '(пусто)').trim().slice(0, 200), 's'); } } })),
   ];
   const draw = () => list.replaceChildren(...items.map((it, i) => h('div', { class: `ac-i ${i === sel ? 'on' : ''}`, onmousedown: (e) => { e.preventDefault(); choose(i); } }, h('span', {}, it.label), it.desc ? h('span', { class: 'ac-d' }, it.desc) : null)));

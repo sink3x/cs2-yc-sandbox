@@ -100,9 +100,9 @@ function connectUrl() {
 function connectButton(big) {
   const o = S.ov || {}; const st = o.vm && o.vm.status; const cls = `connect${big ? ' big' : ''}`;
   if (!o.vm) return h('span', { class: `${cls} off` }, 'Подключиться');
-  if (st === 'STOPPED') return h('button', { class: cls, onclick: act(async () => { await api('POST', '/vm/start'); await loadOverview(); }, 'Запускаю сервер. Когда он будет готов, здесь появится «Подключиться»') }, '⏻ Запустить сервер');
+  if (st === 'STOPPED') return h('button', { class: cls, onclick: act(async () => { await api('POST', '/vm/start'); await loadOverview(); }, 'Запускаю сервер. Когда он будет готов, здесь появится «Подключиться»') }, 'Запустить сервер');
   if (!serverUp()) return h('span', { class: `${cls} off`, title: 'Дождитесь запуска CS2' }, st === 'STOPPING' || o.busy ? 'Выключается…' : 'Сервер запускается…');
-  return h('a', { class: cls, href: connectUrl(), title: 'Откроет Steam и подключит к серверу', onclick: () => toast('Открываю Steam… Если ничего не произошло — скопируйте строку connect и вставьте в консоль CS2 (Steam должен быть запущен).') }, '🎮 Подключиться');
+  return h('a', { class: cls, href: connectUrl(), title: 'Откроет Steam и подключит к серверу', onclick: () => toast('Открываю Steam… Если ничего не произошло — скопируйте строку connect и вставьте в консоль CS2 (Steam должен быть запущен).') }, 'Подключиться');
 }
 
 function serverUp() { return S.ov && S.ov.vm && S.ov.vm.status === 'RUNNING' && S.ov.server && S.ov.server.live; }
@@ -138,7 +138,7 @@ function modal(title, content, buttons = []) {
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
   back.append(h('div', { class: 'modal', role: 'dialog', 'aria-label': title },
-    h('div', { class: 'modal-h' }, h('b', {}, title), h('button', { class: 'btn', onclick: close, 'aria-label': 'Закрыть' }, '✕')),
+    h('div', { class: 'modal-h' }, h('b', {}, title), h('button', { class: 'btn', onclick: close, 'aria-label': 'Закрыть' }, '')),
     h('div', { class: 'modal-b' }, content),
     buttons.length ? h('div', { class: 'row modal-f' }, buttons.map((b) => h('button', { class: `btn ${b.kind || ''}`, onclick: async (ev) => { ev.currentTarget.disabled = true; try { const keep = await b.run(); if (keep !== false) close(); } catch (e) { toast(e.message, 'e'); ev.currentTarget.disabled = false; } } }, b.text))) : null));
   document.body.append(back);
