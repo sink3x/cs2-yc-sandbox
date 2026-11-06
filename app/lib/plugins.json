@@ -1,0 +1,67 @@
+[
+  {
+    "id": "matchzy",
+    "title": "MatchZy",
+    "desc": "Практика (.prac, .bot, .spawn, .rethrow, .timer, .savenade), скримы и пуги",
+    "repo": "shobhit-pathak/MatchZy",
+    "asset": "^MatchZy-[0-9][0-9.]*\\.zip$",
+    "dirs": ["MatchZy"],
+    "default": true
+  },
+  {
+    "id": "weaponpaints",
+    "title": "WeaponPaints (скинченджер)",
+    "desc": "Скины, ножи, перчатки, агенты через !ws и !skins. Нарушает правила Valve для серверов, см. README",
+    "repo": "Nereziel/cs2-WeaponPaints",
+    "asset": "^WeaponPaints\\.zip$",
+    "dirs": ["WeaponPaints"],
+    "needs": ["menumanager", "playersettings", "anybaselib"],
+    "risky": true,
+    "default": true
+  },
+  {
+    "id": "menumanager",
+    "title": "MenuManagerCS2",
+    "desc": "Зависимость WeaponPaints (меню)",
+    "repo": "NickFox007/MenuManagerCS2",
+    "asset": "\\.zip$",
+    "dirs": ["MenuManagerCore"],
+    "dependency": true
+  },
+  {
+    "id": "playersettings",
+    "title": "PlayerSettingsCS2",
+    "desc": "Зависимость WeaponPaints (настройки игроков)",
+    "repo": "NickFox007/PlayerSettingsCS2",
+    "asset": "\\.zip$",
+    "dirs": ["PlayerSettingsCore"],
+    "dependency": true
+  },
+  {
+    "id": "anybaselib",
+    "title": "AnyBaseLibCS2",
+    "desc": "Зависимость WeaponPaints (работа с БД)",
+    "repo": "NickFox007/AnyBaseLibCS2",
+    "asset": "\\.zip$",
+    "dirs": ["AnyBaseLib"],
+    "dependency": true
+  },
+  {
+    "id": "rockthevote",
+    "title": "RockTheVote",
+    "desc": "!rtv, !nextmap, голосование за карту",
+    "repo": "abnerfs/cs2-rockthevote",
+    "asset": "\\.zip$",
+    "dirs": ["RockTheVote"],
+    "default": true
+  },
+  {
+    "id": "openprefireprac",
+    "title": "OpenPrefirePrac",
+    "desc": "Тренировка префайров на ботах (!prefire)",
+    "repo": "lengran/OpenPrefirePrac",
+    "asset": "\\.zip$",
+    "dirs": ["OpenPrefirePrac"],
+    "default": false
+  }
+]

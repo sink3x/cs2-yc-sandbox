@@ -1,0 +1,14 @@
+[Unit]
+Description=Fetch application bundle and configuration from instance metadata
+After=network-online.target cloud-final.service
+Wants=network-online.target
+Before=cs2-agent.service cs2.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/cs2-bootstrap.sh
+TimeoutStartSec=1200
+
+[Install]
+WantedBy=multi-user.target

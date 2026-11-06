@@ -1,0 +1,18 @@
+#cloud-config
+# Minimal first-boot stub. Everything else (bundle, config, secrets) is pulled from the instance metadata by
+# cs2-bootstrap.service on every boot, so `terraform apply` + reboot is all it takes to roll out a change.
+package_update: false
+write_files:
+  - path: /usr/local/sbin/cs2-bootstrap.sh
+    permissions: "0755"
+    encoding: b64
+    content: ${bootstrap_b64}
+  - path: /etc/systemd/system/cs2-bootstrap.service
+    permissions: "0644"
+    encoding: b64
+    content: ${unit_b64}
+runcmd:
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, cs2-bootstrap.service]
+  # --no-block: the unit is ordered After=cloud-final.service, a blocking start from runcmd would deadlock
+  - [systemctl, start, --no-block, cs2-bootstrap.service]

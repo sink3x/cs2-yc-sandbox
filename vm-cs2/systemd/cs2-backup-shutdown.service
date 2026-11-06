@@ -1,0 +1,17 @@
+[Unit]
+Description=Back up CS2 state to Object Storage on shutdown (safety net)
+# Before=cs2.service means: stopped AFTER cs2 has stopped, while network, disk and MariaDB are still up.
+Before=cs2.service
+After=network-online.target mariadb.service
+Wants=network-online.target
+RequiresMountsFor=/srv/cs2
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+ExecStop=-/usr/bin/node /opt/cs2-app/app/agent/backup.js backup shutdown --if-stale
+TimeoutStopSec=240
+
+[Install]
+WantedBy=multi-user.target

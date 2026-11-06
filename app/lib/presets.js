@@ -1,0 +1,108 @@
+'use strict';
+// Game mode presets, map list and the cvar catalog shown in the admin panel.
+
+const PRACTICE_CVARS = {
+  sv_cheats: '1',
+  mp_limitteams: '0',
+  mp_autoteambalance: '0',
+  mp_roundtime: '60',
+  mp_roundtime_defuse: '60',
+  mp_roundtime_hostage: '60',
+  mp_freezetime: '0',
+  mp_buytime: '9999',
+  mp_buy_anywhere: '1',
+  mp_maxmoney: '60000',
+  mp_startmoney: '60000',
+  mp_afterroundmoney: '60000',
+  mp_free_armor: '2',
+  mp_respawn_on_death_ct: '1',
+  mp_respawn_on_death_t: '1',
+  mp_ignore_round_win_conditions: '1',
+  mp_do_warmup_period: '0',
+  sv_infinite_ammo: '1',
+  ammo_grenade_limit_total: '5',
+  sv_grenade_trajectory_prac_pipreview: '1',
+  sv_grenade_trajectory_prac_trailtime: '6',
+  sv_showimpacts: '1',
+  bot_quota: '0',
+  matchzy_autostart_mode: '2',
+};
+
+const PRESETS = {
+  practice: { label: 'Тренировка (nade/prac)', gameType: 0, gameMode: 1, cvars: PRACTICE_CVARS,
+    note: 'Бесконечные деньги и патроны, траектории гранат, респавн. MatchZy стартует в режиме .prac' },
+  competitive: { label: 'Соревновательный 5v5', gameType: 0, gameMode: 1, cvars: { sv_cheats: '0', matchzy_autostart_mode: '0' },
+    note: 'Классический матч без плагинных режимов' },
+  bots: { label: 'Против ботов', gameType: 0, gameMode: 1,
+    cvars: { sv_cheats: '0', bot_quota: '10', bot_quota_mode: 'fill', bot_difficulty: '2', matchzy_autostart_mode: '0' },
+    note: 'Соревновательные правила, комнату добивают ботами до 10' },
+  casual: { label: 'Казуальный', gameType: 0, gameMode: 0, cvars: { sv_cheats: '0', matchzy_autostart_mode: '0' }, note: '' },
+  wingman: { label: 'Напарники 2v2', gameType: 0, gameMode: 2, cvars: { sv_cheats: '0', matchzy_autostart_mode: '0' }, note: '' },
+  deathmatch: { label: 'Дезматч', gameType: 1, gameMode: 2, cvars: { sv_cheats: '0', matchzy_autostart_mode: '0' }, note: 'Респавн, гонка за килами' },
+  armsrace: { label: 'Гонка вооружений', gameType: 1, gameMode: 0, cvars: { sv_cheats: '0', matchzy_autostart_mode: '0' }, note: '' },
+};
+
+const MAPS = [
+  ['de_dust2', 'Dust II'], ['de_mirage', 'Mirage'], ['de_inferno', 'Inferno'], ['de_nuke', 'Nuke'],
+  ['de_overpass', 'Overpass'], ['de_ancient', 'Ancient'], ['de_anubis', 'Anubis'], ['de_train', 'Train'],
+  ['de_vertigo', 'Vertigo'], ['de_jura', 'Jura'], ['de_grail', 'Grail'], ['de_dogtown', 'Dogtown'],
+  ['cs_office', 'Office'], ['cs_italy', 'Italy'], ['de_cache', 'Cache'], ['de_edin', 'Edin'],
+].map(([id, label]) => ({ id, label }));
+
+// type: bool | int | float | string | enum:<a|b|c>
+const CATALOG = [
+  { group: 'Раунд и экономика', items: [
+    { name: 'mp_roundtime', type: 'float', hint: 'Минуты раунда' },
+    { name: 'mp_roundtime_defuse', type: 'float', hint: 'Минуты раунда (карты с бомбой)' },
+    { name: 'mp_freezetime', type: 'int', hint: 'Секунды заморозки' },
+    { name: 'mp_maxrounds', type: 'int', hint: 'Раундов в матче' },
+    { name: 'mp_startmoney', type: 'int', hint: 'Стартовые деньги' },
+    { name: 'mp_maxmoney', type: 'int', hint: 'Максимум денег' },
+    { name: 'mp_buytime', type: 'int', hint: 'Секунды на покупку' },
+    { name: 'mp_buy_anywhere', type: 'enum:0|1|2|3', hint: '0 — только в зоне, 1 — везде, 2/3 — по командам' },
+    { name: 'mp_free_armor', type: 'enum:0|1|2', hint: '0 нет, 1 броня, 2 броня + шлем' },
+    { name: 'mp_friendlyfire', type: 'bool', hint: 'Огонь по своим' },
+    { name: 'mp_autoteambalance', type: 'bool', hint: 'Автобаланс команд' },
+    { name: 'mp_limitteams', type: 'int', hint: 'Допустимая разница в командах (0 — без лимита)' },
+    { name: 'mp_respawn_on_death_ct', type: 'bool', hint: 'Респавн за CT' },
+    { name: 'mp_respawn_on_death_t', type: 'bool', hint: 'Респавн за T' },
+    { name: 'mp_ignore_round_win_conditions', type: 'bool', hint: 'Раунд не заканчивается сам' },
+    { name: 'mp_do_warmup_period', type: 'bool', hint: 'Разминка перед матчем' },
+    { name: 'mp_warmuptime', type: 'int', hint: 'Секунды разминки' },
+  ] },
+  { group: 'Сервер', items: [
+    { name: 'sv_cheats', type: 'bool', hint: 'Читы (noclip, god и т.д.)' },
+    { name: 'sv_infinite_ammo', type: 'enum:0|1|2', hint: '1 — без перезарядки, 2 — полностью бесконечные' },
+    { name: 'sv_alltalk', type: 'bool', hint: 'Голосовой чат слышат все' },
+    { name: 'sv_deadtalk', type: 'bool', hint: 'Мёртвые говорят с живыми' },
+    { name: 'sv_gravity', type: 'int', hint: 'Гравитация (800 по умолчанию)' },
+    { name: 'sv_airaccelerate', type: 'float', hint: 'Аэроускорение' },
+    { name: 'sv_pausable', type: 'bool', hint: 'Разрешить паузу' },
+    { name: 'sv_allow_votes', type: 'bool', hint: 'Голосования' },
+    { name: 'sv_hibernate_when_empty', type: 'bool', hint: 'Спящий режим пустого сервера' },
+    { name: 'sv_kick_players_with_cooldown', type: 'enum:0|1|2', hint: 'Кик игроков с кулдауном' },
+  ] },
+  { group: 'Тренировка', items: [
+    { name: 'sv_grenade_trajectory_prac_pipreview', type: 'bool', hint: 'Предпросмотр траектории гранаты' },
+    { name: 'sv_grenade_trajectory_prac_trailtime', type: 'float', hint: 'Сколько секунд держится след гранаты' },
+    { name: 'sv_showimpacts', type: 'enum:0|1|2|3', hint: 'Показывать попадания' },
+    { name: 'ammo_grenade_limit_total', type: 'int', hint: 'Лимит гранат' },
+    { name: 'mp_death_drop_gun', type: 'enum:0|1|2', hint: 'Выпадение оружия' },
+  ] },
+  { group: 'Боты', items: [
+    { name: 'bot_quota', type: 'int', hint: 'Сколько ботов' },
+    { name: 'bot_quota_mode', type: 'enum:normal|fill|match', hint: 'Режим набора ботов' },
+    { name: 'bot_difficulty', type: 'enum:0|1|2|3', hint: '0 лёгкие … 3 эксперт' },
+    { name: 'bot_stop', type: 'bool', hint: 'Заморозить ботов' },
+    { name: 'bot_knives_only', type: 'bool', hint: 'Боты только с ножами' },
+    { name: 'bot_pistols_only', type: 'bool', hint: 'Боты только с пистолетами' },
+    { name: 'bot_zombie', type: 'bool', hint: 'Боты стоят на месте' },
+  ] },
+  { group: 'MatchZy', items: [
+    { name: 'matchzy_autostart_mode', type: 'enum:0|1|2', hint: '0 — спящий, 1 — матч/пуг, 2 — тренировка' },
+    { name: 'matchzy_kick_when_no_match_loaded', type: 'bool', hint: 'Кикать, если матч не загружен' },
+    { name: 'matchzy_everyone_is_admin', type: 'bool', hint: 'Все игроки админы MatchZy (осторожно)' },
+  ] },
+];
+
+module.exports = { PRESETS, MAPS, CATALOG, PRACTICE_CVARS };

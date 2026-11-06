@@ -1,0 +1,14 @@
+[Unit]
+Description=CS2 sandbox agent (HTTP API for the admin panel)
+After=network-online.target cs2-bootstrap.service
+Wants=network-online.target
+RequiresMountsFor=/srv/cs2
+
+[Service]
+ExecStart=/usr/bin/node /opt/cs2-app/app/agent/agent.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

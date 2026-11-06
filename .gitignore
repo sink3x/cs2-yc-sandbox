@@ -1,0 +1,10 @@
+# secrets and state never go to git
+secrets.auto.tfvars
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl.bak
+terraform.tfvars
+crash.log
+build/
+node_modules/

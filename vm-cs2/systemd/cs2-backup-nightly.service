@@ -1,0 +1,8 @@
+[Unit]
+Description=Nightly CS2 state backup
+After=network-online.target mariadb.service
+RequiresMountsFor=/srv/cs2
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/node /opt/cs2-app/app/agent/backup.js backup nightly

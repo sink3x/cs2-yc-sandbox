@@ -1,0 +1,24 @@
+[Unit]
+Description=CS2 sandbox admin panel
+After=network-online.target cs2-bootstrap.service
+Wants=network-online.target
+
+[Service]
+User=cs2admin
+Group=cs2admin
+ExecStart=/usr/bin/node /opt/cs2-app/app/admin/server.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+# hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/cs2-admin
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
