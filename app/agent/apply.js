@@ -41,8 +41,16 @@ function syncPluginFolders(state, gp = E.gamePaths) {
 }
 
 /** Fill WeaponPaints DB credentials. Returns 'patched' | 'unchanged' | 'missing'. */
+/** CounterStrikeSharp writes plugin configs with a leading "// ..." comment; plain JSON.parse chokes on it. */
+function readJsonc(file, fallback = null) {
+  try {
+    const text = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
+    return JSON.parse(text.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, ''));
+  } catch { return fallback; }
+}
+
 function patchWeaponPaints(secrets, gp = E.gamePaths) {
-  const cfg = readJson(gp.wpConfig, null);
+  const cfg = readJsonc(gp.wpConfig, null);
   if (!cfg) return 'missing';
   const want = { DatabaseHost: '127.0.0.1', DatabasePort: 3306, DatabaseUser: 'weaponpaints', DatabasePassword: secrets.DB_PASSWORD || '', DatabaseName: 'weaponpaints' };
   let changed = false;
@@ -58,7 +66,7 @@ function applyState(state, secrets, gp = E.gamePaths) {
   if (writeIfChanged(gp.overrides, S.renderOverrides(state))) changed.push('overrides.cfg');
   if (fs.existsSync(gp.css)) {
     if (writeIfChanged(gp.cssAdmins, S.renderCssAdmins(state))) changed.push('admins.json');
-    const core = S.patchCoreJson(readJson(gp.cssCore, null), state);
+    const core = S.patchCoreJson(readJsonc(gp.cssCore, null), state);
     if (writeIfChanged(gp.cssCore, JSON.stringify(core, null, 2) + '\n')) changed.push('core.json');
   }
   if (writeIfChanged(gp.matchzyAdmins, S.renderMatchzyAdmins(state))) changed.push('MatchZy/admins.json');
@@ -86,4 +94,4 @@ function ensureDatabase(secrets) {
   });
 }
 
-module.exports = { applyState, patchWeaponPaints, syncPluginFolders, ensureDatabase, writeIfChanged };
+module.exports = { applyState, patchWeaponPaints, readJsonc, syncPluginFolders, ensureDatabase, writeIfChanged };

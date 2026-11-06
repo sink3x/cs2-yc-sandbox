@@ -65,3 +65,17 @@ test('writeIfChanged reports changes only', () => {
 });
 
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+test('patchWeaponPaints reads a config that starts with a // comment (as CounterStrikeSharp writes it)', () => {
+  const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wp-'));
+  const file = path.join(dir, 'WeaponPaints.json');
+  fs.writeFileSync(file, '// This file is generated\n{\n  "ConfigVersion": 10,\n  "DatabaseHost": "",\n  "DatabasePort": 3306,\n  "DatabaseUser": "",\n  "DatabasePassword": "",\n  "DatabaseName": "",\n  "Website": "example.com/skins" // trailing\n}\n'.replace(' // trailing', ''));
+  const { patchWeaponPaints } = require('../agent/apply');
+  assert.equal(patchWeaponPaints({ DB_PASSWORD: 'secret123' }, { wpConfig: file }), 'patched');
+  const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  assert.equal(cfg.DatabaseUser, 'weaponpaints');
+  assert.equal(cfg.DatabasePassword, 'secret123');
+  assert.equal(cfg.Website, 'example.com/skins');
+  assert.equal(patchWeaponPaints({ DB_PASSWORD: 'secret123' }, { wpConfig: file }), 'unchanged');
+});
