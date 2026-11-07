@@ -156,6 +156,20 @@ function linksCard(P) {
     }) }, 'Добавить ссылку')) : null);
 }
 
+/** Карточка «Страна и язык»: игрок указывает сам; показывается как флаг рядом с ником в статистике и списках. */
+function geoCard(P) {
+  const mk = (type, codes, cur, blank) => {
+    const sel = h('select', { 'aria-label': blank }, h('option', { value: '' }, blank), ...codes.map((c) => h('option', { value: c, selected: c === cur }, `${type === 'region' ? flagOf(c) + ' ' : ''}${geoName(type, c)} (${c})`)));
+    sel.value = cur || '';
+    return sel;
+  };
+  const cs = mk('region', P.countries || [], P.country, tr('Страна не указана'));
+  const ls = mk('language', P.langs || [], P.lang, tr('Язык не указан'));
+  return h('div', { class: 'card' }, h('h3', {}, 'Страна и язык'),
+    h('div', { class: 'row' }, cs, ls, h('button', { class: 'btn', onclick: act(async () => { const r = await api('PUT', '/profile', { country: cs.value, lang: ls.value }); P.country = r.country; P.lang = r.lang; if (P.steamid) SP.map.delete(P.steamid); }, 'Сохранено') }, 'Сохранить')),
+    h('div', { class: 'muted small' }, 'Необязательно. Видно в статистике и списках рядом с ником. Панель не определяет это по IP — только то, что вы выберете сами.'));
+}
+
 function pageProfile() {
   const root = h('div', {}, h('h2', {}, 'Профиль'), h('div', { class: 'muted' }, 'Загрузка…'));
   (async () => {
@@ -175,6 +189,7 @@ function pageProfile() {
         h('div', { class: 'row', style: 'margin-top:8px' }, email, h('button', { class: 'btn', onclick: act(async () => { P.email = (await api('PUT', '/profile', { email: email.value })).email; email.value = P.email; }, 'Почта сохранена') }, 'Сохранить почту')),
         h('div', { class: 'muted small' }, 'Почта хранится только в панели (для связи и будущих уведомлений); письма панель сама не рассылает.')),
       h('div', { class: 'card' }, h('h3', {}, 'Steam'), steamBox),
+      geoCard(P),
     ];
     if (S.role === 'admin') {
       cards.splice(1, 0, h('div', { class: 'card' }, h('h3', {}, 'Пароль'), h('div', { class: 'row' }, o, n, h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/password', { oldPassword: o.value, newPassword: n.value }); o.value = ''; n.value = ''; }, 'Пароль изменён') }, 'Сменить пароль')),

@@ -57,6 +57,22 @@ function steamAv(id, size = 28, fallback = '?', onName) {
   return box;
 }
 
+/** Флаг-эмодзи страны по коду ISO alpha-2 ('' → ''). */
+function flagOf(cc) { cc = String(cc || '').toUpperCase(); return /^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map((c) => 0x1F1E6 + c.charCodeAt(0) - 65)) : ''; }
+/** Название страны/языка на языке интерфейса (Intl.DisplayNames; без поддержки — сам код). */
+function geoName(type, code) { try { return new Intl.DisplayNames([typeof LOCALE === 'string' ? LOCALE : 'ru'], { type }).of(type === 'region' ? String(code).toUpperCase() : String(code).toLowerCase()) || code; } catch { return code; } }
+/** Метка «флаг + язык» игрока, которую он сам указал в профиле; пока профиль грузится или данных нет — пустой span. */
+function geoTag(id) {
+  const el = h('span', { class: 'geo' });
+  steamProfile(id).then((p) => {
+    if (!p || (!p.country && !p.lang)) return;
+    const f = flagOf(p.country); // на Windows эмодзи-флаги рисуются буквами — поэтому код страны остаётся видимым
+    el.title = [p.country ? geoName('region', p.country) : '', p.lang ? geoName('language', p.lang) : ''].filter(Boolean).join(' · ');
+    el.replaceChildren(f ? h('span', { class: 'geo-f', 'aria-hidden': 'true' }, f) : null, h('span', { class: 'geo-c' }, [p.country, p.lang && p.lang.toUpperCase() !== p.country && p.lang.toUpperCase()].filter(Boolean).join(' · ')));
+  });
+  return el;
+}
+
 // ---- острова Preact + TypeScript: страница-обёртка подгружает /ui/main.js и монтирует компонент (см. web/) ----------
 function island(name) {
   const el = h('div');

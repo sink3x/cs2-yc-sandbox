@@ -213,5 +213,21 @@ async function steamProfile(steamid, get) {
   try { const r = await get(`https://steamcommunity.com/profiles/${steamid}/?xml=1`, {}); return r && r.status === 200 ? parseSteamProfileXml(r.text) : null; } catch { return null; }
 }
 
-module.exports = {
+// Страна и язык игрока: указывает сам игрок (панель не определяет их по IP — это были бы персональные данные).
+const COUNTRIES = ['RU', 'UA', 'BY', 'KZ', 'UZ', 'KG', 'TJ', 'TM', 'AM', 'AZ', 'GE', 'MD', 'LV', 'LT', 'EE', 'PL', 'CZ', 'SK', 'DE', 'AT', 'CH', 'FR', 'BE', 'NL', 'GB', 'IE', 'ES', 'PT', 'IT', 'SE', 'NO', 'FI', 'DK', 'TR', 'IL', 'US', 'CA', 'BR', 'AR', 'CN', 'JP', 'KR', 'IN'];
+const LANGS = ['ru', 'en', 'de', 'fr', 'uk', 'be', 'kk', 'pl', 'es', 'pt', 'it', 'tr', 'zh', 'ja', 'ko'];
+function validateCountry(v) {
+  const s = String(v == null ? '' : v).trim().toUpperCase();
+  if (!s) return '';
+  if (!COUNTRIES.includes(s)) throw Object.assign(new Error('country: unknown code'), { status: 400 });
+  return s;
+}
+function validateLang(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase();
+  if (!s) return '';
+  if (!LANGS.includes(s)) throw Object.assign(new Error('lang: unknown code'), { status: 400 });
+  return s;
+}
+
+module.exports = { COUNTRIES, LANGS, validateCountry, validateLang,
   parseSteamProfileXml, steamProfile, analyzeFaceit, faceitCalc, steamAuthUrl, verifySteamAssertion, validateEmail, validateLinks, faceitLookup, STEAM_OP, IDENT_SELECT };

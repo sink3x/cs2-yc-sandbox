@@ -103,6 +103,8 @@
     ['Включить все безопасные', 'Enable all safe ones', 'Alle sicheren aktivieren', 'Activer tous les sûrs'], ['Выключить все', 'Disable all', 'Alle deaktivieren', 'Tout désactiver'],
     ['Рискованные и несовместимые не включаются; после выбора нажмите «Сохранить».', 'Risky and incompatible ones are never enabled; press “Save” after choosing.', 'Riskante und inkompatible werden nie aktiviert; nach der Auswahl auf „Speichern“ klicken.', 'Les plugins risqués et incompatibles ne sont jamais activés ; cliquez sur « Enregistrer » après le choix.'],
     ['риск блокировки', 'ban risk', 'Sperrrisiko', 'risque de bannissement'], ['не совместим', 'incompatible', 'inkompatibel', 'incompatible'], ['по умолчанию', 'default', 'Standard', 'par défaut'], ['не установлен', 'not installed', 'nicht installiert', 'non installé'],
+    ['Страна и язык', 'Country and language', 'Land und Sprache', 'Pays et langue'], ['Страна не указана', 'Country not set', 'Land nicht angegeben', 'Pays non indiqué'], ['Язык не указан', 'Language not set', 'Sprache nicht angegeben', 'Langue non indiquée'],
+    ['Необязательно. Видно в статистике и списках рядом с ником. Панель не определяет это по IP — только то, что вы выберете сами.', 'Optional. Shown next to your name in stats and lists. The panel does not detect this from your IP — only what you choose yourself.', 'Optional. Wird in Statistiken und Listen neben dem Namen angezeigt. Das Panel erkennt dies nicht per IP — nur, was du selbst wählst.', 'Facultatif. Affiché à côté du pseudo dans les statistiques et les listes. Le panneau ne le déduit pas de l’IP — seulement ce que vous choisissez.'],
   ];
   for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
 })();

@@ -178,7 +178,7 @@ function createApp(deps = {}) {
     delete users[from]; sessions.destroyUser(from);
     return true;
   }
-  const profileOf = (name) => { const u = loadUsers()[name] || {}; return { user: name, displayName: u.persona || name, avatar: u.avatar || '', email: u.email || '', steamid: u.steamid || '', links: u.links || [], faceitKey: !!readJson(faceitFile, {}).key }; };
+  const profileOf = (name) => { const u = loadUsers()[name] || {}; return { user: name, country: u.country || '', lang: u.lang || '', countries: account.COUNTRIES, langs: account.LANGS, displayName: u.persona || name, avatar: u.avatar || '', email: u.email || '', steamid: u.steamid || '', links: u.links || [], faceitKey: !!readJson(faceitFile, {}).key }; };
   async function faceitFor(steamid) {
     const hit = faceitCache.get(steamid);
     if (hit && hit.exp > now()) return hit.v;
@@ -559,6 +559,8 @@ function createApp(deps = {}) {
       const users = loadUsers(); const u = users[user]; if (!u) throw Object.assign(new Error('not found'), { status: 404 });
       if (body.email !== undefined) u.email = account.validateEmail(body.email);
       if (body.links !== undefined) u.links = account.validateLinks(body.links);
+      if (body.country !== undefined) u.country = account.validateCountry(body.country);
+      if (body.lang !== undefined) u.lang = account.validateLang(body.lang);
       saveUsers(users); audit(user, ip, 'profile.save', { email: !!u.email, links: (u.links || []).length });
       return profileOf(user);
     }],
@@ -586,7 +588,10 @@ function createApp(deps = {}) {
     }],
     ['GET', '/api/steam-profiles', async ({ query }) => {
       const ids = [...new Set(String(query.ids || '').split(',').filter((x) => /^\d{17}$/.test(x)))].slice(0, 30);
-      return { profiles: ids.length ? await steamProfilesFor(ids) : {} };
+      const profiles = ids.length ? await steamProfilesFor(ids) : {};
+      const users = Object.values(loadUsers()); // страна и язык — то, что игрок сам указал в профиле панели
+      for (const id of Object.keys(profiles)) { const u = users.find((x) => x.steamid === id); if (u && (u.country || u.lang)) profiles[id] = { ...profiles[id], country: u.country || '', lang: u.lang || '' }; }
+      return { profiles };
     }],
     ['GET', '/api/people', async () => {
       const us = usersWithSlugs();

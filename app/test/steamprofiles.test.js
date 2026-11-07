@@ -46,3 +46,23 @@ test('/api/steam-profiles: ник и аватар, кэш, мусорные id �
     assert.ok(calls.length <= 2 + 8, 'за один запрос — не больше 8 обращений к Steam');
   } finally { app.close(); }
 });
+
+test('/api/steam-profiles: страна и язык берутся из профиля аккаунта панели с этим SteamID', async () => {
+  const SID = '76561198000000100';
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs2sg-'));
+  fs.writeFileSync(path.join(dir, 'users.json'), JSON.stringify({ users: { alice: { hash: hashPassword('hunter2hunter2'), role: 'admin', steamid: SID, country: 'DE', lang: 'de' } } }));
+  const app = createApp({
+    config: { instanceId: 'i1', agentUrl: 'http://x', publicPort: 0 }, secrets: { AGENT_TOKEN: 't' }, compute: {}, httpGet: async () => ({ status: 200, text: xml('sink333') }),
+    usersFile: path.join(dir, 'users.json'), settingsFile: path.join(dir, 'settings.json'), auditFile: path.join(dir, 'audit.log'),
+    faceitFile: path.join(dir, 'faceit.json'), statsCacheFile: path.join(dir, 'stats-cache.json'), brandFile: path.join(dir, 'brand.json'), brandLogoFile: path.join(dir, 'brand-logo.bin'),
+    steamProfilesFile: path.join(dir, 'sp.json'),
+  });
+  await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${app.server.address().port}`;
+  try {
+    const lr = await fetch(`${base}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'alice', password: 'hunter2hunter2' }) });
+    const cookie = (lr.headers.get('set-cookie') || '').split(';')[0];
+    const r = await (await fetch(`${base}/api/steam-profiles?ids=${SID},76561198000000102`, { headers: { cookie } })).json();
+    assert.equal(r.profiles[SID].country, 'DE'); assert.equal(r.profiles[SID].lang, 'de'); assert.equal(r.profiles[SID].name, 'sink333');
+  } finally { app.server.close(); }
+});

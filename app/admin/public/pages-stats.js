@@ -97,7 +97,7 @@ function pageStats() {
     let r; try { r = await api('GET', S.role === 'player' ? `/stats/${S.steamid}` : '/stats'); } catch (e) { root.replaceChildren(h('h2', {}, 'Статистика'), h('div', { class: 'banner' }, e.message)); return; }
     const detail = h('div', { class: 'card', hidden: S.role !== 'player' });
     const show = (p) => {
-      detail.hidden = false; detail.replaceChildren(h('h3', { class: 'adm-name' }, steamAv(p.steamid, 34, p.name || '?'), p.name || p.steamid), statCard(p));
+      detail.hidden = false; detail.replaceChildren(h('h3', { class: 'adm-name' }, steamAv(p.steamid, 34, p.name || '?'), p.name || p.steamid, geoTag(p.steamid)), statCard(p));
       if (p.heat === undefined && S.role !== 'player') api('GET', `/stats/${p.steamid}`).then((d) => { const full = d.players && d.players[0]; if (full && !detail.hidden) { p.heat = full.heat || {}; detail.replaceChildren(h('h3', { class: 'adm-name' }, steamAv(p.steamid, 34, p.name || '?'), p.name || p.steamid), statCard(p)); } }).catch(() => {});
     };
     const note = h('div', { class: 'muted small' }, `Считается с ${r.since ? new Date(r.since).toLocaleDateString(LOCALE) : '—'} по логу сервера: убийства, смерти, хедшоты, урон, гранаты, время. Выстрелы/пули лог не пишет.`);
@@ -109,7 +109,7 @@ function pageStats() {
     const maxK = Math.max(1, ...r.players.map((p) => p.kills));
     put(root, h('h2', {}, 'Статистика'), offline,
       h('div', { class: 'card' }, h('h3', {}, 'Игроки'), r.players.length ? h('table', {}, h('thead', {}, h('tr', {}, ['#', 'Игрок', 'Убийств', 'Смертей', 'K/D', 'HS, %', 'Урон', 'Время'].map((x) => h('th', {}, x)))),
-        h('tbody', {}, r.players.map((p, i) => h('tr', { class: 'clickable', onclick: () => { show(p); detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }, h('td', {}, String(i + 1)), h('td', {}, h('span', { class: 'adm-name' }, steamAv(p.steamid, 26, p.name || '?'), p.name || p.steamid), p.online ? h('span', { class: 'pill ok', style: 'margin-left:8px' }, h('i'), 'в игре') : null),
+        h('tbody', {}, r.players.map((p, i) => h('tr', { class: 'clickable', onclick: () => { show(p); detail.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } }, h('td', {}, String(i + 1)), h('td', {}, h('span', { class: 'adm-name' }, steamAv(p.steamid, 26, p.name || '?'), p.name || p.steamid, geoTag(p.steamid)), p.online ? h('span', { class: 'pill ok', style: 'margin-left:8px' }, h('i'), 'в игре') : null),
           h('td', {}, h('span', { class: 'bar-inline', style: `--w:${Math.round(100 * p.kills / maxK)}%` }, String(p.kills))), h('td', {}, String(p.deaths)), h('td', {}, String(p.kd)), h('td', {}, String(p.hsPct)), h('td', {}, String(p.damage)), h('td', {}, fmtDur(p.seconds)))))) : h('div', { class: 'muted' }, 'Пока нет данных — статистика копится, пока игроки на сервере.'),
         h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'btn danger', onclick: act(async () => { if (!confirm('Сбросить всю статистику сервера?')) return; await api('POST', '/stats/reset', {}); go('stats'); }) }, 'Сбросить статистику'))),
       detail,

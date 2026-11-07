@@ -532,3 +532,9 @@ nav button.mob-more { display: none; }
 .plg-d { overflow-wrap: anywhere; }
 .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .badge.warn { border-color: #e6b34a; color: #e6b34a; } .badge.bad { border-color: #e5484d; color: #e5484d; }
+
+/* страна и язык игрока (geoTag) */
+.geo{display:inline-flex;align-items:center;gap:5px;margin-left:8px;font-size:11px;color:var(--muted,#8a93a3);white-space:nowrap}
+.geo:empty{display:none}
+.geo-f{font-size:15px;line-height:1}
+.geo-c{font-variant-numeric:tabular-nums;letter-spacing:.03em}

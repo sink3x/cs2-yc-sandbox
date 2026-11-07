@@ -138,7 +138,7 @@ function pageAdmins() {
     const acc = accounts[a.steamid]; const nick = h('span', { class: 'muted small' });
     return h('div', { class: 'owner-box' },
       h('span', { class: 'owner-badge', title: 'Это владелец сервера: удалить его из админов и снять root нельзя' }, h('b', { 'aria-hidden': 'true' }, '♛'), 'Владелец'),
-      isSid(a.steamid) ? h('div', { class: 'adm-name' }, steamAv(a.steamid, 22, a.name, (n) => { nick.textContent = n; }), nick) : null,
+      isSid(a.steamid) ? h('div', { class: 'adm-name' }, steamAv(a.steamid, 22, a.name, (n) => { nick.textContent = n; }), nick, geoTag(a.steamid)) : null,
       h('div', { class: 'owner-links' },
         isSid(a.steamid) ? h('a', { class: 'adm-link', href: `https://steamcommunity.com/profiles/${a.steamid}`, target: '_blank', rel: 'noopener noreferrer' }, 'Профиль Steam ↗') : null,
         acc ? h('a', { class: 'adm-link', href: `#users/${acc.slug}`, title: 'Карточка в панели управления', onclick: (e) => { e.preventDefault(); go('users', acc.slug); } },

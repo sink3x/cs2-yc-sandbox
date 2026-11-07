@@ -225,6 +225,12 @@ test('profile: e-mail, links, password policy and Steam link/login via OpenID', 
     const ok = await t.req('PUT', '/api/profile', { email: 'me@example.com', links: [{ title: 'Faceit', url: 'https://www.faceit.com/en' }] }, c, CSRF);
     assert.equal(ok.json.email, 'me@example.com'); assert.equal(ok.json.links.length, 1);
     assert.equal((await t.req('PUT', '/api/profile', { links: [{ title: 'x', url: 'javascript:alert(1)' }] }, c, CSRF)).status, 400);
+    // страна и язык: из фиксированного списка, регистр нормализуется, пусто — сброс
+    assert.equal((await t.req('PUT', '/api/profile', { country: 'xx' }, c, CSRF)).status, 400);
+    assert.equal((await t.req('PUT', '/api/profile', { lang: '<b>' }, c, CSRF)).status, 400);
+    const geo = await t.req('PUT', '/api/profile', { country: 'de', lang: 'DE' }, c, CSRF);
+    assert.equal(geo.json.country, 'DE'); assert.equal(geo.json.lang, 'de'); assert.ok(geo.json.countries.includes('RU'));
+    assert.equal((await t.req('PUT', '/api/profile', { country: '', lang: '' }, c, CSRF)).json.country, '');
     // Steam не привязан → вход через Steam отказывает
     const cbq = (extra = '', id = STEAM, n = 'n1') => `/api/auth/steam/callback${extra}`;
     const assertion = (returnTo, id = STEAM, nonce = 'n1') => new URLSearchParams({ 'openid.ns': 'http://specs.openid.net/auth/2.0', 'openid.mode': 'id_res', 'openid.op_endpoint': 'https://steamcommunity.com/openid/login',
