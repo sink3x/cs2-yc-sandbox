@@ -32,6 +32,31 @@ async function api(method, path, body) {
   return j;
 }
 
+// ---- профили Steam (ник + аватар) по SteamID64: общий кэш и пакетные запросы ----------------------------------------
+const SP = { map: new Map(), queue: new Set(), timer: null, waiters: [] };
+function steamProfile(id) { // → Promise<{name, avatar}|null>
+  id = String(id || ''); if (!/^\d{17}$/.test(id)) return Promise.resolve(null);
+  if (SP.map.has(id)) return Promise.resolve(SP.map.get(id));
+  SP.queue.add(id);
+  if (!SP.timer) SP.timer = setTimeout(async () => {
+    const ids = [...SP.queue]; SP.queue.clear(); SP.timer = null;
+    let got = {}; try { got = (await api('GET', `/steam-profiles?ids=${ids.join(',')}`)).profiles || {}; } catch { /* не критично: останется буква */ }
+    for (const x of ids) SP.map.set(x, got[x] || null);
+    const w = SP.waiters; SP.waiters = []; w.forEach((f) => f());
+  }, 25);
+  return new Promise((res) => SP.waiters.push(() => res(SP.map.get(id) || null)));
+}
+/** Аватар Steam для SteamID: сначала буква, затем подменяется картинкой; onName(name) получает ник Steam. */
+function steamAv(id, size = 28, fallback = '?', onName) {
+  const box = h('span', { class: 'avatar ph', style: `width:${size}px;height:${size}px;line-height:${size}px;font-size:${Math.round(size * 0.45)}px` }, String(fallback || '?').slice(0, 1).toUpperCase());
+  steamProfile(id).then((p) => {
+    if (!p) return;
+    if (p.avatar) box.replaceWith(h('img', { class: 'avatar', src: p.avatar, alt: '', width: size, height: size, loading: 'lazy', referrerpolicy: 'no-referrer', style: `width:${size}px;height:${size}px` }));
+    if (onName) onName(p.name);
+  });
+  return box;
+}
+
 // Перевод типовых ошибок сервера на русский.
 const ERR_RU = [
   [/^only \.wav, \.mp3 and \.ogg files/i, 'Только файлы .wav, .mp3 и .ogg'], [/^content does not look like/i, 'Содержимое не похоже на звуковой файл этого типа'],

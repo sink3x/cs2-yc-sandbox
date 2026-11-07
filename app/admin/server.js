@@ -64,7 +64,7 @@ function validateCustomSkins(input) {
   });
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
-const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/skins/loadout/:steamid',
+const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
@@ -120,6 +120,27 @@ function createApp(deps = {}) {
   async function refreshPersona(users, name, steamid) {
     const p = await account.steamProfile(steamid, httpGet);
     if (p && p.name) { users[name].persona = p.name; users[name].avatar = p.avatar || ''; saveUsers(users); }
+  }
+  // Публичные профили Steam (ник + аватар) для любых SteamID64: админы сервера, игроки в статистике и т.д.
+  // Кэш на диске: 24 ч для найденных, 1 ч для скрытых/недоступных; при сбое Steam отдаётся прежнее значение.
+  const steamProfilesFile = deps.steamProfilesFile || path.join(VAR, 'steam-profiles.json');
+  async function steamProfilesFor(ids) {
+    const cache = readJson(steamProfilesFile, {}); const out = {}; const todo = [];
+    for (const id of ids) {
+      const c = cache[id]; const ttl = c && c.name ? 24 * 3600_000 : 3600_000;
+      if (c && now() - c.at < ttl) { if (c.name) out[id] = { name: c.name, avatar: c.avatar || '' }; continue; }
+      const u = Object.values(loadUsers()).find((x) => x.steamid === id && x.persona && x.avatar); // уже знаем по аккаунту панели
+      if (u) { cache[id] = { name: u.persona, avatar: u.avatar, at: now() }; out[id] = { name: u.persona, avatar: u.avatar }; continue; }
+      todo.push(id);
+    }
+    await Promise.all(todo.slice(0, 8).map(async (id) => {
+      const p = await account.steamProfile(id, httpGet);
+      if (p && p.name) { cache[id] = { name: p.name, avatar: p.avatar || '', at: now() }; out[id] = { name: p.name, avatar: p.avatar || '' }; }
+      else if (cache[id] && cache[id].name) { cache[id].at = now() - 23 * 3600_000; out[id] = { name: cache[id].name, avatar: cache[id].avatar || '' }; } // Steam не ответил: старое значение, повтор через час
+      else cache[id] = { name: '', avatar: '', at: now() };
+    }));
+    if (todo.length) { try { fs.mkdirSync(path.dirname(steamProfilesFile), { recursive: true }); writeJsonAtomic(steamProfilesFile, cache, 0o600); } catch (e) { log('steam profiles cache:', e.message); } }
+    return out;
   }
   /** Профили со Steam, но без аватара (раньше Steam отдавал неизвестный хост) подтягиваем в фоне, не чаще раза в 6 часов. */
   function backfillAvatars(users, names) {
@@ -561,6 +582,10 @@ function createApp(deps = {}) {
       if (roleOf(user) !== 'admin') throw Object.assign(new Error('forbidden'), { status: 403 });
       const us = usersWithSlugs(); const ig = inGameAdminIds(); backfillAvatars(us, Object.keys(us));
       return people.listUsers(Object.entries(us).map(([n, u]) => people.publicUser(n, u, { inGameAdmin: ig.has(String(u.steamid)) })), query);
+    }],
+    ['GET', '/api/steam-profiles', async ({ query }) => {
+      const ids = [...new Set(String(query.ids || '').split(',').filter((x) => /^\d{17}$/.test(x)))].slice(0, 30);
+      return { profiles: ids.length ? await steamProfilesFor(ids) : {} };
     }],
     ['GET', '/api/people', async () => {
       const us = usersWithSlugs();

@@ -125,9 +125,10 @@ function pageAdmins() {
   const accounts = {}; // steamid → карточка пользователя панели (slug, аватар, ник): нужна для ссылки «Профиль на сервере»
   const isSid = (v) => /^\d{17}$/.test(String(v || ''));
   const ownerBadge = (a) => {
-    const acc = accounts[a.steamid];
+    const acc = accounts[a.steamid]; const nick = h('span', { class: 'muted small' });
     return h('div', { class: 'owner-box' },
       h('span', { class: 'owner-badge', title: 'Это владелец сервера: удалить его из админов и снять root нельзя' }, h('b', { 'aria-hidden': 'true' }, '♛'), 'Владелец'),
+      isSid(a.steamid) ? h('div', { class: 'adm-name' }, steamAv(a.steamid, 22, a.name, (n) => { nick.textContent = n; }), nick) : null,
       h('div', { class: 'owner-links' },
         isSid(a.steamid) ? h('a', { class: 'adm-link', href: `https://steamcommunity.com/profiles/${a.steamid}`, target: '_blank', rel: 'noopener noreferrer' }, 'Профиль Steam ↗') : null,
         acc ? h('a', { class: 'adm-link', href: `#users/${acc.slug}`, title: 'Карточка в панели управления', onclick: (e) => { e.preventDefault(); go('users', acc.slug); } },
@@ -141,7 +142,7 @@ function pageAdmins() {
         const on = a.flags.includes(f); const fixed = own && f === '@css/root';
         return h('span', { class: 'chip', title: fixed ? 'Права владельца менять нельзя' : '', style: `${on ? 'border-color:var(--accent);color:var(--accent);' : ''}${fixed ? 'opacity:.6;cursor:not-allowed;' : ''}`, onclick: () => { if (fixed) return; a.flags = on ? a.flags.filter((x) => x !== f) : a.flags.concat([f]); draw(); } }, f.replace('@css/', ''));
       }));
-      return h('tr', {}, h('td', {}, h('input', { type: 'text', value: a.name, style: 'width:140px', oninput: (e) => { a.name = e.target.value; } })),
+      return h('tr', {}, h('td', {}, h('div', { class: 'adm-name' }, isSid(a.steamid) ? steamAv(a.steamid, 32, a.name) : null, h('input', { type: 'text', value: a.name, style: 'width:140px', oninput: (e) => { a.name = e.target.value; } }))),
         h('td', {}, h('div', { class: 'adm-sid' }, h('input', { type: 'text', value: a.steamid, style: 'width:180px', readonly: own, oninput: (e) => { a.steamid = e.target.value.trim(); } }),
           isSid(a.steamid) && !own ? h('a', { class: 'adm-ext', href: `https://steamcommunity.com/profiles/${a.steamid}`, target: '_blank', rel: 'noopener noreferrer', title: 'Профиль Steam', 'aria-label': 'Профиль Steam' }, '↗') : null)),
         h('td', {}, flagSel),
