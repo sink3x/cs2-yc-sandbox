@@ -185,6 +185,18 @@ function pageProfile() {
         h('div', { class: 'row' }, h('button', { class: 'btn', onclick: act(async () => { S.settings = await api('PUT', '/settings', { playerLogin: pl.checked }); }, 'Сохранено') }, 'Сохранить')),
         h('div', { class: 'muted small' }, 'Игрок попадает в панель по кнопке «Войти через Steam»: ему доступны скины, профиль и информация о сервере — ничего больше. Лимит: 300 аккаунтов игроков.')));
     }
+    if (S.role === 'player' && P.steamid) { // вошёл через Steam, а админ-аккаунт уже есть: объединяем по паролю
+      const lu = h('input', { type: 'text', placeholder: 'Логин админ-аккаунта', autocomplete: 'username', style: 'width:200px', 'aria-label': 'Логин админ-аккаунта' });
+      const lp = h('input', { type: 'password', placeholder: 'Пароль', autocomplete: 'current-password', style: 'width:200px', 'aria-label': 'Пароль' });
+      cards.splice(1, 0, h('div', { class: 'card' }, h('h3', {}, 'У меня уже есть админ-аккаунт'),
+        h('div', { class: 'muted small' }, 'Если вы управляете сервером, привяжите этот Steam к своему админ-аккаунту: сетапы и профиль переедут туда, а на экране входа кнопка «Войти через Steam» будет открывать админ-аккаунт.'),
+        h('div', { class: 'row', style: 'margin-top:8px' }, lu, lp, h('button', { class: 'btn primary', onclick: act(async () => {
+          if (!lu.value.trim() || !lp.value) throw new Error(tr('Введите логин и пароль админ-аккаунта'));
+          const r = await api('POST', '/link-account', { user: lu.value.trim(), password: lp.value });
+          toast(`${tr('Steam привязан к аккаунту')} ${r.user}. ${tr('Войдите через Steam заново')}`, 's');
+          setTimeout(() => location.reload(), 1500);
+        }) }, 'Привязать'))));
+    }
     cards.push(faceitCard(P), linksCard(P));
     root.replaceChildren(h('h2', {}, 'Профиль'), ...cards);
   })();

@@ -67,6 +67,7 @@ function island(name) {
 
 // Перевод типовых ошибок сервера на русский.
 const ERR_RU = [
+  [/^wrong account or password/i, 'Неверный логин или пароль админ-аккаунта'], [/^only for a Steam player session/i, 'Только для игрока, вошедшего через Steam'], [/^this account is already linked to a Steam ID/i, 'Этот аккаунт уже привязан к другому Steam'],
   [/^only \.wav, \.mp3 and \.ogg files/i, 'Только файлы .wav, .mp3 и .ogg'], [/^content does not look like/i, 'Содержимое не похоже на звуковой файл этого типа'],
   [/^file too large/i, 'Файл больше 8 МБ'], [/^too many files/i, 'Слишком много файлов (максимум 100)'], [/^storage limit reached/i, 'Хранилище звуков заполнено (100 МБ)'],
   [/^file already exists/i, 'Файл с таким именем уже есть'], [/^no such file/i, 'Файла нет'], [/^extension cannot change/i, 'Расширение файла менять нельзя'], [/^bad file name/i, 'Недопустимое имя файла'], [/^empty file/i, 'Файл пустой'], [/^body too large/i, 'Файл слишком большой'],
