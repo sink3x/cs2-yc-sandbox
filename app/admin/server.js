@@ -93,13 +93,25 @@ function createApp(deps = {}) {
   const loadBrand = () => { const b = readJson(brandFile, {}); return { name: String(b.name || 'sandbox-cs-1').slice(0, 40), tagline: String(b.tagline || '').slice(0, 80), logoType: b.logoType || '', v: b.v || 0 }; };
   const statsCacheFile = deps.statsCacheFile || path.join(VAR, 'stats-cache.json');
   const faceitFile = deps.faceitFile || path.join(VAR, 'faceit.json');
-  const httpGet = deps.httpGet || (async (url, headers) => { const r = await fetch(url, { headers, signal: AbortSignal.timeout(12000) }); return { status: r.status, json: await r.json().catch(() => null) }; });
+  const httpGet = deps.httpGet || (async (url, headers) => { const r = await fetch(url, { headers, signal: AbortSignal.timeout(12000) }); const text = await r.text().catch(() => ''); let json = null; try { json = JSON.parse(text); } catch { /* не JSON */ } return { status: r.status, json, text }; });
   const httpPost = deps.httpPost || (async (url, form) => { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form, signal: AbortSignal.timeout(12000) }); return r.text(); });
   const steamNonces = new Map(); const linkTokens = new Map(); const faceitCache = new Map();
   const roleOf = (name) => ((loadUsers()[name] || {}).role === 'player' ? 'player' : 'admin');
   const playerLoginOn = () => readJson(settingsFile, {}).playerLogin !== false;
   const saveUsers = (users) => writeJsonAtomic(usersFile, { users }, 0o600);
-  const profileOf = (name) => { const u = loadUsers()[name] || {}; return { user: name, email: u.email || '', steamid: u.steamid || '', links: u.links || [], faceitKey: !!readJson(faceitFile, {}).key }; };
+  /** Ник и аватар из публичного Steam-профиля → в запись пользователя (best effort, вход не блокирует). */
+  async function refreshPersona(users, name, steamid) {
+    const p = await account.steamProfile(steamid, httpGet);
+    if (p && p.name) { users[name].persona = p.name; users[name].avatar = p.avatar || ''; saveUsers(users); }
+  }
+  /** Админ из списка игрового сервера → панельный аккаунт с тем же именем и без привязки Steam. */
+  function autoLinkTarget(users, steamid) {
+    const c = readStateCache(); const adm = ((c && c.state && c.state.admins) || []).find((a) => String(a.steamid) === String(steamid));
+    if (!adm) return null;
+    const lc = String(adm.name).toLowerCase();
+    return Object.keys(users).find((n) => n.toLowerCase() === lc && users[n].role !== 'player' && !users[n].steamid) || null;
+  }
+  const profileOf = (name) => { const u = loadUsers()[name] || {}; return { user: name, displayName: u.persona || name, avatar: u.avatar || '', email: u.email || '', steamid: u.steamid || '', links: u.links || [], faceitKey: !!readJson(faceitFile, {}).key }; };
   const originOf = (req, secure) => (config.publicUrl ? String(config.publicUrl).replace(/\/+$/, '') : `${secure ? 'https' : 'http'}://${req.headers.host}`);
 
   const audit = (user, ip, action, detail) => {
@@ -262,7 +274,7 @@ function createApp(deps = {}) {
   // ---- routes ---------------------------------------------------------------------------------
   const P = (p) => async ({ params, body, query }) => agent('POST', p, body);
   const routes = [
-    ['GET', '/api/me', async ({ user }) => { const u = loadUsers()[user] || {}; return { user, role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
+    ['GET', '/api/me', async ({ user }) => { const u = loadUsers()[user] || {}; return { user, displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
     ['GET', '/api/public-info', async () => { const o = await overview(); return { status: o.vm ? o.vm.status : null, connect: o.connect || null, map: o.server && o.server.live ? o.server.live.map : null, humans: o.server && o.server.live ? o.server.live.humans : null, maxPlayers: o.server && o.server.live ? o.server.live.maxPlayers : null }; }],
     ['GET', '/api/overview', async () => overview()],
     ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS })],
@@ -352,7 +364,7 @@ function createApp(deps = {}) {
       return { url: `/api/auth/steam?link=${token}` };
     }],
     ['POST', '/api/profile/steam-unlink', async ({ user, ip }) => {
-      const users = loadUsers(); if (users[user]) { delete users[user].steamid; saveUsers(users); }
+      const users = loadUsers(); if (users[user]) { delete users[user].steamid; delete users[user].persona; delete users[user].avatar; saveUsers(users); }
       audit(user, ip, 'steam.unlink'); return profileOf(user);
     }],
     ['PUT', '/api/faceit-key', async ({ body, user, ip }) => {
@@ -399,7 +411,7 @@ function createApp(deps = {}) {
 
   const SEC_HEADERS = {
     'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://raw.githubusercontent.com; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://raw.githubusercontent.com; frame-ancestors 'none'",
   };
 
   function clientIp(req) {
@@ -457,16 +469,17 @@ function createApp(deps = {}) {
             if (!t || t.exp < now() || !users[t.user]) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=expired' });
             const other = Object.keys(users).find((n) => users[n].steamid === steamid && n !== t.user);
             if (other) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=taken' });
-            users[t.user].steamid = steamid; saveUsers(users); audit(t.user, ip, 'steam.link', steamid);
+            users[t.user].steamid = steamid; saveUsers(users); audit(t.user, ip, 'steam.link', steamid); await refreshPersona(users, t.user, steamid);
             return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=linked' });
           }
-          const name = Object.keys(users).find((n) => users[n].steamid === steamid);
-          let name2 = name;
+          let name2 = Object.keys(users).find((n) => users[n].steamid === steamid);
+          if (!name2) { const t = autoLinkTarget(users, steamid); if (t) { users[t].steamid = steamid; saveUsers(users); name2 = t; audit(t, ip, 'steam.autolink', steamid); } }
           if (!name2) {
             const players = Object.keys(users).filter((n) => users[n].role === 'player').length;
             if (!playerLoginOn() || players >= MAX_PLAYER_ACCOUNTS) { limiter.fail(`ip:${ip}`); audit(steamid, ip, 'login.steam.unlinked'); return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=unlinked' }); }
             name2 = `p${steamid}`; users[name2] = { role: 'player', steamid, created: new Date(now()).toISOString() }; saveUsers(users); audit(name2, ip, 'player.register', steamid);
           }
+          await refreshPersona(users, name2, steamid);
           const sid2 = sessions.create(name2); audit(name2, ip, 'login.steam');
           return send(res, 302, '', { ...SEC_HEADERS, Location: '/', 'Set-Cookie': `cs2sid=${sid2}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}${secure ? '; Secure' : ''}` });
         } catch (e) { limiter.fail(`ip:${ip}`); log('steam login:', e.message); return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=error' }); }

@@ -127,4 +127,18 @@ function analyzeFaceit(f) {
   return tips;
 }
 
-module.exports = { analyzeFaceit, steamAuthUrl, verifySteamAssertion, validateEmail, validateLinks, faceitLookup, STEAM_OP, IDENT_SELECT };
+/** Публичный профиль Steam (XML, без ключа API): ник и аватар. Возвращает null, если профиль скрыт/недоступен. */
+function parseSteamProfileXml(text) {
+  const t = String(text || '');
+  const name = (/<steamID><!\[CDATA\[([\s\S]*?)\]\]><\/steamID>/.exec(t) || [])[1];
+  if (!name) return null;
+  const av = (/<avatarFull><!\[CDATA\[([^\]]*)\]\]><\/avatarFull>/.exec(t) || [])[1] || '';
+  return { name: name.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40) || null, avatar: /^https:\/\/avatars(\.akamai)?\.steamstatic\.com\/[\w]+_full\.jpg$/.test(av) ? av : '' };
+}
+async function steamProfile(steamid, get) {
+  if (!/^\d{17}$/.test(String(steamid))) return null;
+  try { const r = await get(`https://steamcommunity.com/profiles/${steamid}/?xml=1`, {}); return r && r.status === 200 ? parseSteamProfileXml(r.text) : null; } catch { return null; }
+}
+
+module.exports = {
+  parseSteamProfileXml, steamProfile, analyzeFaceit, steamAuthUrl, verifySteamAssertion, validateEmail, validateLinks, faceitLookup, STEAM_OP, IDENT_SELECT };

@@ -82,7 +82,7 @@ function pageProfile() {
       h('div', { class: 'muted small' }, 'Привязка проверяется через официальный вход Steam (OpenID): пароль Steam панель не видит. После привязки на экране входа работает кнопка «Войти через Steam».'));
     drawSteam();
     const cards = [
-      h('div', { class: 'card' }, h('h3', {}, `Аккаунт: ${P.user}`), h('div', { class: 'muted small' }, S.role === 'admin' ? 'Роль: администратор — полный доступ.' : ''),
+      h('div', { class: 'card' }, h('div', { class: 'row' }, P.avatar ? h('img', { class: 'avatar', src: P.avatar, alt: '', referrerpolicy: 'no-referrer' }) : null, h('h3', {}, `Аккаунт: ${P.displayName || P.user}`)), S.role === 'admin' && P.displayName && P.displayName !== P.user ? h('div', { class: 'muted small' }, `Логин для входа по паролю: ${P.user}`) : null, h('div', { class: 'muted small' }, S.role === 'admin' ? 'Роль: администратор — полный доступ.' : ''),
         h('div', { class: 'row', style: 'margin-top:8px' }, email, h('button', { class: 'btn', onclick: act(async () => { P.email = (await api('PUT', '/profile', { email: email.value })).email; email.value = P.email; }, 'Почта сохранена') }, 'Сохранить почту')),
         h('div', { class: 'muted small' }, 'Почта хранится только в панели (для связи и будущих уведомлений); письма панель сама не рассылает.')),
       h('div', { class: 'card' }, h('h3', {}, 'Steam'), steamBox),

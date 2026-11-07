@@ -357,3 +357,33 @@ test('stats: proxied from the agent, cached for offline, per-player route valida
     assert.equal((await t.req('GET', '/api/stats/abc', undefined, c)).status, 400);
   } finally { t.close(); }
 });
+
+test('Steam login: автопривязка по списку админов сервера и ник из Steam', async () => {
+  const STEAM = '76561198000000100';
+  const xml = (n) => `<?xml version="1.0"?><profile><steamID64>${STEAM}</steamID64><steamID><![CDATA[${n}]]></steamID><avatarFull><![CDATA[https://avatars.steamstatic.com/abc123_full.jpg]]></avatarFull></profile>`;
+  let nick = 'sink333';
+  const t = await setup({ deps: { httpPost: async () => 'is_valid:true\n', httpGet: async () => ({ status: 200, json: null, text: xml(nick) }) } });
+  try {
+    const host = `http://127.0.0.1:${t.app.server.address().port}`;
+    const raw = async (p) => { const r = await fetch(host + p, { redirect: 'manual' }); return { loc: r.headers.get('location') || '', cookie: (r.headers.get('set-cookie') || '').split(';')[0] }; };
+    const cb = (n) => `/api/auth/steam/callback?` + new URLSearchParams({ 'openid.ns': 'http://specs.openid.net/auth/2.0', 'openid.mode': 'id_res', 'openid.op_endpoint': 'https://steamcommunity.com/openid/login', 'openid.claimed_id': `https://steamcommunity.com/openid/id/${STEAM}`, 'openid.identity': `https://steamcommunity.com/openid/id/${STEAM}`, 'openid.return_to': `${host}/api/auth/steam/callback`, 'openid.response_nonce': n, 'openid.assoc_handle': 'x', 'openid.signed': 'a', 'openid.sig': 'b' });
+    const c = await t.login();
+    await t.req('PUT', '/api/settings', { playerLogin: false }, c, CSRF);
+    // админа нет в списке сервера → не привязываем
+    assert.match((await raw(cb('n1'))).loc, /steam=unlinked/);
+    // админ есть в списке, имя совпадает с панельным логином → привязка и вход с правами админа
+    fs.writeFileSync(path.join(t.dir, 'state-cache.json'), JSON.stringify({ state: { admins: [{ name: 'Alice', steamid: STEAM, flags: ['@css/root'] }] }, pending: [] }));
+    const l = await raw(cb('n2'));
+    assert.equal(l.loc, '/'); assert.match(l.cookie, /^cs2sid=/);
+    const me = (await t.req('GET', '/api/me', undefined, l.cookie)).json;
+    assert.equal(me.user, 'alice'); assert.equal(me.role, 'admin'); assert.equal(me.steamid, STEAM);
+    assert.equal(me.displayName, 'sink333'); assert.match(me.avatar, /^https:\/\/avatars\.steamstatic\.com\//);
+    // ник обновляется при следующем входе
+    nick = 'sink333 pro';
+    const l2 = await raw(cb('n3'));
+    assert.equal((await t.req('GET', '/api/me', undefined, l2.cookie)).json.displayName, 'sink333 pro');
+    // скрытый/недоступный профиль не ломает вход
+    const parsed = require('../lib/account').parseSteamProfileXml('<profile></profile>'); assert.equal(parsed, null);
+    assert.equal(require('../lib/account').parseSteamProfileXml(xml('<b>x</b>')).name, 'bx/b');
+  } finally { t.close(); }
+});

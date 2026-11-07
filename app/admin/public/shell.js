@@ -78,7 +78,7 @@ async function renderPage() {
     ...visiblePages().map(([k, [t]]) => navBtn(k, t, { class: S.page === k ? 'on' : '', onclick: () => go(k) })),
     h('div', { class: 'sp' }),
     navBtn('search', 'Поиск (Ctrl+K)', { onclick: openPalette }),
-    navBtn('logout', `Выйти (${S.user})`, { onclick: async () => { await api('POST', '/logout'); showLogin(); } }),
+    navBtn('logout', `Выйти (${S.display || S.user})`, { onclick: async () => { await api('POST', '/logout'); showLogin(); } }),
     navBtn('sidebar', 'Свернуть меню', { class: 'collapse-btn', onclick: toggleNav }));
   applyNav(); renderNavLabels();
   const wantsState = S.role !== 'player' && (needsState.has(S.page) || S.page === 'skins');
@@ -123,7 +123,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.
 
 async function boot() {
   await loadBrand();
-  try { const me = await api('GET', '/me'); S.user = me.user; S.role = me.role || 'admin'; S.steamid = me.steamid || ''; } catch { return showLogin(); }
+  try { const me = await api('GET', '/me'); S.user = me.user; S.display = me.displayName || me.user; S.avatar = me.avatar || ''; S.role = me.role || 'admin'; S.steamid = me.steamid || ''; } catch { return showLogin(); }
   { const sp = new URLSearchParams(location.search).get('steam'); if (sp && STEAM_MSG[sp]) { toast(STEAM_MSG[sp], sp === 'linked' ? 's' : 'e'); history.replaceState(null, '', location.pathname); } }
   if (S.role === 'player') { S.page = 'skins'; S.catalog = { presets: [], maps: [], catalog: [], toggles: [], fun: [] }; } else S.catalog = await api('GET', '/catalog');
   S.state = null;

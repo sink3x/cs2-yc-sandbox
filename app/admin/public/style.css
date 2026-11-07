@@ -206,6 +206,7 @@ nav h1 .lbl span { color: var(--muted); font-weight: 500; }
 .login-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin: 10px 0; }
 .login-or::before, .login-or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 .lang-seg { margin-top: 12px; display: inline-flex; }
+.login .lang-seg { display: flex; } .login .lang-seg button { flex: 1 1 0; min-width: 0; }
 .faceit-head { display: flex; align-items: center; gap: 14px; margin: 12px 0; }
 .faceit-head .lvl { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 2px solid var(--accent); font-weight: 700; }
 .faceit-elo { margin-left: auto; text-align: right; } .faceit-elo b { font-size: 24px; display: block; line-height: 1; } .faceit-elo small, .stat small { color: var(--muted); }
@@ -262,3 +263,20 @@ td.good { font-weight: 600; } td.bad { color: var(--bad, #ff453a); }
 .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 12px 0; }
 tr.clickable { cursor: pointer; } tr.clickable:hover td { background: var(--hover); }
 .bar-inline { display: inline-block; min-width: 40px; padding: 0 6px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 35%, transparent) var(--w), transparent var(--w)); border-radius: 4px; }
+
+.preview .big { position: relative; overflow: hidden; }
+.wear-scratch { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: overlay; transition: opacity .15s;
+  background: repeating-linear-gradient(115deg, transparent 0 7px, rgba(0,0,0,.45) 7px 8px, transparent 8px 19px), repeating-linear-gradient(60deg, transparent 0 11px, rgba(255,255,255,.35) 11px 12px, transparent 12px 29px); }
+.preview .big img { transition: filter .15s; }
+.skin-links { margin: 10px 0; } .skin-links summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+
+img.avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; }
+
+/* свёрнутое меню: иконки строго по центру колонки */
+@media (min-width: 781px) {
+  .shell.collapsed nav { padding-left: 8px; padding-right: 8px; }
+  .shell.collapsed nav button { justify-content: center; gap: 0; padding: 0; }
+  .shell.collapsed nav button .lbl { display: none; }
+  .shell.collapsed nav h1 { justify-content: center; gap: 0; padding: 0; }
+  .shell.collapsed nav h1 .lbl, .shell.collapsed nav h1 span:not(.ico) { display: none; }
+}

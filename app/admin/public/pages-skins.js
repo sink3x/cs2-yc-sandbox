@@ -32,7 +32,7 @@ async function loadSkinCatalog() {
   K.cat = await api('GET', '/skins/catalog'); K.items = null; skinItems();
 }
 async function loadPlayers() {
-  if (S.role === 'player') { K.players = [{ steamid: S.steamid, name: S.user, self: true }]; K.steamid = S.steamid; return; }
+  if (S.role === 'player') { K.players = [{ steamid: S.steamid, name: S.display || S.user, self: true }]; K.steamid = S.steamid; return; }
   const base = []; const admins = (S.state && S.state.state.admins) || [];
   for (const a of admins) base.push({ steamid: a.steamid, name: a.name, admin: true });
   try { const r = await api('GET', '/skins/players'); for (const p of r.players) { const e = base.find((x) => x.steamid === p.steamid); if (e) Object.assign(e, p, { name: p.name || e.name }); else base.push(p); } } catch { /* сервер выключен */ }
@@ -194,10 +194,12 @@ function previewPanel(redraw, L) {
   const seedIn = h('input', { type: 'number', min: 0, max: 1000, value: E.seed, style: 'width:90px' });
   const tagIn = h('input', { type: 'text', value: E.nametag, maxlength: 20, placeholder: 'Бирка с именем (до 20 символов)' });
   const stIn = h('input', { type: 'checkbox', checked: E.stattrak }); const cntIn = h('input', { type: 'number', min: 0, value: E.count, style: 'width:90px' });
-  const bigImg = h('div', { class: 'big', style: `--rar:${s.rar.c}` }, skinImg(s.img, s.name));
+  const scratch = h('div', { class: 'wear-scratch' });
+  const bigImg = h('div', { class: 'big', style: `--rar:${s.rar.c}` }, skinImg(s.img, s.name), s.paint === 0 ? null : scratch);
   const meta = h('div', { class: 'muted small' });
   const upd = () => {
     E.wear = Number(wearNum.value); E.seed = Number(seedIn.value); E.nametag = tagIn.value; E.stattrak = stIn.checked; E.count = Number(cntIn.value);
+    if (s.paint !== 0) { const lk = SkinLinks.wearLook(E.wear); const im = bigImg.querySelector('img'); if (im) im.style.filter = lk.filter; scratch.style.opacity = lk.scratch; }
     meta.textContent = `${wearName(E.wear)} · float ${E.wear.toFixed(3)} · паттерн ${E.seed}${E.nametag ? ` · «${E.nametag}»` : ''}${E.stattrak ? ` · StatTrak™ ${E.count}` : ''}`;
   };
   wearIn.addEventListener('input', () => { wearNum.value = wearIn.value; upd(); }); wearNum.addEventListener('input', () => { wearIn.value = wearNum.value; upd(); });
@@ -215,10 +217,29 @@ function previewPanel(redraw, L) {
       h('div', { class: 'row' }, 'Износ', wearIn, wearNum), h('div', { class: 'chips' }, WEAR_PRESETS.map(([t, w]) => h('span', { class: 'chip', onclick: () => { const v = Math.min(Math.max(w, s.min), s.max); wearIn.value = v; wearNum.value = v.toFixed(3); upd(); } }, t))),
       h('div', { class: 'row' }, 'Паттерн', seedIn, h('button', { class: 'btn', title: 'Случайный', onclick: () => { seedIn.value = Math.floor(Math.random() * 1001); upd(); } }, 'Случайный')),
       kind === 'weapon' ? h('div', {}, h('div', { class: 'row' }, tagIn), s.st ? h('div', { class: 'row' }, h('label', { class: 'switch' }, stIn, 'StatTrak™'), cntIn, 'убийств') : null) : null),
+    s.paint === 0 ? null : h('div', { class: 'hint' }, 'Вид износа на картинке приблизительный: в каталоге одна картинка на скин. Точный вид покажет осмотр в игре.'),
     meta, h('div', { class: 'row' }, teamSel),
+    s.paint === 0 ? null : skinLinksBlock(s),
     h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: act(async () => { need(); await applyOps(ops(), 'Надето'); redraw(); }) }, kind === 'weapon' ? 'Надеть скин' : kind === 'knife' ? 'Надеть нож' : 'Надеть перчатки'),
       kind === 'weapon' ? h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'unskin', teams: teamList(), def: s.weapon.def }], 'Скин снят'); redraw(); }) }, 'Снять скин') : null,
       kind === 'glove' ? h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'gloves', def: 0 }, { op: 'unskin', def: s.weapon.def }], 'Перчатки сняты'); redraw(); }) }, 'Снять перчатки') : null));
+}
+
+/** Осмотр в игре, 3D/скриншот, поиск такого же скина на маркетах — по текущим настройкам редактора (E). */
+function skinLinksBlock(s) {
+  const item = () => ({ def: s.weapon.def, paint: s.paint, wear: E.wear, seed: E.seed, kind: s.weapon.kind, rarityName: s.rar.n, stattrak: E.stattrak, count: E.count, nametag: E.nametag, weaponName: s.weapon.name, skinName: s.name });
+  const inspect = () => SkinLinks.inspectUrl(SkinLinks.previewData(item()));
+  const open = (url) => window.open(url, '_blank', 'noopener');
+  const copyText = async (t, msg) => { try { await navigator.clipboard.writeText(t); toast(msg, 's'); } catch { toast(t); } };
+  const market = (key, label) => h('a', { class: 'btn', href: '#', target: '_blank', rel: 'noopener', onclick: (e) => { e.preventDefault(); open(SkinLinks.marketLinks(item())[key]); } }, label);
+  return h('details', { class: 'skin-links' }, h('summary', {}, 'Осмотр, 3D и поиск такого скина'),
+    h('div', { class: 'row' },
+      h('button', { class: 'btn', onclick: () => { location.href = inspect(); } }, 'Осмотреть в игре'),
+      h('button', { class: 'btn', onclick: () => copyText(inspect(), 'Ссылка на осмотр скопирована') }, 'Копировать ссылку')),
+    h('div', { class: 'hint' }, 'Ссылка содержит все параметры (износ, паттерн, StatTrak, бирка): предмет в инвентаре не нужен. Для «в игре» на вашем компьютере должен быть запущен Steam.'),
+    h('div', { class: 'row' }, SkinLinks.VIEWERS.map(([t, url]) => h('button', { class: 'btn', onclick: () => { copyText(inspect(), 'Ссылка скопирована: вставьте её на открывшейся странице'); open(url); } }, t))),
+    h('div', { class: 'muted small' }, 'Похожий скин (тот же износ):'),
+    h('div', { class: 'row' }, market('csmoney', 'CS.MONEY'), market('lis', 'LIS-SKINS'), market('csfloat', 'CSFloat'), market('steam', 'Steam Market')));
 }
 
 function loadoutPanel(redraw, L) {
