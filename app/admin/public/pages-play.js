@@ -53,7 +53,7 @@ function pageConsole() {
   };
   const upd = () => {
     const name = input.value.trim().split(/\s+/)[0]; const c = COMMANDS.find((x) => x[0] === name); const i = idx.get(name);
-    syntax.textContent = c ? `${c[0]} ${c[2] || ''} — ${c[1]}` : i ? `${i.name} — ${i.hint}` : 'Подсказка появится при вводе. ↑/↓ — история, Tab — автодополнение.';
+    syntax.textContent = c ? `${c[0]} ${tr(c[2] || '')} — ${tr(c[1])}` : i ? `${i.name} — ${tr(i.hint)}` : tr('Подсказка появится при вводе. ↑/↓ — история, Tab — автодополнение.');
   };
   const wrap = autocomplete(input, options, { limit: 9 });
   input.addEventListener('input', upd);

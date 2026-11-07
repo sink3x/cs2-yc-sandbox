@@ -124,7 +124,7 @@ function lookView(redraw) {
     h('div', { class: 'card' }, h('h3', {}, 'Тема'), h('div', { class: 'grid' }, themes.map(([k, t]) => h('button', { class: `btn preset ${look.theme === k ? 'on' : ''}`, onclick: () => { saveLook({ theme: k }); redraw(); } },
       h('span', { class: 'swatch', style: `background:${THEME_SWATCH[k]}` }), h('b', { style: 'margin-top:6px' }, t))))),
     S.role === 'admin' ? brandCard(redraw) : null,
-    h('div', { class: 'card' }, h('h3', {}, 'Язык'), langSwitch(), h('div', { class: 'hint' }, 'Русский · English · Deutsch · Français. Длинные справочные тексты пока на русском.')),
+    h('div', { class: 'card' }, h('h3', {}, 'Язык'), langSwitch(), h('div', { class: 'hint' }, 'Русский · English · Deutsch · Français')),
     h('div', { class: 'card' }, h('h3', {}, 'Акцентный цвет'),
       h('div', { class: 'swatches' }, ACCENTS.map(([c, name]) => h('button', { class: `dot ${(look.accent || '') === c ? 'on' : ''}`, title: name, 'aria-label': name, style: `--c:${c || 'var(--text)'}`, onclick: () => { saveLook({ accent: c }); redraw(); } }))),
       h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Свой цвет:'), h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(look.accent || '') ? look.accent : '#0a84ff', onchange: (e) => { saveLook({ accent: e.target.value }); redraw(); } })),

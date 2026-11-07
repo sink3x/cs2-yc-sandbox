@@ -75,5 +75,14 @@ test('patchCoreJson drops FollowCS2ServerGuidelines only when WeaponPaints is on
   const base = { PublicChatTrigger: ['!'], FollowCS2ServerGuidelines: true };
   assert.equal(S.patchCoreJson(base, on).FollowCS2ServerGuidelines, false);
   assert.equal(S.patchCoreJson(base, off).FollowCS2ServerGuidelines, true);
-  assert.deepEqual(S.patchCoreJson(base, on).PublicChatTrigger, ['!']);
+  assert.ok(S.patchCoreJson(base, on).PublicChatTrigger.includes('!'));
+});
+
+test('patchCoreJson: chat triggers ! . / (dot can be turned off, existing triggers kept)', () => {
+  const st = S.defaultState();
+  const c = S.patchCoreJson({ PublicChatTrigger: ['!'], SilentChatTrigger: ['/'] }, st);
+  assert.deepEqual(c.PublicChatTrigger.sort(), ['!', '.']); assert.deepEqual(c.SilentChatTrigger, ['/']);
+  const off = S.defaultState(); off.flags.dotChat = false;
+  assert.deepEqual(S.patchCoreJson({ PublicChatTrigger: ['!', '.'] }, off).PublicChatTrigger, ['!']);
+  const old = S.defaultState(); delete old.flags.dotChat; assert.ok(S.patchCoreJson(null, old).PublicChatTrigger.includes('.'));
 });

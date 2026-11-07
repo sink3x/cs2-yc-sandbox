@@ -22,7 +22,7 @@ function defaultState({ hostname = 'sandbox-cs-1', admins = [] } = {}) {
       maxPlayers: 10, password: '', extraArgs: '',
     },
     cvars: { ...PRESETS.practice.cvars },
-    flags: { autoUpdateGame: true, autoUpdatePlugins: true, insecure: false },
+    flags: { autoUpdateGame: true, autoUpdatePlugins: true, insecure: false, dotChat: true },
     plugins,
     admins: admins.map((a) => ({ name: a.name, steamid: a.steamid, flags: a.flags || ['@css/root'] })),
     maps: [],
@@ -191,14 +191,18 @@ function launchArgs(state, secrets = {}) {
   return args;
 }
 
-/** Patch CounterStrikeSharp core.json: WeaponPaints needs FollowCS2ServerGuidelines=false. */
+/** Patch CounterStrikeSharp core.json: WeaponPaints needs FollowCS2ServerGuidelines=false; chat triggers «!» «.» «/». */
 function patchCoreJson(existing, state) {
   const base = existing && typeof existing === 'object' ? existing : {
     PublicChatTrigger: ['!'], SilentChatTrigger: ['/'], FollowCS2ServerGuidelines: true,
     PluginHotReloadEnabled: true, PluginAutoLoadEnabled: true, ServerLanguage: 'en',
     UnlockConCommands: true, UnlockConVars: true,
   };
-  return { ...base, FollowCS2ServerGuidelines: !state.plugins.weaponpaints };
+  // Чат-команды: «!» и «.» — обычные (видны в чате), «/» — тихие (сообщение скрывается). Точку можно отключить флагом dotChat.
+  const dot = !state.flags || state.flags.dotChat !== false;
+  const pub = new Set(Array.isArray(base.PublicChatTrigger) ? base.PublicChatTrigger : ['!']); pub.add('!'); if (dot) pub.add('.'); else pub.delete('.');
+  const silent = new Set(Array.isArray(base.SilentChatTrigger) ? base.SilentChatTrigger : ['/']); silent.add('/');
+  return { ...base, PublicChatTrigger: [...pub], SilentChatTrigger: [...silent], FollowCS2ServerGuidelines: !state.plugins.weaponpaints };
 }
 
 const GAME_DIR = '/srv/cs2/server/game/csgo';

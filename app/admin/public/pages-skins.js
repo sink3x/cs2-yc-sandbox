@@ -6,6 +6,22 @@ const SORTS = [['default', 'По умолчанию'], ['name', 'По назва
 const RAR_ORDER = ['consumer', 'industrial', 'mil-spec', 'restricted', 'classified', 'covert', 'contraband', 'extraordinary'];
 const rarRank = (r) => { const n = String((r && r.n) || '').toLowerCase(); const i = RAR_ORDER.findIndex((x) => n.includes(x)); return i < 0 ? (n === 'своё' ? 99 : -1) : i; };
 const SKIN_TABS = [['Knives', 'Ножи'], ['Gloves', 'Перчатки'], ['Rifles', 'Винтовки'], ['Pistols', 'Пистолеты'], ['SMGs', 'Пистолеты-пулемёты'], ['Heavy', 'Тяжёлое'], ['Equipment', 'Zeus'], ['Agents', 'Агенты'], ['Music', 'Музыка'], ['Custom', 'Свои']];
+
+/** Моменты, на которые играет музыкальный набор: [id, подпись, когда играет, кто слышит, слово для поиска]. */
+const MUSIC_EVENTS = [
+  ['mainmenu', 'Главное меню', 'играет в меню игры', 'me', 'main menu'],
+  ['chooseteam', 'Выбор команды', 'пока вы выбираете сторону', 'me', 'choose team'],
+  ['startround', 'Начало раунда', 'в начале раунда, во время заморозки', 'me', 'round start'],
+  ['startaction', 'Экшн-старт', 'в первые секунды после заморозки', 'me', 'start action'],
+  ['bombplanted', 'Бомба заложена', 'сразу после установки бомбы', 'me', 'bomb planted'],
+  ['bombtenseccount', '10 сек до взрыва', 'последние 10 секунд таймера бомбы', 'me', 'bomb 10 second'],
+  ['roundtenseccount', '10 сек до конца', 'последние 10 секунд раунда', 'me', 'round 10 seconds'],
+  ['wonround', 'Победа в раунде', 'когда ваша команда выиграла раунд', 'me', 'won round'],
+  ['lostround', 'Поражение', 'когда ваша команда проиграла раунд', 'me', 'lost round'],
+  ['roundmvpanthem', 'MVP-гимн', 'когда вас выбрали MVP раунда', 'all', 'MVP anthem'],
+  ['deathcam', 'Камера смерти', 'после вашей гибели', 'me', 'deathcam'],
+];
+const extLink = (href, text) => h('a', { class: 'btn', href, target: '_blank', rel: 'noopener noreferrer' }, text);
 const WEAR_PRESETS = [['FN', 0.03], ['MW', 0.1], ['FT', 0.25], ['WW', 0.41], ['BS', 0.6]];
 const wearName = (w) => (w < 0.07 ? 'Прямо с завода' : w < 0.15 ? 'Немного поношенное' : w < 0.38 ? 'После полевых' : w < 0.45 ? 'Поношенное' : 'Закалённое в боях');
 
@@ -70,7 +86,7 @@ function skinsView(redraw) {
   const player = K.players.find((p) => p.steamid === K.steamid);
 
   // ---- выбор игрока
-  const sel = h('select', {}, [h('option', { value: '' }, '— выберите игрока —')].concat(K.players.map((p) => h('option', { value: p.steamid, selected: p.steamid === K.steamid }, `${p.name || p.steamid}${p.online ? ' ● в игре' : ''}${p.admin ? ' · админ' : ''}${p.hasLoadout ? ' · есть скины' : ''}`))));
+  const sel = h('select', {}, [h('option', { value: '' }, '— выберите игрока —')].concat(K.players.map((p) => h('option', { value: p.steamid, selected: p.steamid === K.steamid }, `${p.name || p.steamid}${p.online ? ` ${tr('● в игре')}` : ''}${p.admin ? ` ${tr('· админ')}` : ''}${p.hasLoadout ? ` ${tr('· есть скины')}` : ''}`))));
   sel.addEventListener('change', async () => { K.steamid = sel.value; store.set('skinPlayer', K.steamid); await loadLoadout(); redraw(); });
   const manual = h('input', { type: 'text', placeholder: 'SteamID64, STEAM_0:…, [U:1:…] или ссылка /profiles/…', style: 'width:340px' });
   const openManual = act(async () => { const id = parseSteamId(manual.value); if (!id) throw new Error('Не распознал SteamID. Нужен 17-значный SteamID64 (ссылки вида /id/имя не подходят — возьмите ID на steamid.io).'); K.steamid = id; store.set('skinPlayer', id); if (!K.players.some((p) => p.steamid === id)) K.players.push({ steamid: id, name: null }); await loadLoadout(); redraw(); });
@@ -180,13 +196,32 @@ function previewPanel(redraw, L) {
     return h('div', { class: 'card preview' }, h('h3', {}, 'Агент'), h('div', { class: 'big', style: `--rar:${K.cat.rarities[a.rarity].c}` }, skinImg(a.img, a.name)), h('b', {}, a.name), h('div', { class: 'muted small' }, `Команда: ${a.team === 'ct' ? 'CT' : 'T'} · модель ${a.model.split('/').pop()}`),
       h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: act(async () => { need(); await applyOps([{ op: 'agents', [a.team]: a.model }], 'Агент надет'); redraw(); }) }, 'Надеть агента'),
         h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'agents', [a.team]: null }], 'Агент снят'); redraw(); }) }, `Снять (${a.team === 'ct' ? 'CT' : 'T'})`)),
+      h('div', { class: 'viewlinks' }, h('b', {}, 'Посмотреть агента'),
+        h('div', { class: 'row' },
+          extLink(`https://www.google.com/search?q=${encodeURIComponent(`"${a.name}" CS2 agent 3D viewer`)}`, '🧍 3D, в полный рост'),
+          extLink(`https://www.google.com/search?q=${encodeURIComponent(`"${a.name}" CS2 agent first person sleeves arms`)}`, '✋ Руки от первого лица'),
+          extLink(`https://steamcommunity.com/market/listings/730/${encodeURIComponent(a.name)}`, 'Steam Market')),
+        h('div', { class: 'hint' }, 'В каталоге у агента только портрет. Полноростовая 3D-модель и вид рук от первого лица есть у сторонних просмотрщиков (поиск откроется в новой вкладке); собственный 3D-просмотр потребует вытащить модели из файлов игры на сервере.')),
       h('div', { class: 'hint' }, 'Модель агента сохраняется как путь agents/models/…; если после надевания агент не сменился, откройте /agents в игре один раз — это подскажет формат вашей версии плагина.'));
   }
   if (sel.music) {
     const m = sel.music;
+    const ev = MUSIC_EVENTS.find((e) => e[0] === (K.musicEvent || 'wonround')) || MUSIC_EVENTS[0];
+    const q = (extra) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${m.name} CS2 music kit ${extra}`.trim())}`;
+    const info = h('div', { class: 'muted small' });
+    const chips = h('div', { class: 'chips' });
+    const paintEv = () => {
+      chips.replaceChildren(...MUSIC_EVENTS.map(([id, label]) => h('button', { class: `chip ${id === ev[0] ? 'on' : ''}`, onclick: () => { K.musicEvent = id; redraw(); } }, label)));
+      info.replaceChildren(h('b', {}, ev[1]), ' — ', ev[2], ' ', h('span', { class: ev[3] === 'all' ? 'tag okc' : 'tag' }, ev[3] === 'all' ? 'слышат все игроки' : 'слышите только вы'));
+    };
+    paintEv();
     return h('div', { class: 'card preview' }, h('h3', {}, 'Музыкальный набор'), h('div', { class: 'big' }, skinImg(m.img, m.name)), h('b', {}, m.name),
       h('div', { class: 'row' }, teamSel, h('button', { class: 'btn primary', onclick: act(async () => { need(); await applyOps([{ op: 'music', id: m.id, teams: teamList() }], 'Музыка выбрана'); redraw(); }) }, 'Выбрать'),
-        h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'music', id: 0 }], 'Музыка сброшена'); redraw(); }) }, 'Сбросить')));
+        h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'music', id: 0 }], 'Музыка сброшена'); redraw(); }) }, 'Сбросить')),
+      h('div', { class: 'viewlinks' }, h('b', {}, 'Прослушать и выбрать момент'), chips, info,
+        h('div', { class: 'row' }, extLink(q(ev[4]), `▶ Слушать: ${ev[1]}`), extLink(q(''), '▶ Весь набор'), extLink(`https://steamcommunity.com/market/listings/730/${encodeURIComponent(`Music Kit | ${m.name}`)}`, 'Steam Market')),
+        h('div', { class: 'hint' }, 'Звук набора Valve не публикует, поэтому прослушивание открывается на YouTube в новой вкладке (по выбранному моменту).')),
+      h('div', { class: 'hint' }, 'Набор применяется целиком: выбрать звук для отдельного события (MVP, конец раунда) нельзя — это ограничение игры и плагина WeaponPaints. StatTrak™ для музыкальных наборов плагин не поддерживает (в базе нет поля для счётчика MVP), поэтому дубли «StatTrak» убраны из списка, а переключателя нет.'));
   }
   const s = sel.skin; const kind = s.weapon.kind;
   const wearIn = h('input', { type: 'range', min: s.min, max: s.max, step: 0.001, value: Math.min(Math.max(E.wear, s.min), s.max) });
@@ -200,7 +235,7 @@ function previewPanel(redraw, L) {
   const upd = () => {
     E.wear = Number(wearNum.value); E.seed = Number(seedIn.value); E.nametag = tagIn.value; E.stattrak = stIn.checked; E.count = Number(cntIn.value);
     if (s.paint !== 0) { const lk = SkinLinks.wearLook(E.wear); const im = bigImg.querySelector('img'); if (im) im.style.filter = lk.filter; scratch.style.opacity = lk.scratch; }
-    meta.textContent = `${wearName(E.wear)} · float ${E.wear.toFixed(3)} · паттерн ${E.seed}${E.nametag ? ` · «${E.nametag}»` : ''}${E.stattrak ? ` · StatTrak™ ${E.count}` : ''}`;
+    meta.textContent = tr(`${wearName(E.wear)} · float ${E.wear.toFixed(3)} · паттерн ${E.seed}${E.nametag ? ` · «${E.nametag}»` : ''}${E.stattrak ? ` · StatTrak™ ${E.count}` : ''}`);
   };
   wearIn.addEventListener('input', () => { wearNum.value = wearIn.value; upd(); }); wearNum.addEventListener('input', () => { wearIn.value = wearNum.value; upd(); });
   for (const el of [seedIn, tagIn, stIn, cntIn]) el.addEventListener('input', upd);

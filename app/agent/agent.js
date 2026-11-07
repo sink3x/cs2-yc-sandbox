@@ -41,7 +41,12 @@ async function liveStatus() {
   if (Date.now() - liveCache.at < 2000) return liveCache.value;
   let value = null;
   try {
+    const t0 = Date.now();
     value = parseStatus((await rconRun(['status'], 4000))[0]);
+    value.rttMs = Date.now() - t0; // задержка RCON-запроса внутри ВМ (показатель «живости» сервера)
+    const pings = (value.players || []).filter((x) => !x.bot && Number.isFinite(x.ping)).map((x) => x.ping);
+    value.pingAvg = pings.length ? Math.round(pings.reduce((a, b) => a + b, 0) / pings.length) : null;
+    value.pingMax = pings.length ? Math.max(...pings) : null;
     // CS2 в спячке/на старте печатает неполный status: добираем из настроек панели, чтобы «Обзор» не показывал пустоту
     const sv = (loadState().server) || {};
     if (!value.map && sv.map) { value.map = sv.map; value.mapGuess = true; }

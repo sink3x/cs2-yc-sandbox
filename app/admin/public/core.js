@@ -49,7 +49,7 @@ const ERR_RU = [
 ];
 function ruErr(m) {
   const t = String(m || '');
-  for (const [re, rep] of ERR_RU) if (re.test(t)) return rep.endsWith(': ') ? rep + t.slice(6) : t.replace(re, rep);
+  for (const [re, rep] of ERR_RU) if (re.test(t)) return rep.endsWith(': ') ? tr(rep) + t.slice(6) : t.replace(re, tr(rep));
   return t;
 }
 
@@ -112,7 +112,7 @@ async function loadOverview() {
       const r = await api('GET', '/public-info'); const ip = r.connect ? r.connect.replace(/^connect\s+/, '').split(':')[0] : null;
       S.ov = { vm: { status: r.status, publicIp: ip }, server: r.map ? { live: { map: r.map, humans: r.humans, maxPlayers: r.maxPlayers } } : null };
     } catch (e) { if (e.message !== 'Нужен вход') S.ov = { error: e.message }; }
-    renderBar(); if (S.page === 'overview') renderPage(); return;
+    renderBar(); if (S.page === 'overview' || S.page === 'info') renderPage(); return;
   }
   try { S.ov = await api('GET', '/overview'); } catch (e) { if (e.message !== 'Нужен вход') S.ov = { error: e.message }; }
   if (serverUp() && !S.state && !S.stateTried) {
@@ -120,7 +120,7 @@ async function loadOverview() {
     api('GET', '/state').then((r) => { S.state = r; S.pluginsMeta = r.plugins; S.adminFlags = r.admin_flags; renderBar(); }).catch(() => { S.stateTried = false; });
   }
   renderBar();
-  if (S.page === 'overview') renderPage();
+  if (S.page === 'overview' || S.page === 'info') renderPage();
 }
 
 /** steam://connect/ip:порт[/пароль] — открывает Steam и заходит на сервер. */
@@ -162,7 +162,7 @@ function renderBar() {
 
 
 // ---------------------------------------------------------------- общие виджеты
-const fmtNum = (n) => new Intl.NumberFormat('ru-RU').format(n);
+const fmtNum = (n) => new Intl.NumberFormat(LOCALE).format(n);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /** Модальное окно. content — узел или массив; возвращает {close}. */

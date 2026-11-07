@@ -2,15 +2,17 @@
 // Каркас: навигация, быстрый поиск (Ctrl+K), загрузка данных и запуск панели.
 
 const PAGES = {
-  overview: ['Обзор', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка', pagePractice], maps: ['Карты и режимы', pageMaps],
+  overview: ['Сервер', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка', pagePractice], maps: ['Карты и режимы', pageMaps],
   console: ['Консоль', pageConsole], settings: ['Настройки', pageSettings], plugins: ['Плагины и флаги', pagePlugins], admins: ['Админы', pageAdmins],
   look: ['Оформление', pageLook], stats: ['Статистика', pageStats], profile: ['Профиль', pageProfile], info: ['Сервер', pageInfo], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
 };
+// Главная страница — «Сервер»: у админа это обзор сервера, у игрока — информация о сервере. Логотип и вход ведут только сюда.
+const homePage = () => (S.role === 'player' ? 'info' : 'overview');
 const PLAYER_PAGES = new Set(['skins', 'stats', 'info', 'profile', 'look']);
 const visiblePages = () => Object.entries(PAGES).filter(([k]) => (S.role === 'player' ? PLAYER_PAGES.has(k) : k !== 'info'));
 // Разделы боковой панели: заголовок → страницы (порядок важен).
 const NAV_GROUPS = [
-  ['Сервер', ['overview', 'info', 'maps', 'settings', 'console']],
+  ['Управление', ['overview', 'info', 'maps', 'settings', 'console']],
   ['Игра', ['practice', 'skins', 'plugins']],
   ['Игроки', ['stats', 'admins']],
   ['Панель и аккаунт', ['profile', 'look', 'panel', 'backups', 'help']],
@@ -80,8 +82,8 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.
 
 function offlineBanner() {
   const st = S.state; if (!st || !st.offline) return null;
-  const when = st.savedAt ? ` (копия от ${new Date(st.savedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})` : '';
-  return h('div', { class: 'banner' }, `Сервер CS2 выключен: показаны настройки, сохранённые в панели${when}. Менять их можно уже сейчас — изменения применятся автоматически после запуска сервера.${st.pending ? ` В очереди: ${st.pending}.` : ''}`);
+  const when = st.savedAt ? ` (${tr('копия от')} ${new Date(st.savedAt).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})` : '';
+  return h('div', { class: 'banner' }, `${tr('Сервер CS2 выключен: показаны настройки, сохранённые в панели')}${when}. ${tr('Менять их можно уже сейчас — изменения применятся автоматически после запуска сервера.')}${st.pending ? ` ${tr('В очереди:')} ${st.pending}.` : ''}`);
 }
 
 
@@ -92,7 +94,7 @@ async function fetchState() {
 }
 async function renderPage() {
   navEl.replaceChildren(
-    h('h1', { onclick: () => { document.dispatchEvent(new Event('logo-click')); const home = S.role === 'player' ? 'skins' : 'overview'; if (S.page !== home) go(home); }, role: 'link', tabindex: '0', style: 'cursor:pointer', 'data-tip': BRAND.name }, brandMark(22) || svgIcon('logo', 20), h('span', { class: 'lbl' }, BRAND.name)),
+    h('h1', { onclick: () => { document.dispatchEvent(new Event('logo-click')); const home = homePage(); if (S.page !== home) go(home); }, role: 'link', tabindex: '0', style: 'cursor:pointer', 'data-tip': BRAND.name }, brandMark(22) || svgIcon('logo', 20), h('span', { class: 'lbl' }, BRAND.name)),
     ...navSections(visiblePages()),
     h('div', { class: 'sp' }),
     navBtn('search', 'Поиск (Ctrl+K)', { onclick: openPalette }),
@@ -143,7 +145,7 @@ async function boot() {
   await loadBrand();
   try { const me = await api('GET', '/me'); S.user = me.user; S.display = me.displayName || me.user; S.avatar = me.avatar || ''; S.role = me.role || 'admin'; S.steamid = me.steamid || ''; } catch { return showLogin(); }
   { const sp = new URLSearchParams(location.search).get('steam'); if (sp && STEAM_MSG[sp]) { toast(STEAM_MSG[sp], sp === 'linked' ? 's' : 'e'); history.replaceState(null, '', location.pathname); } }
-  if (S.role === 'player') { S.page = 'skins'; S.catalog = { presets: [], maps: [], catalog: [], toggles: [], fun: [] }; } else S.catalog = await api('GET', '/catalog');
+  if (S.role === 'player') { S.page = homePage(); S.catalog = { presets: [], maps: [], catalog: [], toggles: [], fun: [] }; } else S.catalog = await api('GET', '/catalog');
   S.state = null;
   const hash = location.hash.slice(1); if (PAGES[hash] && visiblePages().some(([k]) => k === hash)) S.page = hash;
   $app.replaceChildren(h('div', { class: 'shell' }, navEl, h('div', {}, h('div', { style: 'padding:20px 26px 0' }, barEl), mainEl)));

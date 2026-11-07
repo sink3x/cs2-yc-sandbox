@@ -189,15 +189,10 @@ function pageProfile() {
 function pageInfo() {
   const box = h('div', { class: 'muted' }, 'Загрузка…');
   const load = async () => {
-    try {
-      const r = await api('GET', '/public-info'); const [st, kind] = fmtStatus(r.status || '');
-      put(box, h('div', { class: 'row' }, pill(st, kind), r.map ? h('span', {}, `Карта: ${r.map}`) : null, r.humans != null ? h('span', {}, `Игроков: ${r.humans}/${r.maxPlayers}`) : null),
-        r.connect ? h('div', { class: 'row' }, h('code', {}, r.connect), h('button', { class: 'btn', onclick: copy(r.connect) }, 'Скопировать')) : null,
-        null);
-    } catch (e) { box.replaceChildren(h('div', { class: 'banner' }, e.message)); }
+    try { const r = await api('GET', '/public-info'); put(box, serverGlance(r)); } catch (e) { box.replaceChildren(h('div', { class: 'banner' }, e.message)); }
   };
   setTimeout(load, 0);
-  return h('div', {}, h('h2', {}, 'Сервер'), h('div', { class: 'card' }, box));
+  return h('div', {}, h('h2', {}, 'Сервер'), box);
 }
 
 /** Переключатель языка (RU / EN / DE / FR). */

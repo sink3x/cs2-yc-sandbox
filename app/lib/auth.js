@@ -23,9 +23,9 @@ class Sessions {
     this.now = now;
     this.map = new Map();
   }
-  create(user) {
+  create(user, extra = {}) {
     const id = crypto.randomBytes(32).toString('hex');
-    this.map.set(id, { user, exp: this.now() + this.ttlMs });
+    this.map.set(id, { user, exp: this.now() + this.ttlMs, ...extra });
     return id;
   }
   get(id) {

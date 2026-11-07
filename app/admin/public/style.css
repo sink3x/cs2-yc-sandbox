@@ -321,10 +321,13 @@ td.tone-good, td.tone-bad { font-weight: 600; }
 .switch .small { white-space: nowrap; }
 @media (max-width: 780px) { .cv { grid-template-columns: 1fr; } }
 
-/* разделы бокового меню */
-nav .nav-cap { padding: 14px 11px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); opacity: .8; white-space: nowrap; }
-nav h1 + .nav-cap { padding-top: 2px; }
-.shell.collapsed nav .nav-cap { height: 1px; padding: 0; margin: 10px 14px 6px; background: var(--line); overflow: hidden; } .shell.collapsed nav .nav-cap .lbl { display: none; }
+/* разделы бокового меню: высота постоянна, при сворачивании подпись плавно гаснет, а вместо неё проявляется тонкая черта — ничего не прыгает */
+nav .nav-cap { position: relative; flex: none; height: 34px; padding: 0 11px 6px; display: flex; align-items: flex-end; font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; }
+nav h1 + .nav-cap { height: 22px; }
+nav .nav-cap .lbl { max-width: none; opacity: .8; transition: opacity .18s ease; }
+nav .nav-cap::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: 11px; height: 1px; background: var(--line); opacity: 0; transition: opacity .18s ease; }
+.shell.collapsed nav .nav-cap .lbl { opacity: 0; max-width: none; }
+.shell.collapsed nav .nav-cap::after { opacity: 1; transition-delay: .1s; }
 @media (max-width: 780px) { nav .nav-cap { display: none; } }
 
 /* FACEIT: значок уровня, ELO-полоса, динамика */
@@ -335,3 +338,26 @@ nav h1 + .nav-cap { padding-top: 2px; }
 .fc-spark i { flex: 1; min-width: 4px; border-radius: 3px 3px 0 0; opacity: .9; } .fc-spark i.w { background: var(--ok); } .fc-spark i.l { background: var(--bad); }
 .stat .sub { display: block; margin-top: 2px; font-size: 11px; opacity: .85; }
 .fc-details { margin-top: 12px; }
+
+/* Сводка «Сервер» */
+.glance-head { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.glance-map { position: relative; width: 168px; height: 112px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #2b3a4f, #151b26); flex: none; overflow: hidden; }
+.glance-map img { position: relative; z-index: 1; height: 96px; width: auto; max-width: 90%; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,.5)); }
+.glance-map .mono { position: absolute; font-size: 44px; font-weight: 800; letter-spacing: .06em; color: rgba(255,255,255,.35); }
+.glance-map.has-img .mono { opacity: 0; }
+.glance-title { min-width: 220px; flex: 1; }
+.glance-title h3 { margin: 2px 0 4px; font-size: 22px; }
+.glance .stats { margin-top: 14px; }
+.glance-players { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.glance-players .gp { display: flex; gap: 8px; align-items: center; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid var(--border, rgba(255,255,255,.1)); font-size: 13px; }
+.gp-ping.ok { color: #3fb950; } .gp-ping.warn { color: #d29922; } .gp-ping.bad { color: #f85149; }
+.glance .stat.ok .val { color: #3fb950; } .glance .stat.warn .val { color: #d29922; } .glance .stat.bad .val { color: #f85149; }
+.glance-foot { margin-top: 12px; }
+
+/* Просмотр агента / прослушивание музыки */
+.viewlinks { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); display: flex; flex-direction: column; gap: 8px; }
+.viewlinks .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.viewlinks a.btn { text-decoration: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; font-size: 12px; }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }

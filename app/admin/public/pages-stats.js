@@ -100,7 +100,7 @@ function pageStats() {
       detail.hidden = false; detail.replaceChildren(h('h3', {}, p.name || p.steamid), statCard(p));
       if (p.heat === undefined && S.role !== 'player') api('GET', `/stats/${p.steamid}`).then((d) => { const full = d.players && d.players[0]; if (full && !detail.hidden) { p.heat = full.heat || {}; detail.replaceChildren(h('h3', {}, p.name || p.steamid), statCard(p)); } }).catch(() => {});
     };
-    const note = h('div', { class: 'muted small' }, `Считается с ${r.since ? new Date(r.since).toLocaleDateString() : '—'} по логу сервера: убийства, смерти, хедшоты, урон, гранаты, время. Выстрелы/пули лог не пишет.`);
+    const note = h('div', { class: 'muted small' }, `Считается с ${r.since ? new Date(r.since).toLocaleDateString(LOCALE) : '—'} по логу сервера: убийства, смерти, хедшоты, урон, гранаты, время. Выстрелы/пули лог не пишет.`);
     const offline = r.offline ? h('div', { class: 'banner' }, 'Сервер выключен — показаны последние сохранённые данные.') : null;
     if (S.role === 'player') {
       const me = r.players[0];

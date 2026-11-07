@@ -53,6 +53,30 @@ function teamsOf(v) {
   return out;
 }
 
+const flt = (v, lo, hi, name, dflt) => {
+  const n = v === undefined || v === null || v === '' ? dflt : Number(v);
+  if (!Number.isFinite(n) || n < lo || n > hi) throw err(`${name}: число ${lo}…${hi}`);
+  return Math.round(n * 1e4) / 1e4;
+};
+/** Стикеры WeaponPaints: до 5 слотов, формат колонки «id;schema;x;y;wear;scale;rotation». null/0 — пустой слот. */
+function validateStickers(list) {
+  if (!Array.isArray(list) || list.length > 5) throw err('stickers: массив до 5 слотов');
+  return Array.from({ length: 5 }, (_x, i) => {
+    const st = list[i];
+    if (!st || !st.id) return null;
+    return { id: int(st.id, 1, 999999, `stickers[${i}].id`), schema: int(st.schema ?? i, 0, 4, `stickers[${i}].schema`),
+      x: flt(st.x, -3, 3, `stickers[${i}].x`, 0), y: flt(st.y, -3, 3, `stickers[${i}].y`, 0), wear: flt(st.wear, 0, 1, `stickers[${i}].wear`, 0),
+      scale: flt(st.scale, 0.05, 5, `stickers[${i}].scale`, 1), rotation: flt(st.rotation, -360, 360, `stickers[${i}].rotation`, 0) };
+  });
+}
+const stickerCell = (st) => (st ? [st.id, st.schema, st.x, st.y, st.wear, st.scale, st.rotation].join(';') : '0;0;0;0;0;0;0');
+function parseStickerCell(v) {
+  const p = String(v || '').split(';'); const id = Number(p[0]);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const n = (i, d) => { const x = Number(p[i]); return Number.isFinite(x) ? x : d; };
+  return { id, schema: n(1, 0), x: n(2, 0), y: n(3, 0), wear: n(4, 0), scale: n(5, 1), rotation: n(6, 0) };
+}
+
 /** Validate and normalise the operations received from the panel. */
 function validateOps(ops) {
   if (!Array.isArray(ops) || !ops.length || ops.length > 40) throw err('ops: от 1 до 40 операций');
@@ -63,12 +87,15 @@ function validateOps(ops) {
         if (!Number.isFinite(wear) || wear < 0 || wear > 1) throw err('wear: число 0–1');
         const nametag = String(o.nametag ?? '');
         if (!NAMETAG.test(nametag)) throw err('nametag: до 20 символов (буквы, цифры, пробел и _ . - ! ? + * # @ ( ))');
-        return {
+        const out = {
           op: 'skin', teams: teamsOf(o.teams), def: int(o.def, 1, 99999, 'def'), paint: int(o.paint, 0, 99999, 'paint'),
           wear: Math.round(wear * 1e6) / 1e6, seed: int(o.seed ?? 0, 0, 1000, 'seed'), nametag,
           stattrak: o.stattrak ? 1 : 0, stattrakCount: int(o.stattrakCount ?? 0, 0, 9999999, 'stattrakCount'),
         };
+        if (o.stickers !== undefined) out.stickers = validateStickers(o.stickers);
+        return out;
       }
+      case 'stattrak-reset': return { op: 'stattrak-reset', teams: teamsOf(o.teams), def: int(o.def, 1, 99999, 'def') };
       case 'unskin': return { op: 'unskin', teams: teamsOf(o.teams), def: int(o.def, 1, 99999, 'def') };
       case 'knife': {
         if (o.knife === null || o.knife === '' || o.knife === undefined) return { op: 'knife', teams: teamsOf(o.teams), knife: null };
@@ -128,6 +155,16 @@ function deleteSql(schema, table, steamid, where = {}) {
   return `DELETE FROM ${table} WHERE ${conds.join(' AND ')};`;
 }
 
+function updateSql(schema, table, steamid, where, set) {
+  const cols = schema[table]; if (!cols) return null;
+  const have = new Set(cols.map((c) => c.name));
+  const sets = Object.entries(set).filter(([k]) => have.has(k)).map(([k, v]) => `${k}=${sqlVal(v)}`);
+  if (!sets.length) return null;
+  const conds = [`steamid=${sqlStr(steamid)}`];
+  for (const [k, v] of Object.entries(where)) if (have.has(k)) conds.push(Array.isArray(v) ? `${k} IN (${v.map(sqlVal).join(',')})` : `${k}=${sqlVal(v)}`);
+  return `UPDATE ${table} SET ${sets.join(', ')} WHERE ${conds.join(' AND ')};`;
+}
+
 /** Turn normalised ops into a list of SQL statements. `schema`: table -> [{name,type,nullable,def,auto}] | null. */
 function buildSql(steamid, ops, schema) {
   if (!isSteamId(steamid)) throw err('steamid: SteamID64 вида 7656119XXXXXXXXXX');
@@ -136,13 +173,18 @@ function buildSql(steamid, ops, schema) {
   for (const o of ops) {
     switch (o.op) {
       case 'skin':
-        if (o.paint === 0) { out.push(deleteSql(schema, 'wp_player_skins', steamid, { weapon_defindex: o.def, weapon_team: o.teams })); break; }
+        if (o.paint === 0 && !(o.stickers && o.stickers.some(Boolean))) { out.push(deleteSql(schema, 'wp_player_skins', steamid, { weapon_defindex: o.def, weapon_team: o.teams })); break; }
         for (const t of o.teams) {
-          out.push(tableSql(schema, 'wp_player_skins', { ...k1(t), weapon_defindex: o.def }, {
+          const vals = {
             weapon_paint_id: o.paint, weapon_wear: o.wear, weapon_seed: o.seed, weapon_nametag: o.nametag || null,
             weapon_stattrak: o.stattrak, weapon_stattrak_count: o.stattrakCount,
-          }));
+          };
+          if (o.stickers) o.stickers.forEach((st, i) => { vals[`weapon_sticker_${i}`] = stickerCell(st); });
+          out.push(tableSql(schema, 'wp_player_skins', { ...k1(t), weapon_defindex: o.def }, vals));
         }
+        break;
+      case 'stattrak-reset':
+        out.push(updateSql(schema, 'wp_player_skins', steamid, { weapon_defindex: o.def, weapon_team: o.teams }, { weapon_stattrak_count: 0 }));
         break;
       case 'unskin': out.push(deleteSql(schema, 'wp_player_skins', steamid, { weapon_defindex: o.def, weapon_team: o.teams })); break;
       case 'knife':
@@ -180,6 +222,7 @@ function shapeLoadout(steamid, rows) {
   const skins = (rows.wp_player_skins || []).map((r) => ({
     team: num(r.weapon_team), def: num(r.weapon_defindex), paint: num(r.weapon_paint_id), wear: num(r.weapon_wear), seed: num(r.weapon_seed),
     nametag: r.weapon_nametag || '', stattrak: num(r.weapon_stattrak) ? 1 : 0, stattrakCount: num(r.weapon_stattrak_count) || 0,
+    stickers: [0, 1, 2, 3, 4].map((i) => parseStickerCell(r[`weapon_sticker_${i}`])),
   }));
   const agent = (rows.wp_player_agents || [])[0] || null;
   return {
@@ -255,4 +298,4 @@ function createSkinsService({ run = defaultRun, schemaTtlMs = 60000, now = () =>
   return { schema, loadout, apply, knownPlayers };
 }
 
-module.exports = { createSkinsService, validateOps, buildSql, parseTsv, parseOnlinePlayers, shapeLoadout, isSteamId, TABLES };
+module.exports = { createSkinsService, validateOps, validateStickers, parseStickerCell, stickerCell, buildSql, parseTsv, parseOnlinePlayers, shapeLoadout, isSteamId, TABLES };

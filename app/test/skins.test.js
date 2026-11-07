@@ -69,8 +69,23 @@ test('service: loadout and apply go through the runner', async () => {
   const svc = createSkinsService({ run });
   const l = await svc.loadout(ID);
   assert.equal(l.available, true);
-  assert.deepEqual(l.skins[0], { team: 2, def: 7, paint: 282, wear: null, seed: null, nametag: '', stattrak: 0, stattrakCount: 0 });
+  assert.deepEqual(l.skins[0], { team: 2, def: 7, paint: 282, wear: null, seed: null, nametag: '', stattrak: 0, stattrakCount: 0, stickers: [null, null, null, null, null] });
   const r = await svc.apply(ID, [{ op: 'unskin', def: 7 }]);
   assert.equal(r.changed, 1);
   assert.match(seen.at(-1), /^START TRANSACTION; DELETE FROM wp_player_skins .* COMMIT;$/);
+});
+
+test('stickers: validation, column format, parsing back, StatTrak reset', () => {
+  const { validateOps, buildSql, parseStickerCell } = require('../agent/skins');
+  const ops = validateOps([{ op: 'skin', teams: [2], def: 7, paint: 44, stickers: [{ id: 123, x: 0.5, y: -0.2, rotation: 30, scale: 0.8, wear: 0.1 }, null, { id: 9 }] }]);
+  assert.equal(ops[0].stickers.length, 5); assert.equal(ops[0].stickers[1], null);
+  const col = (n) => ({ name: n, type: 'varchar', nullable: false, def: 'x', auto: false });
+  const sch = { wp_player_skins: [{ name: 'steamid', nullable: false, def: null }, { name: 'weapon_team', nullable: false, def: null }, { name: 'weapon_defindex', nullable: false, def: null }, { name: 'weapon_paint_id', nullable: false, def: null }, col('weapon_sticker_0'), col('weapon_sticker_2'), { name: 'weapon_stattrak_count', nullable: false, def: '0' }] };
+  const sql = buildSql('76561198000000100', ops, sch)[0];
+  assert.match(sql, /'123;0;0\.5;-0\.2;0\.1;0\.8;30'/); assert.match(sql, /'9;2;0;0;0;1;0'/);
+  assert.deepEqual(parseStickerCell('123;0;0.5;-0.2;0.1;0.8;30'), { id: 123, schema: 0, x: 0.5, y: -0.2, wear: 0.1, scale: 0.8, rotation: 30 });
+  assert.equal(parseStickerCell('0;0;0;0;0;0;0'), null);
+  assert.throws(() => validateOps([{ op: 'skin', teams: [2], def: 7, paint: 44, stickers: [{ id: 1, x: 99 }] }]));
+  assert.throws(() => validateOps([{ op: 'skin', teams: [2], def: 7, paint: 44, stickers: new Array(6).fill({ id: 1 }) }]));
+  assert.match(buildSql('76561198000000100', validateOps([{ op: 'stattrak-reset', teams: [2, 3], def: 7 }]), sch)[0], /UPDATE wp_player_skins SET weapon_stattrak_count=0 WHERE steamid='76561198000000100' AND weapon_defindex=7 AND weapon_team IN \(2,3\)/);
 });

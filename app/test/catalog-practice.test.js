@@ -77,3 +77,11 @@ test('presets: curated workshop map catalog has valid ids and known categories',
   for (const w of WORKSHOP_MAPS) { assert.match(w.id, /^\d{6,12}$/); assert.ok(WORKSHOP_CATS[w.cat], w.cat); assert.ok(w.label && w.note); }
   assert.equal(new Set(WORKSHOP_MAPS.map((w) => w.id)).size, WORKSHOP_MAPS.length);
 });
+
+test('музыкальные наборы: двойники StatTrak™ с тем же def_index убраны', () => {
+  const { buildCatalog } = require('../lib/catalog');
+  const mk = (id, name, def) => ({ id, name, def_index: String(def), image: 'https://cdn.steamstatic.com/apps/730/icons/x.png' });
+  const cat = buildCatalog({ music: [mk('music_kit-3', 'Daniel Sadowski, Crimson Assault', 3), mk('music_kit-3_st', 'StatTrak™ Music Kit | Daniel Sadowski, Crimson Assault', 3), mk('music_kit-4', 'Noisia, Sharpened', 4)] });
+  assert.deepEqual(cat.music.map((m) => m.id), [3, 4]);
+  assert.ok(cat.music.every((m) => !/stattrak/i.test(m.name)));
+});

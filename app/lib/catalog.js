@@ -7,7 +7,7 @@ const { readJson, writeJsonAtomic } = require('./util');
 const BASE = 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en';
 const IMG_PREFIX = 'https://community.akamai.steamstatic.com/economy/image/';
 const TTL_MS = 7 * 24 * 3600 * 1000;
-const CATALOG_VERSION = 3;
+const CATALOG_VERSION = 4;
 
 const CATEGORY_KIND = { Knives: 'knife', Gloves: 'glove' };
 
@@ -70,8 +70,11 @@ function buildCatalog({ skins = [], agents = [], music = [], base = [] }) {
       model: String(a.model_player), img: shortImg(a.image), rarity: rarityIndex(a.rarity),
     }));
 
+  // В каталоге у каждого набора есть двойник «StatTrak™ Music Kit» с тем же def_index: в базе плагина они неразличимы, поэтому оставляем один.
+  const musicSeen = new Set();
   const musicList = music
-    .filter((m) => m && /^\d+$/.test(String(m.def_index)))
+    .filter((m) => m && /^\d+$/.test(String(m.def_index)) && !/stattrak/i.test(String(m.name)) && !/_st$/.test(String(m.id || '')))
+    .filter((m) => { const k = String(m.def_index); if (musicSeen.has(k)) return false; musicSeen.add(k); return true; })
     .map((m) => ({ id: Number(m.def_index), name: String(m.name), img: shortImg(m.image) }));
 
   // Картинки «голого» оружия (без скина) — для списка моделей: def_index → image

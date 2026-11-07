@@ -11,6 +11,7 @@ function detectLang() {
 }
 let LANG = detectLang();
 document.documentElement.lang = LANG;
+const LOCALE = { ru: 'ru-RU', en: 'en-GB', de: 'de-DE', fr: 'fr-FR' }[LANG] || 'ru-RU';
 function setLang(l) { if (!LANGS[l]) return; try { localStorage.setItem('cs2ui.lang', JSON.stringify(l)); } catch { /* ok */ } location.reload(); }
 
 const D = {
@@ -43,7 +44,7 @@ const D = {
   'Раскидки': ['Utility lineups', 'Granaten-Lineups', 'Utilitaires'],
   'Дуэли и AWP': ['Duels & AWP', 'Duelle & AWP', 'Duels & AWP'],
   'Движение и паркур': ['Movement & parkour', 'Bewegung & Parkour', 'Mouvement & parkour'],
-  'Сервер': ['Server', 'Server', 'Serveur'], 'Игра': ['Game', 'Spiel', 'Jeu'], 'Игроки': ['Players', 'Spieler', 'Joueurs'], 'Панель и аккаунт': ['Panel & account', 'Panel & Konto', 'Panneau et compte'],
+  'Сервер': ['Server', 'Server', 'Serveur'], 'Управление': ['Manage', 'Verwaltung', 'Gestion'], 'Игра': ['Game', 'Spiel', 'Jeu'], 'Игроки': ['Players', 'Spieler', 'Joueurs'], 'Панель и аккаунт': ['Panel & account', 'Panel & Konto', 'Panneau et compte'],
   'Обзор': ['Overview', 'Übersicht', 'Aperçu'], 'Скины': ['Skins', 'Skins', 'Skins'], 'Тренировка': ['Practice', 'Training', 'Entraînement'],
   'Карты и режимы': ['Maps & modes', 'Karten & Modi', 'Cartes & modes'], 'Консоль': ['Console', 'Konsole', 'Console'], 'Настройки': ['Settings', 'Einstellungen', 'Paramètres'],
   'Плагины и флаги': ['Plugins & flags', 'Plugins & Flags', 'Plugins & flags'], 'Админы': ['Admins', 'Admins', 'Admins'], 'Оформление': ['Appearance', 'Darstellung', 'Apparence'],
@@ -150,7 +151,12 @@ function tr(s) {
   if (LANG === 'ru' || typeof s !== 'string' || !s) return s;
   const i = LANG_IDX[LANG];
   const hit = D[s]; if (hit && hit[i]) return hit[i];
-  for (const [re, t] of P) { const m = re.exec(s); if (m && t[i]) return t[i].replace(/\$(\d)/g, (_x, n) => m[Number(n)] ?? ''); }
+  for (const [re, t] of P) { const m = re.exec(s); if (m && t[i]) return t[i].replace(/\$(T?)(\d)/g, (_x, k, n) => (k ? tr(m[Number(n)] ?? '') : (m[Number(n)] ?? ''))); }
+  // запасной путь: «термин — описание» и несколько предложений подряд переводятся по частям
+  const dash = /^(\S+) — ([\s\S]+)$/.exec(s);
+  if (dash) { const r = tr(dash[2]); if (r !== dash[2]) return `${dash[1]} — ${r}`; }
+  const parts = s.split(/(?<=[.!?…])\s+/);
+  if (parts.length > 1) { let changed = false; const out = parts.map((p) => { const r = tr(p); if (r !== p) changed = true; return r; }); if (changed) return out.join(' '); }
   return s;
 }
 

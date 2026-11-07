@@ -1,6 +1,41 @@
 'use strict';
 // Основные страницы панели: обзор, консоль, карты, настройки, плагины, админы, бэкапы.
 // ---------------------------------------------------------------- pages
+
+/** Цвет пинга: до 50 мс — хорошо, до 100 — терпимо, дальше — плохо. */
+const pingKind = (ms) => (ms == null ? '' : ms <= 50 ? 'ok' : ms <= 100 ? 'warn' : 'bad');
+const fmtUptime = (sec) => { sec = Math.max(0, Math.round(sec || 0)); const d = Math.floor(sec / 86400); const hh = Math.floor((sec % 86400) / 3600); const m = Math.floor((sec % 3600) / 60); return d ? `${d} д ${hh} ч` : hh ? `${hh} ч ${m} мин` : `${m} мин`; };
+
+/** Сводка «Сервер»: картинка текущей карты, пинги, игроки и краткая статистика. Общая для админа и игрока. */
+function serverGlance(g) {
+  if (!g) return null;
+  const m = g.map || {};
+  const up = g.status === 'RUNNING';
+  const art = h('div', { class: `glance-map ${m.img ? 'has-img' : ''}` },
+    m.img ? h('img', { src: m.img, alt: m.label || '', referrerpolicy: 'no-referrer', onerror: (e) => { e.target.remove(); } }) : null,
+    h('span', { class: 'mono' }, (m.label || (up ? '?' : '—')).replace(/^de_|^cs_/, '').slice(0, 2).toUpperCase()));
+  const stat = (label, value, sub, kind) => h('div', { class: `stat ${kind || ''}` }, h('div', { class: 'lbl' }, label), h('div', { class: 'val' }, value), sub ? h('div', { class: 'sub' }, sub) : null);
+  const stats = [];
+  stats.push(stat('Игроки', g.humans != null ? `${g.humans}/${g.maxPlayers || '?'}` : '—', g.bots ? `+ ${g.bots} ботов` : null));
+  stats.push(stat('Средний пинг', g.pingAvg != null ? `${g.pingAvg} мс` : '—', g.pingMax != null && g.humans > 1 ? `макс. ${g.pingMax} мс` : (g.humans ? null : 'нет игроков'), pingKind(g.pingAvg)));
+  stats.push(stat('Отклик сервера', g.rttMs != null ? `${g.rttMs} мс` : '—', g.agentMs != null ? `канал панели ${g.agentMs} мс` : null, g.rttMs == null ? '' : g.rttMs <= 150 ? 'ok' : g.rttMs <= 500 ? 'warn' : 'bad'));
+  if (g.uptimeSec != null) stats.push(stat('Аптайм ВМ', fmtUptime(g.uptimeSec)));
+  const st = g.stats;
+  const plist = (g.players || []).length ? h('div', { class: 'glance-players' }, g.players.map((p) => h('div', { class: 'gp' }, h('span', { class: 'gp-n' }, p.name || '—'), h('span', { class: `gp-ping ${pingKind(p.ping)}` }, `${p.ping != null ? p.ping : '—'} мс`)))) : null;
+  return h('div', { class: 'card glance' },
+    h('div', { class: 'glance-head' }, art,
+      h('div', { class: 'glance-title' },
+        h('div', { class: 'muted small' }, 'Сейчас на сервере'),
+        h('h3', {}, m.label || (up ? 'Загрузка карты…' : 'Сервер выключен')),
+        m.id && m.id !== m.label ? h('div', { class: 'muted small' }, m.id) : null,
+        h('div', { class: 'row' }, pill(fmtStatus(g.status || '')[0], fmtStatus(g.status || '')[1]), g.connect ? h('code', {}, g.connect) : null, g.connect ? h('button', { class: 'btn', onclick: copy(g.connect) }, 'Скопировать') : null))),
+    up ? h('div', { class: 'stats' }, stats) : null,
+    plist,
+    st ? h('div', { class: 'glance-foot muted small' },
+      `За всё время: ${st.players} игроков · ${st.kills} убийств · ${st.hours} ч игры`,
+      st.top && st.top.length ? ` · топ: ${st.top.map((x) => `${x.name} (${x.kills})`).join(', ')}` : '') : null);
+}
+
 function pageOverview() {
   const o = S.ov;
   if (!o) return h('div', { class: 'muted' }, 'Загрузка…');
@@ -11,7 +46,8 @@ function pageOverview() {
   const mapSel = h('select', {}, (S.catalog ? S.catalog.maps : []).concat((S.state && S.state.state.maps) || []).map((m) => h('option', { value: m.id, selected: live && live.map === m.id }, `${m.label} (${m.id})`)));
   const idle = o.idleSince ? Math.max(0, Math.round((Date.now() - Date.parse(o.idleSince)) / 60000)) : null;
   return h('div', {},
-    h('h2', {}, 'Обзор'),
+    h('h2', {}, 'Сервер'),
+    serverGlance(o.glance),
     h('div', { class: 'grid' },
       h('div', { class: 'card' }, h('h3', {}, 'Виртуальная машина'),
         h('dl', { class: 'kv' },
@@ -59,7 +95,7 @@ function pagePlugins() {
       h('td', { class: 'small' }, i ? i.tag : h('span', { class: 'muted' }, 'не установлен')));
   });
   const flags = {};
-  const flagDefs = [['autoUpdateGame', 'Обновлять CS2 при каждом запуске ВМ'], ['autoUpdatePlugins', 'Обновлять Metamod/CounterStrikeSharp/плагины при запуске'], ['insecure', 'Запуск с -insecure (отключает VAC на сервере)']];
+  const flagDefs = [['autoUpdateGame', 'Обновлять CS2 при каждом запуске ВМ'], ['autoUpdatePlugins', 'Обновлять Metamod/CounterStrikeSharp/плагины при запуске'], ['insecure', 'Запуск с -insecure (отключает VAC на сервере)'], ['dotChat', 'Команды в чате с точкой (.команда) — вместе с «!» и «/»; нужен рестарт CS2']];
   const flagRows = flagDefs.map(([k, t]) => { flags[k] = h('input', { type: 'checkbox', checked: st.flags[k] }); return h('div', { class: 'row' }, h('label', { class: 'switch' }, flags[k], t)); });
   return h('div', {}, h('h2', {}, 'Плагины и фича-флаги'),
     h('div', { class: 'card' }, h('h3', {}, 'Плагины'), h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Плагин'), h('th', {}, 'Описание'), h('th', {}, 'Версия'))), h('tbody', {}, rows)),
@@ -118,7 +154,7 @@ function pageBackups() {
         h('td', {}, h('button', { class: 'btn danger', onclick: act(async () => { if (confirm(`Восстановить ${b.key}? CS2 остановится, конфиги и БД скинов будут заменены.`)) await api('POST', '/restore', { key: b.key }); }, 'Восстановление запущено') }, 'Восстановить')))))) : h('div', { class: 'muted' }, 'Бэкапов пока нет.'));
     } catch (e) { listBox.replaceChildren(h('div', { class: 'warn' }, `Нет связи с агентом: ${e.message}`)); }
   };
-  const loadLogs = async () => { try { const r = await api('GET', `/logs?unit=${unit.value}&n=300`); logBox.textContent = r.text || '(пусто)'; logBox.scrollTop = logBox.scrollHeight; } catch (e) { logBox.textContent = e.message; } };
+  const loadLogs = async () => { try { const r = await api('GET', `/logs?unit=${unit.value}&n=300`); logBox.textContent = r.text || tr('(пусто)'); logBox.scrollTop = logBox.scrollHeight; } catch (e) { logBox.textContent = e.message; } };
   setTimeout(() => { loadList(); loadLogs(); }, 0);
   return h('div', {}, h('h2', {}, 'Бэкапы и логи'),
     h('div', { class: 'card' }, h('h3', {}, 'Бэкапы (Object Storage)'), listBox,
@@ -146,7 +182,7 @@ function cleanupCard() {
     const actions = boxes.filter((b) => b.checked).map((b) => b.dataset.k); if (!actions.length) throw new Error('Отметьте, что чистить');
     if (actions.includes('world') && !confirm('Рестарт раунда выбросит текущий раунд. Продолжить?')) return;
     const r = await api('POST', '/cleanup', { actions });
-    out.replaceChildren(h('div', {}, `Готово: ${r.done.map((d) => ({ files: `файлы (${d.files} шт., ${d.mb} МБ)`, journal: 'журнал', ram: 'кэш ОС', world: 'мир' }[d.action] || d.action)).join(', ')}.`),
+    out.replaceChildren(h('div', {}, `Готово: ${r.done.map((d) => tr({ files: `файлы (${d.files} шт., ${d.mb} МБ)`, journal: 'журнал', ram: 'кэш ОС', world: 'мир' }[d.action] || d.action)).join(', ')}.`),
       h('div', {}, `Свободная RAM: ${r.mem.before.freeMb} → ${r.mem.after.freeMb} МБ.`), ...(r.skipped || []).map((x) => h('div', { class: 'warn small' }, `${x.action}: ${x.reason}`)));
   }, 'Очистка выполнена');
   return h('div', { class: 'card' }, h('h3', {}, 'Очистка кэшей и мусора'),

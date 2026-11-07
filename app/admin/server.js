@@ -61,7 +61,7 @@ function validateCustomSkins(input) {
   });
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
-const PLAYER_OK = new Set(['GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/skins/loadout/:steamid',
+const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
 const MAX_PLAYER_ACCOUNTS = 300;
@@ -104,12 +104,17 @@ function createApp(deps = {}) {
     const p = await account.steamProfile(steamid, httpGet);
     if (p && p.name) { users[name].persona = p.name; users[name].avatar = p.avatar || ''; saveUsers(users); }
   }
-  /** Админ из списка игрового сервера → панельный аккаунт с тем же именем и без привязки Steam. */
-  function autoLinkTarget(users, steamid) {
+  /**
+   * Вход через Steam: ищем панельный аккаунт для SteamID64 игрового админа. Только для SteamID из списка админов сервера
+   * (его ведёт владелец), иначе любой с похожим ником мог бы занять чужой аккаунт. Порядок: имя админа = логин → ник Steam = логин →
+   * единственный свободный аккаунт-админ без привязки Steam.
+   */
+  function autoLinkTarget(users, steamid, persona) {
     const c = readStateCache(); const adm = ((c && c.state && c.state.admins) || []).find((a) => String(a.steamid) === String(steamid));
     if (!adm) return null;
-    const lc = String(adm.name).toLowerCase();
-    return Object.keys(users).find((n) => n.toLowerCase() === lc && users[n].role !== 'player' && !users[n].steamid) || null;
+    const free = Object.keys(users).filter((n) => users[n].role !== 'player' && !users[n].steamid);
+    const byName = (v) => (v ? free.find((n) => n.toLowerCase() === String(v).toLowerCase()) : null);
+    return byName(adm.name) || byName(persona) || (free.length === 1 ? free[0] : null);
   }
   const profileOf = (name) => { const u = loadUsers()[name] || {}; return { user: name, displayName: u.persona || name, avatar: u.avatar || '', email: u.email || '', steamid: u.steamid || '', links: u.links || [], faceitKey: !!readJson(faceitFile, {}).key }; };
   const originOf = (req, secure) => (config.publicUrl ? String(config.publicUrl).replace(/\/+$/, '') : `${secure ? 'https' : 'http'}://${req.headers.host}`);
@@ -265,17 +270,55 @@ function createApp(deps = {}) {
     const out = { vm: null, server: null, busy: vmState.busy, lastError: vmState.lastError, settings: loadSettings(), idleSince: vmState.idleSince ? new Date(vmState.idleSince).toISOString() : null, lastAutoStop: vmState.lastAutoStop };
     try { out.vm = await vmDescribe(); } catch (e) { out.vmError = e.message; return out; }
     if (out.vm.status === 'RUNNING') {
-      try { out.server = await agent('GET', '/status', null, 5000); } catch (e) { out.agentError = e.message; }
+      const t0 = Date.now();
+      try { out.server = await agent('GET', '/status', null, 5000); out.agentMs = Date.now() - t0; } catch (e) { out.agentError = e.message; }
     }
     out.connect = out.vm.publicIp ? `connect ${out.vm.publicIp}:${config.gamePort || 27015}` : null;
+    out.glance = await glance(out);
     return out;
+  }
+
+  /** Карта по id из статуса: подпись и картинка из каталога (воркшоп/своя карта — без картинки, будет монограмма). */
+  function mapInfo(id) {
+    if (!id) return { id: null, label: null, img: null };
+    const std = MAPS.find((m) => m.id === id);
+    if (std) return { id, label: std.label, img: std.img };
+    const num = (String(id).match(/\d{6,}/) || [])[0];
+    const ws = num && WORKSHOP_MAPS.find((m) => m.id === num);
+    if (ws) return { id, label: ws.label, img: null, workshop: true };
+    return { id, label: id, img: null, workshop: /workshop/i.test(String(id)) };
+  }
+
+  let glanceStats = { at: 0, value: null };
+  /** Краткая сводка для страницы «Сервер»: пинг, карта, игроки, счётчики статистики. Одинакова для админа и игрока. */
+  async function glance(o) {
+    const live = o.server && o.server.live;
+    const g = { status: o.vm ? o.vm.status : null, connect: o.connect || null, agentMs: o.agentMs != null ? o.agentMs : null, map: mapInfo(live ? live.map : null) };
+    if (live) {
+      Object.assign(g, { humans: live.humans, bots: live.bots, maxPlayers: live.maxPlayers, rttMs: live.rttMs != null ? live.rttMs : null, pingAvg: live.pingAvg, pingMax: live.pingMax, hostname: live.hostname || null,
+        players: (live.players || []).filter((x) => !x.bot).slice(0, 16).map((x) => ({ name: x.name, ping: x.ping, time: x.time })) });
+    }
+    if (o.server) g.uptimeSec = o.server.uptimeSec;
+    if (o.vm && o.vm.status === 'RUNNING' && o.server) {
+      if (Date.now() - glanceStats.at > 15000) {
+        glanceStats = { at: Date.now(), value: glanceStats.value };
+        try {
+          const r = await agent('GET', '/stats', null, 3000);
+          const ps = r.players || [];
+          glanceStats.value = { players: ps.length, kills: ps.reduce((a, x) => a + (x.kills || 0), 0), deaths: ps.reduce((a, x) => a + (x.deaths || 0), 0), hours: Math.round(ps.reduce((a, x) => a + (x.seconds || 0), 0) / 360) / 10,
+            maps: (r.maps || []).length, since: r.since || null, top: ps.slice(0, 3).map((x) => ({ name: x.name, kills: x.kills, kd: x.kd })) };
+        } catch { /* статистика необязательна */ }
+      }
+      g.stats = glanceStats.value;
+    }
+    return g;
   }
 
   // ---- routes ---------------------------------------------------------------------------------
   const P = (p) => async ({ params, body, query }) => agent('POST', p, body);
   const routes = [
     ['GET', '/api/me', async ({ user }) => { const u = loadUsers()[user] || {}; return { user, displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
-    ['GET', '/api/public-info', async () => { const o = await overview(); return { status: o.vm ? o.vm.status : null, connect: o.connect || null, map: o.server && o.server.live ? o.server.live.map : null, humans: o.server && o.server.live ? o.server.live.humans : null, maxPlayers: o.server && o.server.live ? o.server.live.maxPlayers : null }; }],
+    ['GET', '/api/public-info', async () => { const o = await overview(); return { ...o.glance, map: o.glance.map.id, mapInfo: o.glance.map }; }],
     ['GET', '/api/overview', async () => overview()],
     ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS, workshop: WORKSHOP_MAPS, workshopCats: WORKSHOP_CATS })],
     ['GET', '/api/user-presets', async () => ({ presets: readJson(userPresetsFile, {}) })],
@@ -379,10 +422,24 @@ function createApp(deps = {}) {
       const v = await account.faceitLookup(params.steamid, readJson(faceitFile, {}).key, httpGet);
       faceitCache.set(params.steamid, { v, exp: now() + 10 * 60_000 }); return v;
     }],
+    ['POST', '/api/link-account', async ({ body, user, ip }) => {
+      // Игрок вошёл через Steam, но у него есть админ-аккаунт панели: подтверждаем паролем и объединяем (Steam → этот аккаунт).
+      const users = loadUsers(); const me = users[user];
+      if (!me || me.role !== 'player' || !me.steamid) throw Object.assign(new Error('only for a Steam player session'), { status: 400 });
+      if (keysBlocked(ip)) throw Object.assign(new Error('too many attempts'), { status: 429 });
+      const target = String(body.user || ''); const t = users[target];
+      if (!t || t.role === 'player' || !t.hash || !verifyPassword(String(body.password || ''), t.hash)) { limiter.fail(`ip:${ip}`); audit(user, ip, 'link-account.fail', target.slice(0, 32)); throw Object.assign(new Error('wrong account or password'), { status: 403 }); }
+      if (t.steamid) throw Object.assign(new Error('this account is already linked to a Steam ID'), { status: 409 });
+      t.steamid = me.steamid; if (me.persona) { t.persona = me.persona; t.avatar = me.avatar || ''; }
+      delete users[user]; saveUsers(users); sessions.destroyUser(user); audit(target, ip, 'steam.link-account', me.steamid);
+      return { ok: true, user: target };
+    }],
     ['POST', '/api/password', async ({ body, user, ip, sid }) => {
       const users = readJson(usersFile, { users: {} });
       const u = users.users[user];
-      if (!u || !verifyPassword(String(body.oldPassword || ''), u.hash)) throw Object.assign(new Error('wrong current password'), { status: 403 });
+      // Вошли через Steam и аккаунт привязан к этому Steam — личность уже подтверждена, старый пароль не нужен (на случай, если забыт).
+      const viaSteam = (sessions.get(sid) || {}).via === 'steam' && u && u.steamid;
+      if (!u || (!viaSteam && !verifyPassword(String(body.oldPassword || ''), u.hash || ''))) throw Object.assign(new Error('wrong current password'), { status: 403 });
       const np = String(body.newPassword || '');
       if (np.length < 10) throw Object.assign(new Error('new password: at least 10 characters'), { status: 400 });
       u.hash = hashPassword(np);
@@ -473,14 +530,15 @@ function createApp(deps = {}) {
             return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=linked' });
           }
           let name2 = Object.keys(users).find((n) => users[n].steamid === steamid);
-          if (!name2) { const t = autoLinkTarget(users, steamid); if (t) { users[t].steamid = steamid; saveUsers(users); name2 = t; audit(t, ip, 'steam.autolink', steamid); } }
+          let persona = null;
+          if (!name2) { const pr = await account.steamProfile(steamid, httpGet); persona = pr && pr.name; const t = autoLinkTarget(users, steamid, persona); if (t) { users[t].steamid = steamid; saveUsers(users); name2 = t; audit(t, ip, 'steam.autolink', steamid); } }
           if (!name2) {
             const players = Object.keys(users).filter((n) => users[n].role === 'player').length;
             if (!playerLoginOn() || players >= MAX_PLAYER_ACCOUNTS) { limiter.fail(`ip:${ip}`); audit(steamid, ip, 'login.steam.unlinked'); return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=unlinked' }); }
             name2 = `p${steamid}`; users[name2] = { role: 'player', steamid, created: new Date(now()).toISOString() }; saveUsers(users); audit(name2, ip, 'player.register', steamid);
           }
           await refreshPersona(users, name2, steamid);
-          const sid2 = sessions.create(name2); audit(name2, ip, 'login.steam');
+          const sid2 = sessions.create(name2, { via: 'steam' }); audit(name2, ip, 'login.steam');
           return send(res, 302, '', { ...SEC_HEADERS, Location: '/', 'Set-Cookie': `cs2sid=${sid2}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}${secure ? '; Secure' : ''}` });
         } catch (e) { limiter.fail(`ip:${ip}`); log('steam login:', e.message); return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=error' }); }
       }
