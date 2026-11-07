@@ -111,7 +111,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .kbar { position: fixed; top: 14vh; left: 50%; transform: translateX(-50%); width: min(560px, 92vw); z-index: 25; }
 
 /* ---------- уточнения под монохром ---------- */
-.mapart { filter: grayscale(1) contrast(1.05); }
+.mapart:not(.has-img) { filter: grayscale(1) contrast(1.05); }
 .skin.eq::after { content: 'надето'; background: var(--text); color: var(--bg); }
 .tabs button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
 .seg button.on { background: var(--text); color: var(--bg); }
@@ -280,3 +280,36 @@ img.avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; f
   .shell.collapsed nav h1 { justify-content: center; gap: 0; padding: 0; }
   .shell.collapsed nav h1 .lbl, .shell.collapsed nav h1 span:not(.ico) { display: none; }
 }
+
+/* оценка показателей: зелёный — хорошо, красный — плохо, нейтральный — средне */
+.tone-good { --tone: var(--ok, #30d158); } .tone-bad { --tone: var(--bad, #ff453a); } .tone-mid { --tone: var(--muted); }
+.stat.tone-good, .stat.tone-bad { border-color: color-mix(in srgb, var(--tone) 55%, var(--line)); background: color-mix(in srgb, var(--tone) 9%, var(--panel2)); }
+.stat.tone-good b, .stat.tone-bad b, td.tone-good, td.tone-bad, .recent.tone-good .recent-sum, .recent.tone-bad .recent-sum { color: var(--tone); }
+td.tone-good, td.tone-bad { font-weight: 600; }
+.recent .recent-sum { margin: 0 8px; }
+.form i.w { background: var(--ok, #30d158); color: #06210f; border-color: transparent; } .form i.l { background: color-mix(in srgb, var(--bad, #ff453a) 85%, transparent); color: #fff; border-color: transparent; }
+
+/* паутинка */
+.radar-box { display: flex; flex-direction: column; align-items: center; } .radar { width: 100%; max-width: 420px; height: auto; overflow: visible; }
+.rd-ring { fill: none; stroke: var(--line); } .rd-spoke { stroke: var(--line); }
+.rd-main { fill: color-mix(in srgb, var(--accent) 22%, transparent); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.rd-ref { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; } .rd-dot { fill: var(--accent); }
+.rd-label { fill: var(--text); font-size: 11px; } .rd-val { fill: var(--muted); font-size: 10.5px; }
+.radar-legend { display: flex; align-items: center; gap: 6px; } .radar-legend i { width: 14px; height: 0; border-top: 2px solid var(--accent); display: inline-block; margin-left: 10px; } .radar-legend i.lg-ref { border-top: 2px dashed var(--muted); }
+
+.model-name { font-size: 12px; text-align: center; padding: 0 6px; } .knife-grid .skin .img img { max-height: 60px; }
+
+/* правая колонка скинов: прилипает целиком (редактор + «Сейчас надето»), а не только верхняя карточка; длинная — скроллится внутри */
+.side-sticky { position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; scrollbar-width: thin; }
+.side-sticky > .card { margin: 0; flex: none; } .side-sticky .preview { position: static; }
+@media (max-width: 780px) { .side-sticky { position: static; max-height: none; overflow: visible; } }
+
+.heat-wrap { display: grid; grid-template-columns: minmax(220px, 340px) 1fr; gap: 16px; align-items: start; margin: 10px 0; } .heatmap { width: 100%; height: auto; background: var(--panel2); border-radius: 12px; }
+.hz-good { fill: var(--ok, #30d158); } .hz-bad { fill: var(--bad, #ff453a); } .hz-mark { font: 700 8px system-ui; fill: var(--text); paint-order: stroke; stroke: var(--panel2); stroke-width: 2px; }
+.zone-lists h5 { margin: 6px 0 4px; } .zone-lists ul { margin: 0 0 8px; padding-left: 18px; font-size: 13px; } .zone-lists li { margin-bottom: 4px; }
+@media (max-width: 780px) { .heat-wrap { grid-template-columns: 1fr; } }
+
+.mapart.has-img { height: 104px; position: relative; justify-content: center; align-items: center; }
+.mapart .mapimg { height: 88px; width: auto; max-width: 70%; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,.45)); }
+.mapart .fav { position: absolute; top: 6px; right: 8px; }
+.mapart.has-img { background: radial-gradient(circle at 50% 40%, var(--panel2), var(--console, var(--panel))) !important; }

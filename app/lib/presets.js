@@ -54,7 +54,7 @@ const MAPS = [
   ['de_overpass', 'Overpass'], ['de_ancient', 'Ancient'], ['de_anubis', 'Anubis'], ['de_train', 'Train'],
   ['de_vertigo', 'Vertigo'], ['de_jura', 'Jura'], ['de_grail', 'Grail'], ['de_dogtown', 'Dogtown'],
   ['cs_office', 'Office'], ['cs_italy', 'Italy'], ['de_cache', 'Cache'], ['de_edin', 'Edin'],
-].map(([id, label]) => ({ id, label }));
+].map(([id, label]) => ({ id, label, img: `https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/${id}.png` })); // официальные значки карт (MurkyYT/cs2-map-icons)
 
 // type: bool | int | float | string | enum:<a|b|c>
 const CATALOG = [

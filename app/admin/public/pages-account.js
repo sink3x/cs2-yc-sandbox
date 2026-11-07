@@ -18,6 +18,31 @@ function builtinLinks(steamid, faceitUrl) {
   ].filter(Boolean);
 }
 
+// Оценка показателя FACEIT: 'good' (зелёный) / 'bad' (красный) / 'mid' (нейтральный). Пороги — ориентиры для среднего уровня FACEIT.
+const TONES = { winRate: [54, 47], kd: [1.12, 0.95], hs: [48, 35], kr: [0.74, 0.62], streak: [3, 0] };
+function tone(metric, v) {
+  const n = Number(v); const t = TONES[metric];
+  if (v == null || v === '' || !Number.isFinite(n) || n === 0 && metric !== 'streak' || !t) return 'mid';
+  if (metric === 'streak') return n >= t[0] ? 'good' : 'mid';
+  return n >= t[0] ? 'good' : n < t[1] ? 'bad' : 'mid';
+}
+const recentTone = (rec) => { const w = rec.filter((x) => x === '1').length; const r = rec.length ? w / rec.length : 0.5; return r >= 0.6 ? 'good' : r <= 0.4 ? 'bad' : 'mid'; };
+
+function faceitRadars(r) {
+  const st = r.stats; const rec = st.recent || []; const form = rec.length ? rec.filter((x) => x === '1').length / rec.length : null;
+  const axes = [
+    { label: 'Победы', value: norm(st.winRate, 35, 65), text: `${st.winRate ?? '—'}%` },
+    { label: 'K/D', value: norm(st.kd, 0.6, 1.6), text: String(st.kd ?? '—') },
+    { label: 'Хедшоты', value: norm(st.hs, 20, 65), text: `${st.hs ?? '—'}%` },
+    { label: 'K/R', value: norm(st.kr, 0.5, 0.95), text: String(st.kr ?? '—') },
+    ...(form === null ? [] : [{ label: 'Форма', value: form, text: `${rec.filter((x) => x === '1').length}/${rec.length}` }]),
+  ];
+  const ref = [norm(50, 35, 65), norm(1, 0.6, 1.6), norm(42, 20, 65), norm(0.68, 0.5, 0.95), ...(form === null ? [] : [0.5])];
+  const pool = (r.maps || []).filter((m) => m.matches >= 3 && m.winRate != null).slice(0, 8);
+  return h('div', { class: 'cols radars' }, h('div', {}, h('h4', {}, 'Профиль игрока'), radar({ axes, ref, title: 'Профиль игрока' })),
+    pool.length >= 3 ? h('div', {}, h('h4', {}, 'Пул карт: % побед'), radar({ axes: pool.map((m) => ({ label: m.map, value: norm(m.winRate, 30, 70), text: `${m.winRate}%` })), ref: pool.map(() => norm(50, 30, 70)), title: 'Пул карт' })) : null);
+}
+
 function faceitCard(P) {
   const idIn = h('input', { type: 'text', value: store.get('faceitId', '') || P.steamid || '', placeholder: 'SteamID64 (17 цифр)', style: 'width:220px' });
   const out = h('div', { class: 'faceit-out' });
@@ -27,10 +52,11 @@ function faceitCard(P) {
     const st = r.stats;
     out.replaceChildren(...[h('div', { class: 'faceit-head' }, level(r.level || 0), h('div', {}, h('b', {}, r.nickname || '—'), h('div', { class: 'muted small' }, `${r.region || ''} ${r.country ? '· ' + String(r.country).toUpperCase() : ''}`)),
       h('div', { class: 'faceit-elo' }, h('b', {}, String(r.elo || 0)), h('small', {}, 'ELO'))),
-    st ? h('div', { class: 'statgrid' }, [['Матчей', st.matches], ['Побед, %', st.winRate], ['K/D', st.kd], ['HS, %', st.hs], ['Серия побед', st.streak], ['Рекорд серии', st.longestStreak]].map(([k, v]) => h('div', { class: 'stat' }, h('b', {}, v == null ? '—' : String(v)), h('small', {}, k)))) : h('div', { class: 'muted small' }, 'Статистика матчей недоступна.'),
-    st && st.recent && st.recent.length ? h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Последние матчи'), h('span', { class: 'form' }, st.recent.map((x) => h('i', { class: x === '1' ? 'w' : 'l', title: x === '1' ? 'W' : 'L' }, x === '1' ? 'W' : 'L')))) : null,
+    st ? h('div', { class: 'statgrid' }, [['Матчей', st.matches, null], ['Побед, %', st.winRate, 'winRate'], ['K/D', st.kd, 'kd'], ['HS, %', st.hs, 'hs'], ['K/R', st.kr, 'kr'], ['Серия побед', st.streak, 'streak'], ['Рекорд серии', st.longestStreak, null]].map(([k, v, m]) => h('div', { class: `stat ${m ? 'tone-' + tone(m, v) : ''}` }, h('b', {}, v == null ? '—' : String(v)), h('small', {}, k)))) : h('div', { class: 'muted small' }, 'Статистика матчей недоступна.'),
+    st ? faceitRadars(r) : null,
+    st && st.recent && st.recent.length ? h('div', { class: `row recent tone-${recentTone(st.recent)}` }, h('span', { class: 'muted small' }, 'Последние матчи'), h('b', { class: 'recent-sum' }, `${st.recent.filter((x) => x === '1').length} из ${st.recent.length}`), h('span', { class: 'form' }, st.recent.map((x) => h('i', { class: x === '1' ? 'w' : 'l', title: x === '1' ? 'W' : 'L' }, x === '1' ? 'W' : 'L')))) : null,
     r.maps && r.maps.length ? h('div', {}, h('h4', {}, 'Карты FACEIT'), h('table', {}, h('thead', {}, h('tr', {}, ['Карта', 'Матчей', 'Побед, %', 'K/D', 'HS, %'].map((x) => h('th', {}, x)))),
-      h('tbody', {}, r.maps.map((m) => h('tr', {}, h('td', {}, m.map), h('td', {}, String(m.matches)), h('td', { class: m.winRate >= 52 ? 'good' : m.winRate && m.winRate < 45 ? 'bad' : '' }, String(m.winRate || '—')), h('td', {}, String(m.kd || '—')), h('td', {}, String(m.hs || '—'))))))) : null,
+      h('tbody', {}, r.maps.map((m) => h('tr', {}, h('td', {}, m.map), h('td', {}, String(m.matches)), h('td', { class: `tone-${tone('winRate', m.winRate)}` }, String(m.winRate || '—')), h('td', { class: `tone-${tone('kd', m.kd)}` }, String(m.kd || '—')), h('td', { class: `tone-${tone('hs', m.hs)}` }, String(m.hs || '—'))))))) : null,
     r.analysis && r.analysis.length ? h('div', { class: 'tips' }, h('h4', {}, 'Анализ игры'), r.analysis.map((t) => h('div', { class: `insight ${t.kind}` }, h('i'), h('span', {}, tipText(t))))) : null,
     r.url ? h('div', {}, h('a', { href: r.url, target: '_blank', rel: 'noopener noreferrer' }, 'Открыть профиль на FACEIT ↗')) : null].filter(Boolean));
     P.faceitUrl = r.url; FACEIT_LOOKUP.url = r.url;

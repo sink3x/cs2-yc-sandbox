@@ -32,10 +32,10 @@ test('CatalogCache caches on disk, serves stale data on failure, 503 without any
   const file = path.join(dir, 'c.json');
   const cache = new CatalogCache({ file, fetchJson, now: () => t, ttlMs: 100 });
   await cache.get(); await cache.get();
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
   assert.equal(new CatalogCache({ file, fetchJson, now: () => t, ttlMs: 100 }).mem, null);
   await new CatalogCache({ file, fetchJson, now: () => t, ttlMs: 100 }).get();
-  assert.equal(calls, 3, 'fresh disk cache is reused');
+  assert.equal(calls, 4, 'fresh disk cache is reused');
   t += 500; fail = true;
   assert.equal((await cache.get()).skins.length, 2, 'stale on failure');
   fs.rmSync(file);
@@ -54,4 +54,10 @@ test('practice commands are validated', () => {
   assert.equal(P.buildCommands('fun', { id: 'slowmo' })[0], 'sv_cheats "1"');
   assert.ok(P.buildCommands('fun', { id: 'reset' }).includes('sv_gravity "800"'));
   assert.equal(P.parseCvarOutput('sv_cheats', '"sv_cheats" = "1" ( def. "0" )'), '1');
+});
+
+test('buildCatalog: картинка «голого» оружия из base_weapons, без неё — поле не создаётся', () => {
+  const c = buildCatalog({ ...SRC, base: [{ def_index: 7, image: 'https://community.akamai.steamstatic.com/economy/image/AKvanilla', name: 'AK-47' }, { def_index: 999, image: 'x' }, { def_index: 'bad' }] });
+  assert.equal(c.weapons[0].img, 'AKvanilla'); assert.equal(c.weapons[1].img, undefined);
+  assert.equal(buildCatalog(SRC).weapons[0].img, undefined);
 });

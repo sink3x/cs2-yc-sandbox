@@ -11,7 +11,8 @@ const toSteam64 = (id) => {
   return null;
 };
 const P = String.raw`"(.*?)<(\d+)><([^>]*)><(\w*)>"`; // "name<uid><steamid><team>"
-const POS = String.raw`(?:\s*\[[^\]]*\])?`;
+const NUM = String.raw`(-?\d+(?:\.\d+)?)`;
+const POS = String.raw`(?:\s*\[${NUM} ${NUM} ${NUM}\])?`; // [x y z] — позиция игрока (CS2 пишет её в строках kill/attack/threw)
 const RE = {
   kill: new RegExp(`${P}${POS} killed ${P}${POS} with "([\\w.-]+)"( \\(headshot\\))?`),
   attack: new RegExp(`${P}${POS} attacked ${P}${POS} with "([\\w.-]+)" \\(damage "(\\d+)"\\) \\(damage_armor "(\\d+)"\\) \\(health "(\\d+)"\\) \\(armor "(\\d+)"\\) \\(hitgroup "([^"]+)"\\)`),
@@ -26,9 +27,10 @@ const who = (name, sid) => { const id = toSteam64(sid); return id ? { id, name }
 /** Разбор одной строки лога → событие или null. */
 function parseLine(line) {
   let m;
-  if ((m = RE.attack.exec(line))) { const a = who(m[1], m[3]); const v = who(m[5], m[7]); return { t: 'attack', a, v, weapon: m[9], damage: Number(m[10]), hitgroup: m[14] }; }
-  if ((m = RE.kill.exec(line))) { const a = who(m[1], m[3]); const v = who(m[5], m[7]); return { t: 'kill', a, v, weapon: m[9], hs: !!m[10] }; }
-  if ((m = RE.threw.exec(line))) return { t: 'threw', a: who(m[1], m[3]), kind: m[5] };
+  const pos = (x, y) => (x === undefined || x === null ? null : [Number(x), Number(y)]);
+  if ((m = RE.attack.exec(line))) { const a = who(m[1], m[3]); const v = who(m[8], m[10]); return { t: 'attack', a, v, weapon: m[15], damage: Number(m[16]), hitgroup: m[20] }; }
+  if ((m = RE.kill.exec(line))) { const a = who(m[1], m[3]); const v = who(m[8], m[10]); return { t: 'kill', a, v, weapon: m[15], hs: !!m[16], ap: pos(m[5], m[6]), vp: pos(m[12], m[13]) }; }
+  if ((m = RE.threw.exec(line))) return { t: 'threw', a: who(m[1], m[3]), kind: m[8] };
   if ((m = RE.enter.exec(line))) return { t: 'enter', a: who(m[1], m[3]) };
   if ((m = RE.leave.exec(line))) return { t: 'leave', a: who(m[1], m[3]) };
   if ((m = RE.map.exec(line))) return { t: 'map', map: m[1] };
@@ -36,8 +38,20 @@ function parseLine(line) {
   return null;
 }
 
-const blank = (name) => ({ name, kills: 0, deaths: 0, headshots: 0, damage: 0, hits: 0, grenades: {}, weapons: {}, hitgroups: {}, seconds: 0, maps: {}, firstSeen: null, lastSeen: null });
+const blank = (name) => ({ name, kills: 0, deaths: 0, headshots: 0, damage: 0, hits: 0, grenades: {}, weapons: {}, hitgroups: {}, seconds: 0, maps: {}, heat: {}, firstSeen: null, lastSeen: null });
 const blankMap = () => ({ seconds: 0, rounds: 0, kills: 0, sessions: 0 });
+
+const CELL = 256; // размер клетки тепловой карты, юниты CS2
+const MAX_CELLS = 400; // клеток на игрока и карту
+/** Фиксирует убийство (kills) или смерть (deaths) в клетке карты: heat[map]['gx,gy'] = [убийства, смерти]. */
+function heatAdd(x, map, pos, idx) {
+  if (!pos || !map || !Number.isFinite(pos[0]) || !Number.isFinite(pos[1])) return;
+  const cells = (x.heat = x.heat || {})[map] = x.heat[map] || {};
+  const key = `${Math.floor(pos[0] / CELL)},${Math.floor(pos[1] / CELL)}`;
+  const c = cells[key] = cells[key] || [0, 0]; c[idx]++;
+  const keys = Object.keys(cells);
+  if (keys.length > MAX_CELLS) { keys.sort((a, b) => (cells[a][0] + cells[a][1]) - (cells[b][0] + cells[b][1])); for (const k of keys.slice(0, keys.length - MAX_CELLS + 20)) delete cells[k]; }
+}
 
 class Stats {
   constructor({ now = () => Date.now(), data } = {}) { this.now = now; this.data = data && data.players ? data : { since: new Date(now()).toISOString(), players: {}, maps: {} }; this.sessions = new Map(); this.map = null; this.dirty = false; }
@@ -53,8 +67,8 @@ class Stats {
     if (e.t === 'enter' && e.a && e.a.id) { this.player(e.a); this.sessions.set(e.a.id, { at: this.now(), map: this.map }); return; }
     if (e.t === 'leave' && e.a && e.a.id) { this.player(e.a); this.closeSession(e.a.id); return; }
     if (e.t === 'kill') {
-      if (e.a && e.a.id) { const x = this.player(e.a); x.kills++; if (e.hs) x.headshots++; x.weapons[e.weapon] = (x.weapons[e.weapon] || 0) + 1; this.pm(x).kills++; if (this.map) this.mapOf(this.map).kills++; }
-      if (e.v && e.v.id) { const y = this.player(e.v); y.deaths++; this.pm(y).deaths++; }
+      if (e.a && e.a.id) { const x = this.player(e.a); x.kills++; heatAdd(x, this.map, e.ap, 0); if (e.hs) x.headshots++; x.weapons[e.weapon] = (x.weapons[e.weapon] || 0) + 1; this.pm(x).kills++; if (this.map) this.mapOf(this.map).kills++; }
+      if (e.v && e.v.id) { const y = this.player(e.v); y.deaths++; heatAdd(y, this.map, e.vp, 1); this.pm(y).deaths++; }
       return;
     }
     if (e.t === 'attack' && e.a && e.a.id && (!e.v || e.v.id !== e.a.id)) { const x = this.player(e.a); x.damage += e.damage; x.hits++; x.hitgroups[e.hitgroup] = (x.hitgroups[e.hitgroup] || 0) + 1; this.pm(x).damage += e.damage; return; }
@@ -68,7 +82,7 @@ class Stats {
     const live = new Map(); for (const [id, s] of this.sessions) live.set(id, Math.max(0, Math.round((this.now() - s.at) / 1000)));
     const players = Object.entries(this.data.players).filter(([id]) => !onlySteamid || id === onlySteamid).map(([id, p]) => ({
       steamid: id, name: p.name, kills: p.kills, deaths: p.deaths, kd: p.deaths ? +(p.kills / p.deaths).toFixed(2) : p.kills, headshots: p.headshots, hsPct: p.kills ? Math.round(100 * p.headshots / p.kills) : 0,
-      damage: p.damage, hits: p.hits, grenades: p.grenades, weapons: p.weapons, hitgroups: p.hitgroups, seconds: p.seconds + (live.get(id) || 0), online: live.has(id), maps: p.maps, firstSeen: p.firstSeen, lastSeen: p.lastSeen,
+      damage: p.damage, hits: p.hits, grenades: p.grenades, weapons: p.weapons, hitgroups: p.hitgroups, seconds: p.seconds + (live.get(id) || 0), online: live.has(id), maps: p.maps, ...(onlySteamid ? { heat: p.heat || {}, cell: CELL } : {}), firstSeen: p.firstSeen, lastSeen: p.lastSeen,
     })).sort((a, b) => b.kills - a.kills);
     const maps = Object.entries(this.data.maps).map(([map, m]) => ({ map, ...m })).sort((a, b) => b.seconds - a.seconds);
     return { since: this.data.since, map: this.map, players, maps };

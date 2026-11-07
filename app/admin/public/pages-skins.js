@@ -90,20 +90,20 @@ function skinsView(redraw) {
   const resetW = curW ? h('button', { class: 'btn', onclick: () => { K.weapon = null; K.shown = 48; redraw(); } }, 'Все ' + (SKIN_TABS.find((x) => x[0] === K.tab)?.[1] || '').toLowerCase()) : null;
   const weaponBar = ['Agents', 'Music'].includes(K.tab) ? null : h('div', { class: 'row', style: 'margin-bottom:10px' }, wBox, resetW, h('span', { class: 'spacer' }), 'Сортировка:', sortSel);
 
-  // ---- выбор модели ножа (отдельно, с картинками)
-  const knifePicker = K.tab !== 'Knives' ? null : h('div', { style: 'margin-bottom:12px' },
-    h('div', { class: 'muted small', style: 'margin-bottom:6px' }, 'Выберите модель ножа — ниже появятся только его скины. Нож надевается кнопкой «Применить» в редакторе справа.'),
-    h('div', { class: 'skin-grid knife-grid' }, [null].concat(K.weapons.filter((w) => w.cat === 'Knives' && items.some((s) => s.weapon === w))).map((w) => {
-      const van = w && items.find((s) => s.weapon === w && s.paint === 0);
-      const any = w && (van || items.find((s) => s.weapon === w && s.img));
-      const isEq = w && L && L.knives.some((k) => k.knife === w.id);
-      return h('button', { class: `skin ${(w ? K.weapon === w.def : K.weapon === null) ? 'sel' : ''} ${isEq ? 'eq' : ''}`, onclick: () => { K.weapon = w ? w.def : null; K.q = ''; K.shown = 48; redraw(); } },
-        h('div', { class: 'img' }, w ? skinImg(any && any.img, w.name) : h('span', { class: 'muted' }, 'Все')),
-        h('div', { class: 'nm' }, w ? w.name : 'Все ножи', h('small', {}, w ? `${items.filter((s) => s.weapon === w).length} скинов` : '')));
+  // ---- выбор модели оружия/ножа: карточки с «голым» оружием (без скина и окраса); ниже — все скины выбранной модели
+  const modelEq = (w) => L && (w.kind === 'knife' ? L.knives.some((k) => k.knife === w.id) : L.skins.some((x) => x.def === w.def));
+  const modelPicker = ['Agents', 'Music', 'Custom'].includes(K.tab) ? null : h('div', { style: 'margin-bottom:12px' },
+    h('div', { class: 'muted small', style: 'margin-bottom:6px' }, K.tab === 'Knives' ? 'Выберите модель ножа — ниже появятся только его скины. Нож надевается кнопкой «Надеть нож» в редакторе справа.' : 'Выберите модель — ниже появятся все её скины. Картинки здесь без скинов, как стандартное оружие.'),
+    h('div', { class: 'skin-grid knife-grid' }, [null].concat(catWeapons).map((w) => {
+      // картинка: стандартное оружие из каталога; у ножей — «ваниль»; окрашенный скин для списка моделей не подставляем
+      const van = w && (w.img ? { img: w.img } : items.find((s) => s.weapon === w && s.paint === 0 && s.img));
+      return h('button', { class: `skin ${(w ? K.weapon === w.def : K.weapon === null) ? 'sel' : ''} ${w && modelEq(w) ? 'eq' : ''}`, onclick: () => { K.weapon = w ? w.def : null; K.q = ''; K.shown = 48; redraw(); } },
+        h('div', { class: 'img' }, w ? (van ? skinImg(van.img, w.name) : h('span', { class: 'muted small' }, 'нет фото')) : h('span', { class: 'muted' }, 'Все')),
+        h('div', { class: 'nm' }, w ? w.name : (K.tab === 'Knives' ? 'Все ножи' : 'Все'), h('small', {}, w ? `${items.filter((s) => s.weapon === w).length} скинов` : '')));
     })));
-  const weaponChips = ['Agents', 'Music', 'Custom', 'Knives'].includes(K.tab) && K.tab !== 'Custom' ? null : h('div', { class: 'chips', style: 'margin-bottom:10px' },
+  const weaponChips = K.tab !== 'Custom' ? null : h('div', { class: 'chips', style: 'margin-bottom:10px' },
     h('span', { class: 'chip', style: K.weapon === null ? 'border-color:var(--accent)' : '', onclick: () => { K.weapon = null; K.shown = 48; redraw(); } }, 'Все'),
-    (K.tab === 'Custom' ? K.weapons.filter((w) => items.some((s) => s.custom && s.weapon === w)) : catWeapons).map((w) => h('span', { class: 'chip', style: K.weapon === w.def ? 'border-color:var(--accent);color:var(--accent)' : '', onclick: () => { K.weapon = w.def; K.shown = 48; redraw(); } }, w.name)));
+    K.weapons.filter((w) => items.some((s) => s.custom && s.weapon === w)).map((w) => h('span', { class: 'chip', style: K.weapon === w.def ? 'border-color:var(--accent);color:var(--accent)' : '', onclick: () => { K.weapon = w.def; K.shown = 48; redraw(); } }, w.name)));
 
   // ---- поиск по всем скинам
   const search = h('input', { type: 'text', value: K.q, placeholder: 'Поиск: «редлайн», fade, ak, карамбит…', style: 'width:320px' });
@@ -152,8 +152,8 @@ function skinsView(redraw) {
       S.role === 'player' ? null : h('div', { class: 'row' }, manual, h('button', { class: 'btn', onclick: openManual }, 'Открыть по SteamID')),
       warn() ? h('div', { class: 'warn small' }, warn()) : h('div', { class: 'muted small' }, `${player && player.name ? player.name + ' · ' : ''}${K.steamid}. Скины попадают в базу сразу; в игре игрок пишет !wp (или перезаходит). Новые игроки появляются в списке после первого входа и выбора скина или через ввод SteamID.`)),
     h('div', { class: 'skin-layout' },
-      h('div', {}, h('div', { class: 'row' }, searchW), tabs, weaponBar, knifePicker, weaponChips, gridBox),
-      h('div', {}, previewPanel(redraw, L), loadoutPanel(redraw, L))),
+      h('div', {}, h('div', { class: 'row' }, searchW), tabs, weaponBar, modelPicker, weaponChips, gridBox),
+      h('div', { class: 'side-sticky' }, previewPanel(redraw, L), loadoutPanel(redraw, L))),
     S.role === 'admin' ? customSkinForm(redraw) : null);
 }
 

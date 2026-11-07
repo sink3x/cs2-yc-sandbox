@@ -7,7 +7,7 @@ const { readJson, writeJsonAtomic } = require('./util');
 const BASE = 'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en';
 const IMG_PREFIX = 'https://community.akamai.steamstatic.com/economy/image/';
 const TTL_MS = 7 * 24 * 3600 * 1000;
-const CATALOG_VERSION = 2;
+const CATALOG_VERSION = 3;
 
 const CATEGORY_KIND = { Knives: 'knife', Gloves: 'glove' };
 
@@ -21,7 +21,7 @@ const shortImg = (u) => {
  * skins:   [paint, weaponIndex, patternName, rarityIndex, minFloat, maxFloat, statTrak(0|1), image]
  * weapons: { id: 'weapon_ak47', def: 7, name: 'AK-47', cat: 'Rifles', kind: 'weapon'|'knife'|'glove' }
  */
-function buildCatalog({ skins = [], agents = [], music = [] }) {
+function buildCatalog({ skins = [], agents = [], music = [], base = [] }) {
   const weapons = [];
   const weaponIdx = new Map();
   const rarities = [];
@@ -74,6 +74,10 @@ function buildCatalog({ skins = [], agents = [], music = [] }) {
     .filter((m) => m && /^\d+$/.test(String(m.def_index)))
     .map((m) => ({ id: Number(m.def_index), name: String(m.name), img: shortImg(m.image) }));
 
+  // Картинки «голого» оружия (без скина) — для списка моделей: def_index → image
+  const baseImg = new Map((Array.isArray(base) ? base : []).filter((b) => b && Number.isInteger(b.def_index) && b.image).map((b) => [b.def_index, shortImg(b.image)]));
+  for (const w of weapons) { const im = baseImg.get(w.def); if (im) w.img = im; }
+
   return { v: CATALOG_VERSION, imgBase: IMG_PREFIX, weapons, rarities, skins: out, agents: agentList, music: musicList };
 }
 
@@ -96,8 +100,8 @@ class CatalogCache {
     if (disk && disk.data && disk.data.v === CATALOG_VERSION && t - disk.at < this.ttlMs) { this.mem = disk; return disk.data; }
     if (!this.inflight) {
       this.inflight = (async () => {
-        const [skins, agents, music] = await Promise.all(['skins', 'agents', 'music_kits'].map((n) => this.fetchJson(`${BASE}/${n}.json`)));
-        const data = buildCatalog({ skins, agents, music });
+        const [skins, agents, music, base] = await Promise.all(['skins', 'agents', 'music_kits', 'base_weapons'].map((n) => this.fetchJson(`${BASE}/${n}.json`).catch((e) => { if (n !== 'base_weapons') throw e; return []; })));
+        const data = buildCatalog({ skins, agents, music, base });
         if (!data.skins.length) throw new Error('catalog source returned no skins');
         const rec = { at: this.now(), data };
         if (this.file) { try { writeJsonAtomic(this.file, rec); } catch { /* cache is best effort */ } }

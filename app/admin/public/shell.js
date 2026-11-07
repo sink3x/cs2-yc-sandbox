@@ -74,7 +74,7 @@ async function fetchState() {
 }
 async function renderPage() {
   navEl.replaceChildren(
-    h('h1', { onclick: () => document.dispatchEvent(new Event('logo-click')), style: 'cursor:pointer', 'data-tip': BRAND.name }, brandMark(22) || svgIcon('logo', 20), h('span', { class: 'lbl' }, BRAND.name)),
+    h('h1', { onclick: () => { document.dispatchEvent(new Event('logo-click')); const home = S.role === 'player' ? 'skins' : 'overview'; if (S.page !== home) go(home); }, role: 'link', tabindex: '0', style: 'cursor:pointer', 'data-tip': BRAND.name }, brandMark(22) || svgIcon('logo', 20), h('span', { class: 'lbl' }, BRAND.name)),
     ...visiblePages().map(([k, [t]]) => navBtn(k, t, { class: S.page === k ? 'on' : '', onclick: () => go(k) })),
     h('div', { class: 'sp' }),
     navBtn('search', 'Поиск (Ctrl+K)', { onclick: openPalette }),

@@ -137,7 +137,7 @@ function pageMaps() {
     gridBox.replaceChildren(...(list.length ? list.map((m) => {
       const [kind, note] = metaOf(m); const hue = mapHue(m.id);
       return h('div', { class: `mapcard ${live === m.id ? 'live' : ''} ${st.server.map === m.id ? 'start' : ''}` },
-        h('div', { class: 'mapart', style: `background:linear-gradient(135deg,hsl(${hue} 55% 32%),hsl(${(hue + 50) % 360} 60% 18%))` }, h('span', {}, mapMonogram(m.id)), h('button', { class: `fav ${favs.has(m.id) ? 'on' : ''}`, title: 'В избранное', onclick: () => { favs.has(m.id) ? favs.delete(m.id) : favs.add(m.id); store.set('favmaps', [...favs]); drawMaps(); } }, favs.has(m.id) ? '★' : '☆')),
+        h('div', { class: `mapart ${m.img ? 'has-img' : ''}`, style: `background:linear-gradient(135deg,hsl(${hue} 55% 32%),hsl(${(hue + 50) % 360} 60% 18%))` }, m.img ? h('img', { class: 'mapimg', src: m.img, alt: m.label, loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e) => { e.target.remove(); } }) : h('span', {}, mapMonogram(m.id)), h('button', { class: `fav ${favs.has(m.id) ? 'on' : ''}`, title: 'В избранное', onclick: () => { favs.has(m.id) ? favs.delete(m.id) : favs.add(m.id); store.set('favmaps', [...favs]); drawMaps(); } }, favs.has(m.id) ? '★' : '☆')),
         h('div', { class: 'mapbody' }, h('b', {}, m.label), h('div', { class: 'muted small' }, note || m.id),
           h('div', { class: 'row' }, h('span', { class: 'tag' }, { bomb: 'бомба', hostage: 'заложники', workshop: 'воркшоп', other: 'прочее' }[kind]), live === m.id ? h('span', { class: 'tag okc' }, 'сейчас') : null, st.server.map === m.id ? h('span', { class: 'tag', style: 'color:var(--accent)' }, 'при старте') : null),
           h('div', { class: 'row' },

@@ -239,3 +239,27 @@ function parseSteamId(text) {
 
 // confirm()/alert() тоже переводим
 { const _c = window.confirm.bind(window); window.confirm = (m) => _c(tr(String(m))); const _a = window.alert.bind(window); window.alert = (m) => _a(tr(String(m))); }
+
+// ---------------------------------------------------------------- паутинка (radar / spider chart)
+/** axes: [{ label, value (0..1), text }], ref: необязательный контур для сравнения [0..1,...]. Рисует SVG без зависимостей. */
+function radar({ axes, ref, title = '', size = 300 }) {
+  const NS = 'http://www.w3.org/2000/svg'; const n = axes.length;
+  const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
+  const W = size + 120; const H = size + 50; const cx = W / 2; const cy = H / 2 + 4; const R = size / 2 - 18;
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, class: 'radar', role: 'img', 'aria-label': `${tr(title || 'Паутинка')}: ${axes.map((a) => `${tr(a.label)} ${a.text}`).join(', ')}` });
+  const pt = (i, v) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / n; return [cx + Math.cos(a) * R * v, cy + Math.sin(a) * R * v]; };
+  for (const k of [0.25, 0.5, 0.75, 1]) el('polygon', { points: axes.map((_a, i) => pt(i, k).join(',')).join(' '), class: 'rd-ring' }, svg);
+  axes.forEach((a, i) => {
+    const [x, y] = pt(i, 1); el('line', { x1: cx, y1: cy, x2: x, y2: y, class: 'rd-spoke' }, svg);
+    const [lx, ly] = pt(i, 1.2); const c = Math.cos(-Math.PI / 2 + (2 * Math.PI * i) / n);
+    const t = el('text', { x: lx, y: ly, class: 'rd-label', 'text-anchor': Math.abs(c) < 0.2 ? 'middle' : c > 0 ? 'start' : 'end', 'dominant-baseline': 'middle' }, svg);
+    const l1 = el('tspan', { x: lx, dy: '-0.35em' }, t); l1.textContent = tr(a.label);
+    const l2 = el('tspan', { x: lx, dy: '1.2em', class: 'rd-val' }, t); l2.textContent = a.text;
+  });
+  const clamp = (v) => Math.min(1, Math.max(0.03, v));
+  if (ref) el('polygon', { points: ref.map((v, i) => pt(i, clamp(v)).join(',')).join(' '), class: 'rd-ref' }, svg);
+  el('polygon', { points: axes.map((a, i) => pt(i, clamp(a.value)).join(',')).join(' '), class: 'rd-main' }, svg);
+  axes.forEach((a, i) => { const [x, y] = pt(i, clamp(a.value)); const d = el('circle', { cx: x, cy: y, r: 3.5, class: 'rd-dot' }, svg); el('title', {}, d).textContent = `${tr(a.label)}: ${a.text}`; });
+  return h('div', { class: 'radar-box' }, svg, ref ? h('div', { class: 'muted small radar-legend' }, h('i', { class: 'lg-main' }), tr('Игрок'), h('i', { class: 'lg-ref' }), tr('Средний уровень')) : null);
+}
+const norm = (v, lo, hi) => (Number.isFinite(Number(v)) ? Math.min(1, Math.max(0, (Number(v) - lo) / (hi - lo))) : 0);

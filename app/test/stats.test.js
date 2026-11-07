@@ -48,3 +48,22 @@ test('Stats aggregates kills, damage, grenades, playtime per map', () => {
   assert.equal(s.summary().players.find((p) => p.name === 'sink333').seconds, 240);
   assert.equal(s.data.players['76561198000000100'].maps.de_dust2.seconds, 210);
 });
+
+test('позиции убийств и смертей → тепловая карта по клеткам', () => {
+  const POSA = `${A} [-1200.5 340 -64]`; const POSB = `${B} [800 -500 12]`;
+  const e = parseLine(`L 11/07/2026 - 12:00:00: ${POSA} killed ${POSB} with "ak47" (headshot)`);
+  assert.deepEqual(e.ap, [-1200.5, 340]); assert.deepEqual(e.vp, [800, -500]); assert.equal(e.hs, true); assert.equal(e.weapon, 'ak47');
+  const att = parseLine(`L 11/07/2026 - 12:00:00: ${POSA} attacked ${POSB} with "ak47" (damage "27") (damage_armor "0") (health "73") (armor "0") (hitgroup "head")`);
+  assert.equal(att.damage, 27); assert.equal(att.hitgroup, 'head');
+  const t = parseLine(`L x: ${POSA} threw smokegrenade [1 2 3]`); assert.equal(t.kind, 'smokegrenade');
+  const s = new Stats({ now: () => 0 });
+  s.apply({ t: 'map', map: 'de_mirage' });
+  for (let i = 0; i < 3; i++) s.apply(parseLine(`L: ${POSA} killed ${POSB} with "ak47"`));
+  s.apply(parseLine(`L: ${POSB} killed ${POSA} with "awp"`));
+  const sum = s.summary('76561198000000100'); const p = sum.players[0];
+  assert.equal(p.cell, 256);
+  assert.deepEqual(p.heat.de_mirage['-5,1'], [3, 1]); // убивал 3 раза из клетки (-1200,340), умер 1 раз там же
+  assert.equal(s.summary().players[0].heat, undefined, 'в общем списке тепловой карты нет');
+  // записи без позиции не ломают разбор
+  assert.equal(parseLine(`L: ${A} killed ${B} with "ak47"`).ap, null);
+});
