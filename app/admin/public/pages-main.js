@@ -122,6 +122,17 @@ function pageAdmins() {
   S.protectedAdmins = [...locked];
   let list = st.admins.map((a) => ({ ...a, flags: [...a.flags] }));
   const box = h('div');
+  const accounts = {}; // steamid → карточка пользователя панели (slug, аватар, ник): нужна для ссылки «Профиль на сервере»
+  const isSid = (v) => /^\d{17}$/.test(String(v || ''));
+  const ownerBadge = (a) => {
+    const acc = accounts[a.steamid];
+    return h('div', { class: 'owner-box' },
+      h('span', { class: 'owner-badge', title: 'Это владелец сервера: удалить его из админов и снять root нельзя' }, h('b', { 'aria-hidden': 'true' }, '♛'), 'Владелец'),
+      h('div', { class: 'owner-links' },
+        isSid(a.steamid) ? h('a', { class: 'adm-link', href: `https://steamcommunity.com/profiles/${a.steamid}`, target: '_blank', rel: 'noopener noreferrer' }, 'Профиль Steam ↗') : null,
+        acc ? h('a', { class: 'adm-link', href: `#users/${acc.slug}`, title: 'Карточка в панели управления', onclick: (e) => { e.preventDefault(); go('users', acc.slug); } },
+          acc.avatar ? h('img', { src: acc.avatar, alt: '', width: 16, height: 16, referrerpolicy: 'no-referrer' }) : null, 'Профиль на сервере →') : null));
+  };
   const draw = () => {
     const head = h('tr', {}, h('th', {}, 'Имя'), h('th', {}, 'SteamID64'), h('th', {}, 'Права'), h('th', {}));
     const rows = list.map((a, idx) => {
@@ -131,13 +142,15 @@ function pageAdmins() {
         return h('span', { class: 'chip', title: fixed ? 'Права владельца менять нельзя' : '', style: `${on ? 'border-color:var(--accent);color:var(--accent);' : ''}${fixed ? 'opacity:.6;cursor:not-allowed;' : ''}`, onclick: () => { if (fixed) return; a.flags = on ? a.flags.filter((x) => x !== f) : a.flags.concat([f]); draw(); } }, f.replace('@css/', ''));
       }));
       return h('tr', {}, h('td', {}, h('input', { type: 'text', value: a.name, style: 'width:140px', oninput: (e) => { a.name = e.target.value; } })),
-        h('td', {}, h('input', { type: 'text', value: a.steamid, style: 'width:180px', readonly: own, oninput: (e) => { a.steamid = e.target.value.trim(); } })), h('td', {}, flagSel),
-        h('td', {}, own ? h('span', { class: 'tag', title: 'Это владелец сервера: удалить его из админов нельзя' }, 'владелец')
-          : h('button', { class: 'btn danger', onclick: () => { list.splice(idx, 1); draw(); } }, 'Удалить')));
+        h('td', {}, h('div', { class: 'adm-sid' }, h('input', { type: 'text', value: a.steamid, style: 'width:180px', readonly: own, oninput: (e) => { a.steamid = e.target.value.trim(); } }),
+          isSid(a.steamid) && !own ? h('a', { class: 'adm-ext', href: `https://steamcommunity.com/profiles/${a.steamid}`, target: '_blank', rel: 'noopener noreferrer', title: 'Профиль Steam', 'aria-label': 'Профиль Steam' }, '↗') : null)),
+        h('td', {}, flagSel),
+        h('td', {}, own ? ownerBadge(a) : h('button', { class: 'btn danger', onclick: () => { list.splice(idx, 1); draw(); } }, 'Удалить')));
     });
     box.replaceChildren(h('table', {}, h('thead', {}, head), h('tbody', {}, rows)));
   };
   draw();
+  if (locked.size) api('GET', '/users?limit=100').then((r) => { for (const u of r.users || []) if (u.steamid && locked.has(u.steamid) && u.slug) accounts[u.steamid] = u; draw(); }).catch(() => {});
   return h('div', {}, h('h2', {}, 'Админы сервера'),
     h('div', { class: 'card' }, box, h('div', { class: 'row' },
       h('button', { class: 'btn', onclick: () => { list.push({ name: 'new', steamid: '', flags: ['@css/root'] }); draw(); } }, '＋ Добавить'),

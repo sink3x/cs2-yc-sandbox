@@ -453,3 +453,20 @@ code, pre, .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, "JetBra
 .co-map.co-pick { cursor: crosshair; } .co-map.co-pick .co-pt { pointer-events: none; }
 .co-pt.own circle { stroke: #7be07b; } .co-pt.draft text { display: block; }
 .co-edit { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; }
+
+/* Админы сервера: владелец и ссылки */
+.adm-sid { display: flex; align-items: center; gap: 8px; }
+.adm-ext { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); text-decoration: none; }
+.adm-ext:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 30%, var(--line)); }
+.owner-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 4px 0; min-width: 190px; }
+.owner-badge { display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px 4px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 700; letter-spacing: .01em; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.owner-badge b { font-size: 14px; line-height: 1; }
+.owner-links { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-link { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-size: 12px; text-decoration: none; white-space: nowrap; }
+.adm-link:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); color: var(--accent); }
+.adm-link img { border-radius: 50%; display: block; }
+
+/* Звуки: свои файлы */
+.snd-drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px; margin: 10px 0; border: 1.5px dashed var(--line); border-radius: 12px; cursor: pointer; text-align: center; transition: border-color .15s, background .15s; }
+.snd-drop:hover, .snd-drop:focus-visible, .snd-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); outline: none; }
+.snd-files .snd-pv { min-width: 38px; }

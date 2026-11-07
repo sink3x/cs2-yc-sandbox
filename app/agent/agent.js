@@ -9,7 +9,8 @@ const E = require('./env');
 const S = require('../lib/state');
 const { PRESETS } = require('../lib/presets');
 const { rcon, parseStatus } = require('../lib/rcon');
-const { readBody, readJsonBody, send, matchRoute } = require('../lib/http');
+const { readBody, readRaw, readJsonBody, send, matchRoute } = require('../lib/http');
+const soundFiles = require('../lib/soundfiles');
 const { readJson, writeJsonAtomic, safeEqual, makeLogger, sleep, randomToken } = require('../lib/util');
 const { applyState, patchWeaponPaints } = require('./apply');
 const backup = require('./backup');
@@ -132,6 +133,10 @@ function overrideCommands(state) {
 // Владелец сервера = первый админ из конфигурации Terraform: его нельзя удалить из админов.
 const protectedAdmins = () => (config.admins || []).slice(0, 1).map((a) => String(a.steamid));
 
+const sounds = soundFiles.createStore(require('node:path').join(E.dirs.data, 'custom-sounds'));
+
+const RAW_ROUTES = new Set(['PUT /sound-files/:name']);
+
 const routes = [
   ['GET', '/health', async () => ({ ok: true })],
   ['GET', '/status', async () => status()],
@@ -226,6 +231,10 @@ const routes = [
     try { out.backup = await backup.createBackup({ reason: 'shutdown' }); out.steps.push('backup uploaded'); } catch (e) { out.steps.push(`backup failed: ${e.message}`); out.backupError = e.message; }
     return out;
   }],
+  // Свои аудиофайлы: копия того, что загружено в панель (панель — источник правды, сверяет и досылает сама).
+  ['GET', '/sound-files', async () => ({ files: sounds.list().map(({ name, size, sha1 }) => ({ name, size, sha1 })) })],
+  ['PUT', '/sound-files/:name', async ({ params, raw }) => sounds.put(params.name, raw)],
+  ['DELETE', '/sound-files/:name', async ({ params }) => { sounds.remove(params.name); return { ok: true }; }],
   ['GET', '/jobs/:id', async ({ params }) => {
     const j = jobs.get(params.id);
     if (!j) throw Object.assign(new Error('no such job'), { status: 404 });
@@ -240,8 +249,9 @@ const server = http.createServer(async (req, res) => {
     if (!auth.startsWith('Bearer ') || !safeEqual(auth.slice(7), TOKEN)) return send(res, 401, { error: 'unauthorized' });
     const m = matchRoute(routes, req.method, url.pathname);
     if (!m) return send(res, 404, { error: 'not found' });
-    const body = req.method === 'GET' ? {} : await readJsonBody(req);
-    const result = await m.handler({ params: m.params, body, query: Object.fromEntries(url.searchParams) });
+    const raw = RAW_ROUTES.has(`${req.method} ${m.pattern}`) ? await readRaw(req, soundFiles.MAX_FILE) : null;
+    const body = req.method === 'GET' || raw ? {} : await readJsonBody(req);
+    const result = await m.handler({ params: m.params, body, raw, query: Object.fromEntries(url.searchParams) });
     return send(res, 200, result);
   } catch (e) {
     if (!e.status) log('error', req.method, url.pathname, e.stack || e.message);

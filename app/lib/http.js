@@ -16,6 +16,21 @@ function readBody(req, limit = MAX_BODY) {
   });
 }
 
+/** Тело запроса как Buffer (для загрузки файлов). */
+function readRaw(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > limit + (16 << 20)) { reject(Object.assign(new Error('body too large'), { status: 413 })); req.destroy(); return; }
+      if (size <= limit) chunks.push(c); // чуть больше лимита дочитываем, чтобы ответить 413, а не оборвать соединение
+    });
+    req.on('end', () => (size > limit ? reject(Object.assign(new Error('body too large'), { status: 413 })) : resolve(Buffer.concat(chunks))));
+    req.on('error', reject);
+  });
+}
+
 async function readJsonBody(req) {
   const text = await readBody(req);
   if (!text) return {};
@@ -41,4 +56,4 @@ function matchRoute(routes, method, pathname) {
   return null;
 }
 
-module.exports = { readBody, readJsonBody, send, matchRoute };
+module.exports = { readBody, readRaw, readJsonBody, send, matchRoute };

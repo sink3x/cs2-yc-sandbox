@@ -5,7 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const { Sessions, FailureLimiter, verifyPassword, hashPassword, parseCookies } = require('../lib/auth');
-const { readBody, readJsonBody, send, matchRoute } = require('../lib/http');
+const { readBody, readRaw, readJsonBody, send, matchRoute } = require('../lib/http');
+const soundFiles = require('../lib/soundfiles');
 const { readJson, writeJsonAtomic, loadEnvFile, makeLogger, sleep } = require('../lib/util');
 const { PRESETS, MAPS, CATALOG, WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');
 const { YandexCompute } = require('../lib/yc');
@@ -87,6 +88,8 @@ function createApp(deps = {}) {
   const userPresetsFile = deps.userPresetsFile || path.join(VAR, 'user-presets.json');
   const customSkinsFile = deps.customSkinsFile || path.join(VAR, 'custom-skins.json');
   const stickerCache = deps.stickerCache || new StickerCache({ file: path.join(VAR, 'sticker-catalog.json') });
+  const soundStore = soundFiles.createStore(deps.soundsDir || path.join(VAR, 'sound-files'));
+  const soundSyncFile = deps.soundSyncFile || path.join(VAR, 'sound-sync.json');
   const calloutsCustomFile = deps.calloutsCustomFile || path.join(VAR, 'callouts-custom.json');
   const loadCalloutCustom = () => { const v = validateCalloutCustom(readJson(calloutsCustomFile, EMPTY_CALLOUT_CUSTOM())); return v.custom; };
   const calloutMaps = deps.calloutMaps || new CalloutMaps({ dir: path.join(VAR, 'callouts') });
@@ -171,9 +174,10 @@ function createApp(deps = {}) {
 
   // ---- agent client ---------------------------------------------------------------------------
   const agent = deps.agent || (async (method, apiPath, body, timeoutMs = 20000) => {
+    const bin = Buffer.isBuffer(body); // файл целиком, без JSON
     const res = await fetch(`${config.agentUrl}${apiPath}`, {
-      method, headers: { Authorization: `Bearer ${secrets.AGENT_TOKEN}`, 'Content-Type': 'application/json' },
-      body: method === 'GET' ? undefined : JSON.stringify(body || {}), signal: AbortSignal.timeout(timeoutMs),
+      method, headers: { Authorization: `Bearer ${secrets.AGENT_TOKEN}`, 'Content-Type': bin ? 'application/octet-stream' : 'application/json' },
+      body: method === 'GET' ? undefined : (bin ? body : JSON.stringify(body || {})), signal: AbortSignal.timeout(timeoutMs),
     });
     const text = await res.text();
     let j; try { j = JSON.parse(text); } catch { j = { error: text.slice(0, 200) }; }
@@ -232,6 +236,52 @@ function createApp(deps = {}) {
       writeStateCache({ ...c, state: v.state, pending: [...(c.pending || []), body.state] });
       return { state: v.state, applied: { changed: [] }, needsRestart: false, offline: true, queued: true };
     }
+  }
+
+  // ---- свои аудиофайлы: источник правды — панель, на игровую ВМ их досылает сверка по отпечаткам --------------
+  // Состояние сверки: synced (на ВМ то же самое), pending (ВМ выключена или ещё не сверяли), outdated (старый агент без
+  // приёма файлов: поможет перезапуск ВМ), error (агент ответил ошибкой).
+  const soundSync = { running: false, syncedRunning: null };
+  const readSoundSync = () => readJson(soundSyncFile, {});
+  const soundStatus = () => {
+    const sy = readSoundSync(); const fp = soundStore.fingerprint();
+    const state = sy.error ? (sy.outdated ? 'outdated' : 'error') : (sy.fp === fp ? 'synced' : 'pending');
+    return { state, at: sy.at || null, error: sy.error || null, busy: soundSync.running };
+  };
+  async function syncSounds() {
+    if (soundSync.running) { soundSync.again = true; return soundStatus(); } // изменение пришло во время сверки: повторим сразу после неё
+    soundSync.running = true; soundSync.again = false;
+    const fp = soundStore.fingerprint();
+    const save = (x) => { try { fs.mkdirSync(path.dirname(soundSyncFile), { recursive: true }); writeJsonAtomic(soundSyncFile, x); } catch (e) { log('sound sync state:', e.message); } };
+    try {
+      const local = soundStore.list();
+      const remote = (await agent('GET', '/sound-files', undefined, 6000)).files || [];
+      const rmap = new Map(remote.map((f) => [f.name, f]));
+      for (const f of local) {
+        const r = rmap.get(f.name);
+        if (!r || r.sha1 !== f.sha1) await agent('PUT', `/sound-files/${encodeURIComponent(f.name)}`, soundStore.read(f.name), 60000);
+      }
+      const keep = new Set(local.map((f) => f.name));
+      for (const r of remote) if (!keep.has(r.name)) await agent('DELETE', `/sound-files/${encodeURIComponent(r.name)}`, {}, 10000);
+      save({ fp, at: now(), error: null });
+      soundSync.syncedRunning = vmState.runningSince;
+    } catch (e) {
+      if (isOffline(e)) { save({ ...readSoundSync(), fp: null, error: null }); } // ВМ выключена: досылка позже, сама
+      else { save({ fp: null, at: now(), error: e.status === 404 ? 'agent outdated' : e.message, outdated: e.status === 404 }); soundSync.syncedRunning = vmState.runningSince; }
+    } finally { soundSync.running = false; }
+    if (soundSync.again && readSoundSync().error === null && readSoundSync().fp) { soundSync.again = false; return syncSounds(); }
+    return soundStatus();
+  }
+  async function soundSyncTick() {
+    if (soundSync.running || vmState.busy) return;
+    const sy = readSoundSync();
+    const dirty = sy.fp !== soundStore.fingerprint() || (soundSync.syncedRunning !== vmState.runningSince && vmState.runningSince);
+    if (!dirty) return;
+    if (!soundStore.list().length && !sy.at) return; // нечего и не с чем сверять
+    let d; try { d = await vmDescribe(); } catch { return; }
+    if (d.status !== 'RUNNING') return;
+    if (sy.outdated && soundSync.syncedRunning === vmState.runningSince) return; // старый агент: не долбим до перезапуска ВМ
+    await syncSounds();
   }
 
   async function stateSyncTick() {
@@ -359,6 +409,7 @@ function createApp(deps = {}) {
 
   // ---- routes ---------------------------------------------------------------------------------
   const P = (p) => async ({ params, body, query }) => agent('POST', p, body);
+  const RAW_ROUTES = new Set(['POST /api/sound-files']);
   const routes = [
     ['GET', '/api/me', async ({ user }) => { const all = usersWithSlugs(); await backfillAvatars(all, [user]); const u = all[user] || {}; return { user, slug: u.slug || '', displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
     ['GET', '/api/public-info', async () => { const o = await overview(); return { ...o.glance, map: o.glance.map.id, mapInfo: o.glance.map }; }],
@@ -400,6 +451,31 @@ function createApp(deps = {}) {
     ['PUT', '/api/state', async ({ body, user, ip }) => { audit(user, ip, 'state.save', Object.keys(body.state || {})); return putState(body); }],
     ['POST', '/api/preset', async ({ body, user, ip }) => { audit(user, ip, 'preset', body.preset); return agent('POST', '/preset', body, 120000); }],
     ['POST', '/api/map', async ({ body, user, ip }) => { audit(user, ip, 'map', body.map); return agent('POST', '/map', body); }],
+    ['GET', '/api/sound-files', async () => ({ files: soundStore.list().map(({ name, size, mtime }) => ({ name, size, mtime })), sync: soundStatus(), limits: { maxFile: soundFiles.MAX_FILE, maxFiles: soundFiles.MAX_FILES, maxTotal: soundFiles.MAX_TOTAL } })],
+    ['POST', '/api/sound-files', async ({ raw, query, user, ip }) => {
+      const name = soundFiles.normalizeName(query.name);
+      if (!name) throw Object.assign(new Error('only .wav, .mp3 and .ogg files'), { status: 400 });
+      const r = soundStore.put(name, raw || Buffer.alloc(0), { overwrite: query.overwrite === '1' });
+      audit(user, ip, 'sound-file.upload', { name: r.name, size: r.size });
+      syncSounds().catch(() => {});
+      return { ok: true, name: r.name, size: r.size };
+    }],
+    ['GET', '/api/sound-files/:name', async ({ params, query }) => ({ __file: { buf: soundStore.read(params.name), type: soundFiles.TYPES[soundFiles.extOf(params.name)] || 'application/octet-stream', name: params.name, download: query.dl === '1' } })],
+    ['POST', '/api/sound-files/:name/rename', async ({ params, body, user, ip }) => {
+      const to = soundFiles.normalizeName(String(body.to || '').includes('.') ? body.to : `${body.to}.${soundFiles.extOf(params.name)}`);
+      if (!to) throw Object.assign(new Error('bad file name'), { status: 400 });
+      soundStore.rename(params.name, to);
+      audit(user, ip, 'sound-file.rename', { from: params.name, to });
+      syncSounds().catch(() => {});
+      return { ok: true, name: to };
+    }],
+    ['DELETE', '/api/sound-files/:name', async ({ params, user, ip }) => {
+      soundStore.remove(params.name);
+      audit(user, ip, 'sound-file.delete', { name: params.name });
+      syncSounds().catch(() => {});
+      return { ok: true };
+    }],
+    ['POST', '/api/sound-files-sync', async ({ user, ip }) => { audit(user, ip, 'sound-file.sync'); soundSync.syncedRunning = null; return { sync: await syncSounds() }; }],
     ['POST', '/api/sounds/play', async ({ body, user, ip }) => {
       // имя из библиотеки (id) или путь/событие звука; кому: all, #userid или часть ника
       const sound = String(body.sound || ''); const target = String(body.target || 'all');
@@ -724,7 +800,8 @@ function createApp(deps = {}) {
       if (req.method !== 'GET' && req.headers['x-requested-with'] !== 'cs2panel') return send(res, 403, { error: 'missing CSRF header' }, SEC_HEADERS);
       const m = matchRoute(routes, req.method, url.pathname);
       if (!m) return send(res, 404, { error: 'not found' }, SEC_HEADERS);
-      const body = req.method === 'GET' ? {} : await readJsonBody(req);
+      const raw = RAW_ROUTES.has(`${req.method} ${m.pattern}`) ? await readRaw(req, soundFiles.MAX_FILE) : null;
+      const body = req.method === 'GET' || raw ? {} : await readJsonBody(req);
       if (roleOf(session.user) === 'player') {
         const self = (loadUsers()[session.user] || {}).steamid;
         const key = `${req.method} ${m.pattern}`;
@@ -733,7 +810,11 @@ function createApp(deps = {}) {
         if (key === 'GET /api/users/:slug' && m.params.slug !== (loadUsers()[session.user] || {}).slug) return send(res, 403, { error: 'forbidden for players: own card only' }, SEC_HEADERS);
         if (key === 'PUT /api/profile') { delete body.links; }
       }
-      const result = await m.handler({ params: m.params, body, query: Object.fromEntries(url.searchParams), user: session.user, ip, sid });
+      const result = await m.handler({ params: m.params, body, raw, query: Object.fromEntries(url.searchParams), user: session.user, ip, sid });
+      if (result && result.__file) { // отдача файла (предпросмотр / скачивание); песочница CSP, чтобы ничего не исполнялось
+        const f = result.__file;
+        return send(res, 200, f.buf, { ...SEC_HEADERS, 'Content-Type': f.type, 'Content-Security-Policy': "default-src 'none'; sandbox", 'Content-Disposition': `${f.download ? 'attachment' : 'inline'}; filename="${f.name}"`, 'Cache-Control': 'private, no-cache' });
+      }
       return send(res, 200, result, SEC_HEADERS);
     } catch (e) {
       if (!e.status || e.status >= 500) log('error', req.method, url.pathname, e.message);
@@ -743,10 +824,10 @@ function createApp(deps = {}) {
 
   let timer = null;
   return {
-    server, sessions, limiter, vmState, idleTick, stateSyncTick, getState, putState, overview, startVm, stopVm,
+    server, sessions, limiter, vmState, idleTick, stateSyncTick, soundSyncTick, syncSounds, soundStore, getState, putState, overview, startVm, stopVm,
     listen(port = Number(config.publicPort || 8080), host = '127.0.0.1') {
       return new Promise((resolve) => server.listen(port, host, () => {
-        timer = setInterval(() => { idleTick().catch((e) => log('idle tick:', e.message)); stateSyncTick().catch((e) => log('state sync:', e.message)); sessions.sweep(); }, 60_000);
+        timer = setInterval(() => { idleTick().catch((e) => log('idle tick:', e.message)); soundSyncTick().catch((e) => log('sound sync:', e.message)); stateSyncTick().catch((e) => log('state sync:', e.message)); sessions.sweep(); }, 60_000);
         timer.unref();
         resolve();
       }));

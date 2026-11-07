@@ -34,6 +34,9 @@ async function api(method, path, body) {
 
 // Перевод типовых ошибок сервера на русский.
 const ERR_RU = [
+  [/^only \.wav, \.mp3 and \.ogg files/i, 'Только файлы .wav, .mp3 и .ogg'], [/^content does not look like/i, 'Содержимое не похоже на звуковой файл этого типа'],
+  [/^file too large/i, 'Файл больше 8 МБ'], [/^too many files/i, 'Слишком много файлов (максимум 100)'], [/^storage limit reached/i, 'Хранилище звуков заполнено (100 МБ)'],
+  [/^file already exists/i, 'Файл с таким именем уже есть'], [/^no such file/i, 'Файла нет'], [/^extension cannot change/i, 'Расширение файла менять нельзя'], [/^bad file name/i, 'Недопустимое имя файла'], [/^empty file/i, 'Файл пустой'], [/^body too large/i, 'Файл слишком большой'],
   [/^too many attempts/i, 'Слишком много попыток, подождите немного'], [/^not logged in/i, 'Нужен вход'], [/^missing CSRF/i, 'Запрос отклонён (CSRF), обновите страницу'],
   [/^wrong current password/i, 'Неверный текущий пароль'], [/^new password: at least (\d+)/i, 'Новый пароль: минимум $1 символов'],
   [/^busy: (.+)/i, 'Занято: $1'], [/^VM is (\w+), cannot (\w+) now/i, 'ВМ сейчас в состоянии $1 — действие недоступно'],
