@@ -22,4 +22,22 @@ resource "yandex_storage_bucket" "backups" {
       days = 90
     }
   }
+
+  lifecycle_rule {
+    id      = "expire-old-dist"
+    enabled = true
+    filter {
+      prefix = "dist/"
+    }
+    expiration {
+      days = 30
+    }
+  }
+}
+
+# Frontend bundle for the panel VM (content-addressed key: a new build is a new object, old ones are pruned after 30 days).
+resource "yandex_storage_object" "public" {
+  bucket = yandex_storage_bucket.backups.bucket
+  key    = "dist/public-${substr(filesha256(local.public_path), 0, 16)}.tgz"
+  source = local.public_path
 }

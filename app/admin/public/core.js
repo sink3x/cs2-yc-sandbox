@@ -26,6 +26,8 @@ async function api(method, path, body) {
   if (r.status === 401 && path !== '/me') { showLogin(); throw new Error(path === '/login' ? 'Неверный логин или пароль' : 'Нужен вход'); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(ruErr(j.error || r.statusText));
+  // PUT /state answers with {state, applied, ...} only: keep the registry/flags the page got from GET /state
+  if (method === 'PUT' && path === '/state' && j && S.state) for (const k of ['plugins', 'admin_flags', 'protectedAdmins']) if (j[k] === undefined) j[k] = S.state[k];
   if (j && j.queued) toast('Сервер выключен: изменения сохранены в панели и применятся после его запуска', 's');
   return j;
 }

@@ -22,6 +22,13 @@ resource "yandex_resourcemanager_folder_iam_member" "admin_compute" {
   member    = "serviceAccount:${yandex_iam_service_account.admin.id}"
 }
 
+# Panel VM reads the frontend bundle (dist/) from the bucket with its metadata-service token.
+resource "yandex_resourcemanager_folder_iam_member" "admin_storage" {
+  folder_id = var.folder_id
+  role      = "storage.viewer"
+  member    = "serviceAccount:${yandex_iam_service_account.admin.id}"
+}
+
 resource "yandex_iam_service_account_static_access_key" "cs2" {
   service_account_id = yandex_iam_service_account.cs2.id
   description        = "CS2 VM backups"

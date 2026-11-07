@@ -11,9 +11,28 @@ export DEBIAN_FRONTEND=noninteractive
 log() { echo "[install-admin] $*"; }
 mkdir -p "$STAMP"
 
-# The frontend (app/admin/public) travels in its own metadata value ("app-public") so each stays under the 256 KB limit.
-curl -fsS --retry 12 --retry-delay 3 --retry-connrefused -H 'Metadata-Flavor: Google' \
-  http://169.254.169.254/computeMetadata/v1/instance/attributes/app-public | base64 -d > "$STAMP/public.tgz"
+# The frontend (app/admin/public) is built into build/public.tgz and delivered through Object Storage ("app-public-ref" in the
+# instance metadata names bucket/key/sha256; the VM reads it with its service-account token). Fallbacks, in order: the legacy
+# "app-public" metadata value (while it exists), then the copy cached on disk by the previous boot.
+MDURL=http://169.254.169.254/computeMetadata/v1/instance
+mdget() { curl -fsS --retry 6 --retry-delay 3 --retry-connrefused -H 'Metadata-Flavor: Google' "$MDURL/$1"; }
+fetch_public() {
+  local ref bucket key sha token tmp
+  ref=$(mdget attributes/app-public-ref 2>/dev/null) || return 1
+  bucket=$(printf '%s' "$ref" | sed -n 's/.*"bucket" *: *"\([^"]*\)".*/\1/p'); key=$(printf '%s' "$ref" | sed -n 's/.*"key" *: *"\([^"]*\)".*/\1/p'); sha=$(printf '%s' "$ref" | sed -n 's/.*"sha256" *: *"\([^"]*\)".*/\1/p')
+  [ -n "$bucket" ] && [ -n "$key" ] && [ -n "$sha" ] || return 1
+  if [ "$(cat "$STAMP/public.sha" 2>/dev/null || true)" = "$sha" ] && [ -s "$STAMP/public.tgz" ]; then return 0; fi
+  token=$(mdget service-accounts/default/token | sed -n 's/.*"access_token" *: *"\([^"]*\)".*/\1/p'); [ -n "$token" ] || return 1
+  tmp=$(mktemp)
+  curl -fsS --retry 5 --retry-delay 3 -H "X-YaCloud-SubjectToken: $token" "https://storage.yandexcloud.net/$bucket/$key" -o "$tmp" || { rm -f "$tmp"; return 1; }
+  [ "$(sha256sum "$tmp" | cut -d' ' -f1)" = "$sha" ] || { log "public bundle checksum mismatch"; rm -f "$tmp"; return 1; }
+  mv "$tmp" "$STAMP/public.tgz"; echo "$sha" > "$STAMP/public.sha"; log "frontend downloaded from Object Storage ($key)"
+}
+if ! fetch_public; then
+  if mdget attributes/app-public 2>/dev/null | base64 -d > "$STAMP/public.tgz.new" && [ -s "$STAMP/public.tgz.new" ]; then mv "$STAMP/public.tgz.new" "$STAMP/public.tgz"; rm -f "$STAMP/public.sha"; log "frontend taken from instance metadata (legacy)"
+  elif [ -s "$STAMP/public.tgz" ]; then log "Object Storage unavailable: using the cached frontend"
+  else log "no frontend bundle available"; exit 1; fi
+fi
 rm -rf "$APP/app/admin/public"
 mkdir -p "$APP/app/admin/public"
 tar xzf "$STAMP/public.tgz" -C "$APP/app/admin/public"

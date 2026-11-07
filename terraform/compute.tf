@@ -152,6 +152,12 @@ resource "yandex_compute_instance" "admin" {
     user-data  = local.user_data_admin
     role       = "admin"
     app-bundle = filebase64(local.bundle_path)
+    app-public-ref = jsonencode({
+      bucket = yandex_storage_bucket.backups.bucket
+      key    = yandex_storage_object.public.key
+      sha256 = filesha256(local.public_path)
+    })
+    # legacy copy, kept for one transition deploy as a fallback; removed once Object Storage delivery is verified
     app-public = filebase64(local.public_path)
     panel-host = local.panel_host
     config-json = jsonencode({
@@ -166,7 +172,7 @@ resource "yandex_compute_instance" "admin" {
     panel-users = join("\n", [for n, p in var.panel_users : "${n}:${p}"])
   })
 
-  depends_on = [yandex_resourcemanager_folder_iam_member.admin_compute]
+  depends_on = [yandex_resourcemanager_folder_iam_member.admin_compute, yandex_resourcemanager_folder_iam_member.admin_storage, yandex_storage_object.public]
 
   lifecycle {
     ignore_changes = [boot_disk[0].initialize_params[0].image_id]

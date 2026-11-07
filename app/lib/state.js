@@ -33,6 +33,11 @@ function defaultState({ hostname = 'sandbox-cs-1', admins = [] } = {}) {
 function validateState(input, base = defaultState(), opts = {}) {
   const errors = [];
   const s = JSON.parse(JSON.stringify(base));
+  // A state file written by an older version lacks keys that were added later; without defaults those keys
+  // would be silently dropped below ("flag resets itself after saving").
+  const dflt = defaultState();
+  s.flags = { ...dflt.flags, ...(s.flags || {}) };
+  s.plugins = { ...dflt.plugins, ...(s.plugins || {}) };
   const inp = input && typeof input === 'object' ? input : {};
   const bad = (m) => errors.push(m);
 

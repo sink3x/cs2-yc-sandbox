@@ -86,3 +86,12 @@ test('patchCoreJson: chat triggers ! . / (dot can be turned off, existing trigge
   assert.deepEqual(S.patchCoreJson({ PublicChatTrigger: ['!', '.'] }, off).PublicChatTrigger, ['!']);
   const old = S.defaultState(); delete old.flags.dotChat; assert.ok(S.patchCoreJson(null, old).PublicChatTrigger.includes('.'));
 });
+
+test('validateState keeps flags/plugins added after the stored state was written', () => {
+  const old = S.defaultState();
+  delete old.flags.dotChat;
+  const r = S.validateState({ flags: { dotChat: false, insecure: true } }, old);
+  assert.equal(r.ok, true);
+  assert.equal(r.state.flags.dotChat, false);
+  assert.equal(r.state.flags.insecure, true);
+});
