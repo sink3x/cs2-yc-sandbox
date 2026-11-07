@@ -1,0 +1,98 @@
+name: Deploy
+
+# Деплой в Yandex Cloud после зелёного CI на main (или вручную). Игровую ВМ не трогает: её перезапуск — только вручную, когда на сервере 0 игроков.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      restart_panel:
+        description: Перезапустить ВМ админки после деплоя (она подхватит новый код, ~2 мин недоступна)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy # в Object Storage нет блокировок состояния: два apply одновременно запускать нельзя
+  cancel-in-progress: false
+
+env:
+  FOLDER_ID: b1gxxxxxxxxxxxxxxxxx
+  PANEL_INSTANCE_ID: fhmxxxxxxxxxxxxxxxxx
+  PANEL_URL: https://panel.example.com
+  TF: tofu
+
+jobs:
+  deploy:
+    name: tofu apply и перезапуск админки
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+      - uses: opentofu/setup-opentofu@v1
+
+      - name: Нужна ли перезагрузка админки
+        id: need
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "restart=${{ inputs.restart_panel }}" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only HEAD~1 HEAD | grep -qE '^(app|common|vm-admin|terraform|scripts)/'; then
+            echo "restart=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "restart=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Файлы переменных и ключ (из секретов окружения production)
+        run: |
+          umask 077
+          printf '%s' "$TFVARS_MAIN" > terraform/terraform.tfvars
+          printf '%s' "$TFVARS_SECRETS" > terraform/secrets.auto.tfvars
+          printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/yc-key.json"
+        env:
+          TFVARS_MAIN: ${{ secrets.TFVARS_MAIN }}
+          TFVARS_SECRETS: ${{ secrets.TFVARS_SECRETS }}
+          YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+
+      - name: Yandex Cloud CLI и токен
+        run: |
+          curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a -i "$HOME/yc"
+          echo "$HOME/yc/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/yc/bin:$PATH"
+          yc config profile create ci >/dev/null
+          yc config set service-account-key "$RUNNER_TEMP/yc-key.json"
+          yc config set folder-id "$FOLDER_ID"
+          TOKEN="$(yc iam create-token)"
+          echo "::add-mask::$TOKEN"
+          echo "YC_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Деплой (pack → tofu apply)
+        run: scripts/deploy.sh --yes
+
+      - name: Перезапуск ВМ админки
+        if: steps.need.outputs.restart == 'true'
+        run: |
+          yc compute instance restart "$PANEL_INSTANCE_ID" --folder-id "$FOLDER_ID"
+          for i in $(seq 1 20); do
+            sleep 10
+            code="$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$PANEL_URL/api/brand" || true)"
+            echo "попытка $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+          done
+          echo "::warning::Панель не ответила за 200 с после перезапуска"
+          exit 1
+
+      - name: Убрать ключи с раннера
+        if: always()
+        run: rm -f terraform/terraform.tfvars terraform/secrets.auto.tfvars "$RUNNER_TEMP/yc-key.json"
