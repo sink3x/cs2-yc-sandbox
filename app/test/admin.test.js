@@ -397,5 +397,8 @@ test('Steam login: автопривязка по списку админов с�
     // скрытый/недоступный профиль не ломает вход
     const parsed = require('../lib/account').parseSteamProfileXml('<profile></profile>'); assert.equal(parsed, null);
     assert.equal(require('../lib/account').parseSteamProfileXml(xml('<b>x</b>')).name, 'bx/b');
+    // Steam отдаёт аватары с разных CDN (akamai, fastly, cloudflare), чужие хосты отбрасываются
+    const av = (host) => require('../lib/account').parseSteamProfileXml(`<profile><steamID><![CDATA[n]]></steamID><avatarFull><![CDATA[https://${host}/e52d41c6_full.jpg]]></avatarFull></profile>`).avatar;
+    assert.match(av('avatars.fastly.steamstatic.com'), /^https:\/\/avatars\.fastly/); assert.match(av('avatars.cloudflare.steamstatic.com'), /cloudflare/); assert.equal(av('evil.example'), '');
   } finally { t.close(); }
 });

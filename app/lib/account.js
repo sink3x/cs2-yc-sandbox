@@ -206,7 +206,7 @@ function parseSteamProfileXml(text) {
   const name = (/<steamID><!\[CDATA\[([\s\S]*?)\]\]><\/steamID>/.exec(t) || [])[1];
   if (!name) return null;
   const av = (/<avatarFull><!\[CDATA\[([^\]]*)\]\]><\/avatarFull>/.exec(t) || [])[1] || '';
-  return { name: name.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40) || null, avatar: /^https:\/\/avatars(\.akamai)?\.steamstatic\.com\/[\w]+_full\.jpg$/.test(av) ? av : '' };
+  return { name: name.replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 40) || null, avatar: /^https:\/\/avatars(\.(akamai|fastly|cloudflare))?\.steamstatic\.com\/[\w]+_full\.jpg$/.test(av) ? av : '' };
 }
 async function steamProfile(steamid, get) {
   if (!/^\d{17}$/.test(String(steamid))) return null;

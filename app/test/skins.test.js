@@ -89,3 +89,21 @@ test('stickers: validation, column format, parsing back, StatTrak reset', () => 
   assert.throws(() => validateOps([{ op: 'skin', teams: [2], def: 7, paint: 44, stickers: new Array(6).fill({ id: 1 }) }]));
   assert.match(buildSql('76561198000000100', validateOps([{ op: 'stattrak-reset', teams: [2, 3], def: 7 }]), sch)[0], /UPDATE wp_player_skins SET weapon_stattrak_count=0 WHERE steamid='76561198000000100' AND weapon_defindex=7 AND weapon_team IN \(2,3\)/);
 });
+
+test('sticker catalog: compact build, search, filters and id lookup', () => {
+  const { buildStickers, queryStickers } = require('../lib/catalog');
+  const P = 'https://cdn.steamstatic.com/apps/730/icons/econ/stickers/';
+  const src = [
+    { def_index: '1', name: 'Sticker | Shooter', rarity: { name: 'Default', color: '#ded6cc' }, type: 'Event', effect: 'Other', tournament: { name: '2013 DreamHack Winter' }, image: `${P}dreamhack/a.png` },
+    { def_index: '3206', name: 'Sticker | Hobbit | London 2018', rarity: { name: 'High Grade', color: '#4b69ff' }, type: 'Autograph', effect: 'Gold', tournament: { name: 'London 2018' }, image: `${P}london2018/b.png` },
+    { def_index: 'x', name: 'bad', image: `${P}c.png` }, { def_index: '5', name: 'foreign', image: 'https://evil.example/x.png' },
+  ];
+  const d = buildStickers(src);
+  assert.equal(d.items.length, 2);
+  assert.deepEqual(queryStickers(d, { q: 'hobbit' }).items.map((x) => x.id), [3206]);
+  assert.equal(queryStickers(d, { type: 'Event' }).items[0].name, 'Shooter');
+  assert.equal(queryStickers(d, { effect: 'Gold' }).total, 1);
+  assert.equal(queryStickers(d, { q: 'london' }).total, 1);
+  assert.equal(queryStickers(d, { ids: '1,3206,99' }).items.length, 2);
+  assert.equal(queryStickers(d, {}).items[1].img, 'london2018/b.png');
+});

@@ -66,11 +66,48 @@ function ppUserCard(slug) {
         h('button', { class: 'btn', onclick: () => ppCopy(`${location.origin}/#users/${u.slug}`, tr('Ссылка скопирована')) }, 'Скопировать ссылку')),
       h('div', { class: 'statgrid' }, [['SteamID64', u.steamid || '—'], ['Регистрация', ppDate(u.created)], ['Последний вход', ppDate(u.lastLogin)], ...(u.email ? [['Почта', u.email]] : [])].map(([k, v]) => h('div', { class: 'stat' }, h('b', { style: 'font-size:14px;word-break:break-all' }, v), h('small', {}, k)))),
       links.length ? h('div', { class: 'links' }, links.map(([t, href]) => ppExt(href, t))) : null),
+      gameAdminCard(u, root),
       faceitBox,
       h('div', { class: 'card' }, h('h3', {}, 'Статистика на сервере'), u.stats ? statCard(u.stats) : h('div', { class: 'muted' }, 'На нашем сервере пока нет данных или сервер выключен.')),
       h('div', { class: 'card' }, h('h3', {}, 'Сетапы'), u.setups.length ? h('div', { class: 'ulist' }, u.setups.map((s) => ppSetupRow(s))) : h('div', { class: 'muted' }, 'Нет доступных сетапов.')));
   })();
   return root;
+}
+
+// ---------------------------------------------------------------- «админ в игре»
+const PP_ADMIN_PRESETS = [
+  ['root', 'Полные права (root)', ['@css/root']],
+  ['mod', 'Модератор: кик, бан, смена карты, чат, голосования', ['@css/generic', '@css/reservation', '@css/kick', '@css/ban', '@css/unban', '@css/changemap', '@css/slay', '@css/chat', '@css/vote']],
+  ['custom', 'Свой набор прав', null],
+];
+function gameAdminCard(u, root) {
+  if (S.role === 'player' || !u.gameAdminFlags) return null;
+  const box = h('div', { class: 'card' }, h('h3', {}, 'Админ в игре'));
+  if (!u.steamid) { box.append(h('div', { class: 'muted' }, 'Steam не привязан: выдать права в игре можно только по SteamID64.')); return box; }
+  const curFlags = u.gameAdmin ? u.gameAdmin.flags : null;
+  const isRoot = curFlags && curFlags.includes('@css/root');
+  let preset = !curFlags ? 'mod' : isRoot ? 'root' : 'custom';
+  const checks = {}; const boxes = h('div', { class: 'chips' });
+  for (const f of u.gameAdminFlags) { const cb = h('input', { type: 'checkbox', checked: curFlags ? curFlags.includes(f) : PP_ADMIN_PRESETS[1][2].includes(f) }); checks[f] = cb; boxes.append(h('label', { class: 'switch small' }, cb, f.replace('@css/', ''))); }
+  const sel = h('select', {}, PP_ADMIN_PRESETS.map(([v, t]) => h('option', { value: v, selected: v === preset }, t)));
+  const paint = () => { boxes.hidden = sel.value !== 'custom'; };
+  sel.addEventListener('change', () => { preset = sel.value; if (preset !== 'custom') { const fl = PP_ADMIN_PRESETS.find((x) => x[0] === preset)[2]; for (const [f, cb] of Object.entries(checks)) cb.checked = fl.includes(f); } paint(); });
+  paint();
+  const flagsNow = () => (sel.value === 'custom' ? Object.entries(checks).filter(([, cb]) => cb.checked).map(([f]) => f) : PP_ADMIN_PRESETS.find((x) => x[0] === sel.value)[2]);
+  const save = (enabled) => act(async () => {
+    const r = await api('PUT', `/users/${encodeURIComponent(u.slug)}/game-admin`, enabled ? { enabled: true, flags: flagsNow() } : { enabled: false });
+    toast(enabled ? 'Права в игре выданы' : 'Права в игре сняты', 's');
+    if (r.reload !== null && r.reload !== undefined) toast(r.reload ? tr('Сервер ответил: ') + r.reload : 'Список админов перечитан', 's');
+    else if (!r.queued) toast('Права применятся после смены карты или перезапуска CS2', 's');
+    S.state = null; root.replaceChildren(h('div', { class: 'muted' }, 'Загрузка…')); go('users', u.slug);
+  });
+  box.append(...[curFlags ? h('div', { class: 'row' }, pill('админ в игре', 'ok'), h('span', { class: 'small muted' }, curFlags.map((f) => f.replace('@css/', '')).join(', '))) : h('div', { class: 'muted' }, 'Сейчас у пользователя нет прав в игре.'),
+    h('div', { class: 'row' }, sel), boxes,
+    h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: save(true) }, curFlags ? 'Изменить права' : 'Выдать админа в игре'),
+      curFlags && !u.gameAdminLocked ? h('button', { class: 'btn danger', onclick: save(false) }, 'Снять права') : null),
+    u.gameAdminLocked ? h('div', { class: 'hint' }, 'Владелец сервера защищён: его права root снять нельзя.') : null,
+    h('div', { class: 'hint' }, 'Меняет список админов сервера (SteamID64 пользователя). Если сервер выключен, изменение сохранится в панели и применится при запуске.')].filter(Boolean));
+  return box;
 }
 
 // ================================================================== СЕТАПЫ

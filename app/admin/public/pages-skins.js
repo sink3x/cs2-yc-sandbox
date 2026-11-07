@@ -174,14 +174,86 @@ function skinsView(redraw) {
 }
 
 // ---------------------------------------------------------------- редактор выбранного предмета
-const E = { wear: 0.01, seed: 0, nametag: '', stattrak: false, count: 0, teams: 'both' };
+const E = { wear: 0.01, seed: 0, nametag: '', stattrak: false, count: 0, teams: 'both', stickers: [null, null, null, null, null] };
 function initEdit() {
   const s = K.sel && K.sel.skin; if (!s) return;
   const L = K.loadout && K.loadout.available ? K.loadout : null;
   const cur = L && L.skins.find((x) => x.def === s.weapon.def && x.paint === s.paint);
   Object.assign(E, cur ? { wear: cur.wear ?? 0.01, seed: cur.seed ?? 0, nametag: cur.nametag, stattrak: !!cur.stattrak, count: cur.stattrakCount } : { wear: Math.min(Math.max(0.01, s.min), s.max), seed: 0, nametag: '', stattrak: false, count: 0 });
+  // стикеры: из базы игрока (если оружие уже надето), иначе пустые слоты
+  const base = cur && Array.isArray(cur.stickers) ? cur.stickers : [];
+  E.stickers = [0, 1, 2, 3, 4].map((i) => (base[i] ? { ...base[i] } : null));
+  STK.slot = 0;
 }
 const teamList = () => (E.teams === 'both' ? [2, 3] : [Number(E.teams)]);
+
+// ---------------------------------------------------------------- стикеры на оружии (до 5 слотов)
+const STK = { slot: 0, q: '', type: '', effect: '', event: '', page: 0, res: null, facets: null, known: {}, imgBase: 'https://cdn.steamstatic.com/apps/730/icons/econ/stickers/', busy: false };
+const stkImg = (path) => (path ? (/^https?:/.test(path) ? path : STK.imgBase + path) : '');
+const stkQuery = (o) => '/stickers?' + Object.entries(o).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+async function stkLoadKnown() {
+  const need = E.stickers.filter((x) => x && !STK.known[x.id]).map((x) => x.id);
+  if (!need.length) return;
+  try { const r = await api('GET', stkQuery({ ids: need.join(',') })); STK.imgBase = r.imgBase || STK.imgBase; for (const it of r.items) STK.known[it.id] = it; } catch { /* имена не критичны */ }
+}
+function stickerEditor() {
+  const root = h('div', { class: 'stk' });
+  const slotsRow = h('div', { class: 'stk-slots' });
+  const detail = h('div', { class: 'stk-detail' });
+  const picker = h('div', { class: 'stk-picker' });
+  const numIn = (label, key, min, max, step) => {
+    const st = E.stickers[STK.slot];
+    const inp = h('input', { type: 'number', min, max, step, value: st[key], style: 'width:84px' });
+    inp.addEventListener('input', () => { const v = Number(inp.value); if (Number.isFinite(v)) st[key] = Math.min(Math.max(v, min), max); });
+    return h('label', { class: 'stk-num' }, label, inp);
+  };
+  const paintSlots = () => {
+    slotsRow.replaceChildren(...E.stickers.map((st, i) => {
+      const info = st && STK.known[st.id];
+      return h('button', { class: `stk-slot ${i === STK.slot ? 'on' : ''}`, title: st ? (info ? info.name : `#${st.id}`) : tr('Пустой слот'), onclick: () => { STK.slot = i; paintAll(); } },
+        st ? (info ? h('img', { src: stkImg(info.img), alt: '', referrerpolicy: 'no-referrer', loading: 'lazy' }) : h('span', { class: 'small' }, `#${st.id}`)) : h('span', { class: 'plus' }, '+'), h('span', { class: 'n' }, String(i + 1)));
+    }));
+  };
+  const paintDetail = () => {
+    const st = E.stickers[STK.slot];
+    if (!st) { detail.replaceChildren(h('div', { class: 'muted small' }, `Слот ${STK.slot + 1} пуст: выберите стикер ниже.`)); return; }
+    const info = STK.known[st.id];
+    detail.replaceChildren(h('div', { class: 'row' }, h('b', {}, info ? info.name : `Стикер #${st.id}`), info ? h('span', { class: 'small', style: `color:${info.color}` }, info.rarity) : null,
+      h('button', { class: 'btn danger', onclick: () => { E.stickers[STK.slot] = null; paintAll(); } }, 'Убрать')),
+      h('div', { class: 'row' }, numIn('Потёртость 0–1', 'wear', 0, 1, 0.01), numIn('Размер', 'scale', 0.05, 5, 0.05), numIn('Поворот °', 'rotation', -360, 360, 1)),
+      h('div', { class: 'row' }, numIn('Смещение X', 'x', -3, 3, 0.05), numIn('Смещение Y', 'y', -3, 3, 0.05)),
+      h('div', { class: 'hint' }, 'Положение и размер в игре отличаются у разных моделей оружия — значения подбираются на глаз (осмотр F в игре).'));
+  };
+  const qIn = h('input', { type: 'text', placeholder: 'Поиск стикера: название, команда, турнир, номер…', value: STK.q, style: 'min-width:240px;flex:1' });
+  const selOf = (key, label) => { const el = h('select', {}, h('option', { value: '' }, label)); el.addEventListener('change', () => { STK[key] = el.value; STK.page = 0; STK.res = null; load(); }); return el; };
+  const typeSel = selOf('type', 'Все типы'); const effSel = selOf('effect', 'Все эффекты'); const evSel = selOf('event', 'Все турниры');
+  let timer = null;
+  qIn.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { STK.q = qIn.value; STK.page = 0; STK.res = null; load(); }, 300); });
+  const grid = h('div', { class: 'stk-grid' });
+  const more = h('button', { class: 'btn', onclick: () => { STK.page++; load(true); } }, 'Показать ещё');
+  const status = h('div', { class: 'muted small' });
+  const fill = (sel, arr, label) => { if (sel.options.length > 1) return; for (const v of arr) sel.append(h('option', { value: v }, v)); sel.options[0].textContent = tr(label); };
+  async function load(append) {
+    if (STK.busy) return; STK.busy = true; status.textContent = tr('Загрузка…');
+    try {
+      const r = await api('GET', stkQuery({ q: STK.q, type: STK.type, effect: STK.effect, event: STK.event, page: STK.page, facets: STK.facets ? '' : '1' }));
+      STK.imgBase = r.imgBase || STK.imgBase;
+      if (r.facets) { STK.facets = r.facets; fill(typeSel, r.facets.types, 'Все типы'); fill(effSel, r.facets.effects, 'Все эффекты'); fill(evSel, r.facets.events, 'Все турниры'); }
+      for (const it of r.items) STK.known[it.id] = it;
+      const cards = r.items.map((it) => h('button', { class: 'stk-card', title: `${it.name}\n${it.event} · ${it.effect}`, style: `--rar:${it.color}`, onclick: () => {
+        E.stickers[STK.slot] = { id: it.id, schema: STK.slot, x: 0, y: 0, wear: 0, scale: 1, rotation: 0 }; paintAll();
+      } }, h('img', { src: stkImg(it.img), alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }), h('span', { class: 'nm' }, it.name)));
+      if (append) grid.append(...cards); else grid.replaceChildren(...cards);
+      status.textContent = tr(r.total ? `Найдено: ${r.total}` : 'Ничего не найдено');
+      more.style.display = (STK.page + 1) * 60 < r.total ? '' : 'none';
+    } catch (e) { status.textContent = e.message; } finally { STK.busy = false; }
+  }
+  function paintAll() { paintSlots(); paintDetail(); }
+  picker.append(h('div', { class: 'row' }, qIn, typeSel, effSel, evSel), status, grid, more);
+  root.append(h('h4', {}, 'Стикеры'), slotsRow, detail, picker);
+  paintAll(); stkLoadKnown().then(paintAll); load();
+  return root;
+}
 
 function previewPanel(redraw, L) {
   const sel = K.sel;
@@ -242,6 +314,7 @@ function previewPanel(redraw, L) {
   upd();
   const ops = (withPaint = true) => {
     const base = { op: 'skin', teams: teamList(), def: s.weapon.def, paint: withPaint ? s.paint : 0, wear: E.wear, seed: E.seed, nametag: E.nametag, stattrak: E.stattrak, stattrakCount: E.count };
+    if (kind === 'weapon') base.stickers = E.stickers.map((st, i) => (st ? { id: st.id, schema: i, x: st.x, y: st.y, wear: st.wear, scale: st.scale, rotation: st.rotation } : null));
     if (kind === 'knife') return [{ op: 'knife', teams: teamList(), knife: s.weapon.id }, base];
     if (kind === 'glove') return [{ op: 'gloves', teams: teamList(), def: s.weapon.def }, base];
     return [base];
@@ -253,10 +326,12 @@ function previewPanel(redraw, L) {
       h('div', { class: 'row' }, 'Паттерн', seedIn, h('button', { class: 'btn', title: 'Случайный', onclick: () => { seedIn.value = Math.floor(Math.random() * 1001); upd(); } }, 'Случайный')),
       kind === 'weapon' ? h('div', {}, h('div', { class: 'row' }, tagIn), s.st ? h('div', { class: 'row' }, h('label', { class: 'switch' }, stIn, 'StatTrak™'), cntIn, 'убийств') : null) : null),
     s.paint === 0 ? null : h('div', { class: 'hint' }, 'Вид износа на картинке приблизительный: в каталоге одна картинка на скин. Точный вид покажет осмотр в игре.'),
+    kind === 'weapon' ? stickerEditor() : null,
     meta, h('div', { class: 'row' }, teamSel),
     s.paint === 0 ? null : skinLinksBlock(s),
     h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: act(async () => { need(); await applyOps(ops(), 'Надето'); redraw(); }) }, kind === 'weapon' ? 'Надеть скин' : kind === 'knife' ? 'Надеть нож' : 'Надеть перчатки'),
       kind === 'weapon' ? h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'unskin', teams: teamList(), def: s.weapon.def }], 'Скин снят'); redraw(); }) }, 'Снять скин') : null,
+      kind === 'weapon' && s.st ? h('button', { class: 'btn', title: 'Обнулить счётчик убийств StatTrak™ у этого оружия', onclick: act(async () => { need(); await applyOps([{ op: 'stattrak-reset', teams: teamList(), def: s.weapon.def }], 'Счётчик StatTrak™ сброшен'); redraw(); }) }, 'Сбросить StatTrak™') : null,
       kind === 'glove' ? h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'gloves', def: 0 }, { op: 'unskin', def: s.weapon.def }], 'Перчатки сняты'); redraw(); }) }, 'Снять перчатки') : null));
 }
 

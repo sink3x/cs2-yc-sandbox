@@ -84,6 +84,71 @@ function buildCatalog({ skins = [], agents = [], music = [], base = [] }) {
   return { v: CATALOG_VERSION, imgBase: IMG_PREFIX, weapons, rarities, skins: out, agents: agentList, music: musicList };
 }
 
+// ---- Стикеры: ~11 тыс. штук (17 МБ исходного JSON) — храним сжато на диске панели и отдаём страницами с поиском -------------------
+const STICKER_IMG = 'https://cdn.steamstatic.com/apps/730/icons/econ/stickers/';
+const STICKER_VERSION = 1;
+const STICKER_TYPES = ['Autograph', 'Team', 'Event', 'Other'];
+const sIdx = (arr, map, v) => { const k = String(v || '—'); if (!map.has(k)) { map.set(k, arr.length); arr.push(k); } return map.get(k); };
+/** items: [id, name, rarityIdx, effectIdx, typeIdx, eventIdx, img] */
+function buildStickers(list = []) {
+  const rarities = []; const rmap = new Map(); const effects = []; const emap = new Map(); const events = []; const vmap = new Map();
+  const items = [];
+  for (const s of Array.isArray(list) ? list : []) {
+    const id = Number(s && s.def_index);
+    if (!Number.isInteger(id) || id <= 0 || !s.image) continue;
+    const img = String(s.image);
+    if (!img.startsWith(STICKER_IMG)) continue;
+    const ri = sIdx(rarities, rmap, s.rarity && s.rarity.name);
+    if (rarities[ri] && !rarities.colors) rarities.colors = {};
+    if (s.rarity && s.rarity.color) (rarities.colors = rarities.colors || {})[ri] = String(s.rarity.color);
+    items.push([id, String(s.name || id).replace(/^Sticker \| /, '').slice(0, 80), ri, sIdx(effects, emap, s.effect),
+      Math.max(0, STICKER_TYPES.indexOf(s.type)), sIdx(events, vmap, s.tournament && s.tournament.name), img.slice(STICKER_IMG.length)]);
+  }
+  const colors = rarities.colors || {};
+  return { v: STICKER_VERSION, imgBase: STICKER_IMG, rarities: rarities.map((n, i) => ({ n, c: colors[i] || '#b0c3d9' })), effects, events, types: STICKER_TYPES, items };
+}
+
+/** Фильтр + страница. q ищется по подстроке имени и по турниру, без учёта регистра. */
+function queryStickers(data, { q = '', type = '', effect = '', event = '', ids = '', page = 0, size = 60 } = {}) {
+  const shape = (it) => ({ id: it[0], name: it[1], rarity: data.rarities[it[2]].n, color: data.rarities[it[2]].c, effect: data.effects[it[3]], type: data.types[it[4]], event: data.events[it[5]], img: it[6] });
+  if (ids) {
+    const want = new Set(String(ids).split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 10));
+    return { total: want.size, items: data.items.filter((it) => want.has(it[0])).map(shape) };
+  }
+  const ql = String(q).trim().toLowerCase().slice(0, 60);
+  const ti = type ? data.types.indexOf(type) : -1; const ei = effect ? data.effects.indexOf(effect) : -1; const vi = event ? data.events.indexOf(event) : -1;
+  const hit = data.items.filter((it) => (ti < 0 || it[4] === ti) && (ei < 0 || it[3] === ei) && (vi < 0 || it[5] === vi)
+    && (!ql || it[1].toLowerCase().includes(ql) || data.events[it[5]].toLowerCase().includes(ql) || String(it[0]) === ql));
+  const sz = Math.min(Math.max(Number(size) || 60, 1), 120); const pg = Math.max(Number(page) || 0, 0);
+  return { total: hit.length, items: hit.slice(pg * sz, pg * sz + sz).map(shape) };
+}
+
+class StickerCache {
+  constructor({ file, fetchJson = defaultFetchJson, now = () => Date.now(), ttlMs = TTL_MS } = {}) {
+    this.file = file; this.fetchJson = fetchJson; this.now = now; this.ttlMs = ttlMs; this.mem = null; this.inflight = null;
+  }
+  async get() {
+    const t = this.now();
+    if (this.mem && t - this.mem.at < this.ttlMs) return this.mem.data;
+    const disk = this.file ? readJson(this.file, null) : null;
+    if (disk && disk.data && disk.data.v === STICKER_VERSION && t - disk.at < this.ttlMs) { this.mem = disk; return disk.data; }
+    if (!this.inflight) {
+      this.inflight = (async () => {
+        const data = buildStickers(await this.fetchJson(`${BASE}/stickers.json`));
+        if (!data.items.length) throw new Error('sticker source returned nothing');
+        const rec = { at: this.now(), data };
+        if (this.file) { try { writeJsonAtomic(this.file, rec); } catch { /* best effort */ } }
+        this.mem = rec; return data;
+      })().finally(() => { this.inflight = null; });
+    }
+    try { return await this.inflight; } catch (e) {
+      const stale = (this.mem && this.mem.data) || (disk && disk.data && disk.data.v === STICKER_VERSION ? disk.data : null);
+      if (stale) return stale;
+      throw Object.assign(new Error(`sticker catalog unavailable: ${e.message}`), { status: 503 });
+    }
+  }
+}
+
 async function defaultFetchJson(url) {
   const res = await fetch(url, { signal: AbortSignal.timeout(90000) });
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
@@ -122,4 +187,4 @@ class CatalogCache {
   }
 }
 
-module.exports = { buildCatalog, CatalogCache, shortImg, IMG_PREFIX, CATALOG_VERSION };
+module.exports = { buildCatalog, CatalogCache, buildStickers, queryStickers, StickerCache, shortImg, IMG_PREFIX, CATALOG_VERSION };

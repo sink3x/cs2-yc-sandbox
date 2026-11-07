@@ -9,7 +9,7 @@ const { readBody, readJsonBody, send, matchRoute } = require('../lib/http');
 const { readJson, writeJsonAtomic, loadEnvFile, makeLogger, sleep } = require('../lib/util');
 const { PRESETS, MAPS, CATALOG, WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');
 const { YandexCompute } = require('../lib/yc');
-const { CatalogCache } = require('../lib/catalog');
+const { CatalogCache, StickerCache, queryStickers } = require('../lib/catalog');
 const practice = require('../lib/practice');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
@@ -62,7 +62,7 @@ function validateCustomSkins(input) {
   });
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
-const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/skins/loadout/:steamid',
+const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
@@ -85,6 +85,7 @@ function createApp(deps = {}) {
   const stateCacheFile = deps.stateCacheFile || path.join(VAR, 'state-cache.json');
   const userPresetsFile = deps.userPresetsFile || path.join(VAR, 'user-presets.json');
   const customSkinsFile = deps.customSkinsFile || path.join(VAR, 'custom-skins.json');
+  const stickerCache = deps.stickerCache || new StickerCache({ file: path.join(VAR, 'sticker-catalog.json') });
   const catalogCache = deps.catalogCache || new CatalogCache({ file: path.join(VAR, 'skin-catalog.json') });
   const keysBlocked = (ip) => limiter.blocked(`ip:${ip}`);
   const loadUsers = () => (readJson(usersFile, { users: {} }).users) || {};
@@ -112,6 +113,17 @@ function createApp(deps = {}) {
   async function refreshPersona(users, name, steamid) {
     const p = await account.steamProfile(steamid, httpGet);
     if (p && p.name) { users[name].persona = p.name; users[name].avatar = p.avatar || ''; saveUsers(users); }
+  }
+  /** Профили со Steam, но без аватара (раньше Steam отдавал неизвестный хост) подтягиваем в фоне, не чаще раза в 6 часов. */
+  function backfillAvatars(users, names) {
+    let n = 0; const jobs = [];
+    for (const name of names) {
+      const u = users[name]; if (!u || !u.steamid || u.avatar || now() - (u.personaAt || 0) < 6 * 3600_000 || n >= 8) continue;
+      u.personaAt = now(); n++;
+      jobs.push(refreshPersona(users, name, u.steamid).catch(() => {}));
+    }
+    if (n) saveUsers(users);
+    return Promise.all(jobs);
   }
   /**
    * Вход через Steam: ищем панельный аккаунт для SteamID64 игрового админа. Только для SteamID из списка админов сервера
@@ -344,7 +356,7 @@ function createApp(deps = {}) {
   // ---- routes ---------------------------------------------------------------------------------
   const P = (p) => async ({ params, body, query }) => agent('POST', p, body);
   const routes = [
-    ['GET', '/api/me', async ({ user }) => { const u = usersWithSlugs()[user] || {}; return { user, slug: u.slug || '', displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
+    ['GET', '/api/me', async ({ user }) => { const all = usersWithSlugs(); await backfillAvatars(all, [user]); const u = all[user] || {}; return { user, slug: u.slug || '', displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
     ['GET', '/api/public-info', async () => { const o = await overview(); return { ...o.glance, map: o.glance.map.id, mapInfo: o.glance.map }; }],
     ['GET', '/api/overview', async () => overview()],
     ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS, workshop: WORKSHOP_MAPS, workshopCats: WORKSHOP_CATS })],
@@ -352,6 +364,10 @@ function createApp(deps = {}) {
     ['PUT', '/api/user-presets', async ({ body, user, ip }) => { const v = validateUserPresets(body.presets); writeJsonAtomic(userPresetsFile, v); audit(user, ip, 'user-presets', Object.keys(v)); return { presets: v }; }],
     ['GET', '/api/custom-skins', async () => ({ skins: readJson(customSkinsFile, []) })],
     ['PUT', '/api/custom-skins', async ({ body, user, ip }) => { const v = validateCustomSkins(body.skins); writeJsonAtomic(customSkinsFile, v); audit(user, ip, 'custom-skins', v.length); return { skins: v }; }],
+    ['GET', '/api/stickers', async ({ query }) => {
+      const d = await stickerCache.get(); const r = queryStickers(d, query || {});
+      return { ...r, imgBase: d.imgBase, facets: query && query.facets === '1' ? { types: d.types, effects: d.effects, events: d.events } : undefined };
+    }],
     ['GET', '/api/skins/catalog', async () => ({ ...(await catalogCache.get()), custom: readJson(customSkinsFile, []) })],
     ['GET', '/api/skins/players', async () => agent('GET', '/skins/players')],
     ['GET', '/api/skins/loadout/:steamid', async ({ params }) => agent('GET', `/skins/loadout/${encodeURIComponent(params.steamid)}`)],
@@ -447,7 +463,7 @@ function createApp(deps = {}) {
     // ---- пользователи панели: список и карточка (админам — все, игроку — только своя) ----
     ['GET', '/api/users', async ({ query, user }) => {
       if (roleOf(user) !== 'admin') throw Object.assign(new Error('forbidden'), { status: 403 });
-      const us = usersWithSlugs(); const ig = inGameAdminIds();
+      const us = usersWithSlugs(); const ig = inGameAdminIds(); backfillAvatars(us, Object.keys(us));
       return people.listUsers(Object.entries(us).map(([n, u]) => people.publicUser(n, u, { inGameAdmin: ig.has(String(u.steamid)) })), query);
     }],
     ['GET', '/api/people', async () => {
@@ -462,10 +478,34 @@ function createApp(deps = {}) {
       if (!me) throw Object.assign(new Error('forbidden'), { status: 403 });
       if (u.steamid && !u.avatar && now() - (u.personaAt || 0) > 6 * 3600_000) { u.personaAt = now(); try { await refreshPersona(us, name, u.steamid); } catch { /* Steam недоступен */ } saveUsers(us); }
       const card = people.publicUser(name, u, { full: true, inGameAdmin: inGameAdminIds().has(String(u.steamid)) });
-      const out = { ...card, faceit: null, faceitError: '', stats: null, setups: loadSetups().filter((x) => x.owner === name && people.canView(x, { user, slug: (us[user] || {}).slug, role: roleOf(user) })).map((x) => people.summary(x, card.slug)) };
+      const ga = roleOf(user) === 'admin' && card.steamid ? (((readStateCache() || {}).state || {}).admins || []).find((a) => String(a.steamid) === String(card.steamid)) : null;
+      const out = { ...card, gameAdmin: ga ? { flags: ga.flags, name: ga.name } : null, gameAdminFlags: roleOf(user) === 'admin' ? stateLib.ADMIN_FLAGS : undefined, gameAdminLocked: !!(ga && ((readStateCache() || {}).protectedAdmins || []).includes(String(card.steamid))), faceit: null, faceitError: '', stats: null, setups: loadSetups().filter((x) => x.owner === name && people.canView(x, { user, slug: (us[user] || {}).slug, role: roleOf(user) })).map((x) => people.summary(x, card.slug)) };
       if (card.steamid && query.faceit !== '0') { try { out.faceit = await faceitFor(card.steamid); } catch (e) { out.faceitError = e.message; } }
       if (card.steamid && query.stats !== '0') { try { const r = await statsGet(`/stats/${card.steamid}`, card.steamid); out.stats = (r.players || [])[0] || null; } catch { /* сервер выключен и кэша нет */ } }
       return out;
+    }],
+    // ---- «админ в игре»: добавить/убрать SteamID пользователя в списке админов сервера (CounterStrikeSharp admins.json) ----
+    ['PUT', '/api/users/:slug/game-admin', async ({ params, body, user, ip }) => {
+      if (!people.SLUG_RE.test(params.slug)) throw Object.assign(new Error('users: bad slug'), { status: 400 });
+      const hit = people.findBySlug(usersWithSlugs(), params.slug);
+      if (!hit) throw Object.assign(new Error('user not found'), { status: 404 });
+      const [name, u] = hit;
+      if (!u.steamid) throw Object.assign(new Error('Steam не привязан: у пользователя нет SteamID64'), { status: 400 });
+      const cur = await getState();
+      const list = (cur.state.admins || []).map((a) => ({ name: a.name, steamid: a.steamid, flags: a.flags }));
+      const i = list.findIndex((a) => String(a.steamid) === String(u.steamid));
+      if (body.enabled === false) { if (i >= 0) list.splice(i, 1); }
+      else {
+        const flags = Array.isArray(body.flags) ? body.flags.filter((f) => stateLib.ADMIN_FLAGS.includes(f)) : ['@css/root'];
+        if (!flags.length) throw Object.assign(new Error('выберите хотя бы одно право'), { status: 400 });
+        const nm = String(u.persona || name).replace(/[^\w .\-]/g, '').trim().slice(0, 32) || String(name).replace(/[^\w .\-]/g, '').slice(0, 32) || 'admin';
+        if (i >= 0) list[i].flags = flags; else list.push({ name: nm, steamid: String(u.steamid), flags });
+      }
+      const r = await putState({ state: { admins: list } });
+      let reload = null;
+      if (!r.queued && !r.offline) { try { reload = String((await agent('POST', '/rcon', { command: 'css_reload_admins' }, 10000)).output || '').trim().slice(0, 200); } catch { /* сервер выключен или команды нет */ } }
+      audit(user, ip, body.enabled === false ? 'user.game-admin.revoke' : 'user.game-admin.grant', { target: name, steamid: u.steamid, flags: body.flags || null });
+      return { ok: true, gameAdmin: body.enabled === false ? null : (r.state.admins || []).find((a) => String(a.steamid) === String(u.steamid)) || null, needsRestart: !!r.needsRestart, queued: !!r.queued, reload };
     }],
     // ---- сетапы: cfg, параметры запуска, мышь/DPI, видео ----
     ['GET', '/api/setups', async ({ query, user }) => {
@@ -566,7 +606,7 @@ function createApp(deps = {}) {
 
   const SEC_HEADERS = {
     'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://raw.githubusercontent.com; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://avatars.fastly.steamstatic.com https://avatars.cloudflare.steamstatic.com https://raw.githubusercontent.com; frame-ancestors 'none'",
   };
 
   function clientIp(req) {

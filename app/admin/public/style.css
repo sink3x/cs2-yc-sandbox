@@ -402,3 +402,20 @@ code, pre, .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, "JetBra
 .grid .kv { gap: 10px 14px; margin-bottom: 6px; }
 .grid .card .row { margin: 14px 0 0; gap: 12px; }
 .grid .card .muted.small { margin-top: 14px; line-height: 1.6; }
+
+/* стикеры на оружии */
+.stk { margin-top: 12px; border-top: 1px solid var(--line, #2a3340); padding-top: 12px; }
+.stk h4 { margin: 0 0 8px; }
+.stk-slots { display: flex; gap: 8px; margin-bottom: 8px; }
+.stk-slot { position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid var(--line, #2a3340); background: var(--bg2, rgba(255,255,255,.04)); cursor: pointer; padding: 4px; color: inherit; }
+.stk-slot.on { outline: 2px solid var(--accent, #4c9aff); }
+.stk-slot img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.stk-slot .plus { font-size: 24px; opacity: .5; }
+.stk-slot .n { position: absolute; top: 2px; left: 5px; font-size: 10px; opacity: .6; }
+.stk-detail { margin: 8px 0; }
+.stk-num { display: inline-flex; flex-direction: column; gap: 2px; font-size: 12px; opacity: .9; }
+.stk-picker .row { flex-wrap: wrap; }
+.stk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; margin: 8px 0; max-height: 360px; overflow: auto; }
+.stk-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border-radius: 10px; border: 1px solid var(--line, #2a3340); border-bottom: 3px solid var(--rar, #888); background: var(--bg2, rgba(255,255,255,.04)); cursor: pointer; color: inherit; }
+.stk-card img { width: 72px; height: 54px; object-fit: contain; }
+.stk-card .nm { font-size: 10.5px; line-height: 1.2; text-align: center; max-height: 2.4em; overflow: hidden; }
