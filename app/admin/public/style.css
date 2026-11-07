@@ -5,7 +5,9 @@
   --accent: #ececec; --on-accent: #0b0b0c; --input: #0e0e0f; --console: #080808;
   --ctl-h: 34px; --ctl-sm: 28px; --r-ctl: 10px; --r-card: 16px; --focus: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent);
   --ok: #5fb878; --warn: #c9a227; --bad: #e5645c; --blue: #cfcfd4; --hover: #232326; --shadow: 0 8px 28px rgba(0,0,0,.45);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, "Motiva Sans", "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
+  --font-display: Play, "Motiva Sans", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font);
 }
 html[data-theme=light] {
   color-scheme: light;
@@ -176,8 +178,8 @@ h2 { font-size: 26px; margin-bottom: 20px; }
 .shell { transition: grid-template-columns .28s cubic-bezier(.4, 0, .2, 1); }
 .shell.collapsed { grid-template-columns: 68px 1fr; }
 nav { overflow-x: hidden; padding: 16px 10px; gap: 2px; }
-nav h1 { display: flex; align-items: center; gap: 12px; height: 36px; margin: 0 0 14px; padding: 0 11px; white-space: nowrap; }
-nav button { display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 11px; border-radius: 10px; white-space: nowrap; font-weight: 500; color: var(--muted); }
+nav h1 { display: flex; align-items: center; gap: 12px; height: 36px; margin: 0 0 14px; padding: 0 0 0 15px; white-space: nowrap; }
+nav button { display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 0 0 15px; border-radius: 10px; white-space: nowrap; font-weight: 500; color: var(--muted); }
 nav button:hover { background: var(--hover); color: var(--text); }
 nav button.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); font-weight: 600; box-shadow: none; }
 nav button.on .ico { color: var(--accent); }
@@ -272,13 +274,7 @@ tr.clickable { cursor: pointer; } tr.clickable:hover td { background: var(--hove
 
 img.avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; }
 
-/* свёрнутое меню: иконки строго по центру колонки */
-@media (min-width: 781px) {
-  .shell.collapsed nav { padding-left: 8px; padding-right: 8px; }
-  .shell.collapsed nav button { justify-content: center; gap: 0; padding: 0; }
-  .shell.collapsed nav button .lbl { display: none; }
-  .shell.collapsed nav h1 { justify-content: center; gap: 0; padding: 0; }
-  .shell.collapsed nav h1 .lbl, .shell.collapsed nav h1 span:not(.ico) { display: none; }
+/* свёрнутое меню: иконки не двигаются — отступ слева одинаковый в обоих состояниях (10 + 15 + 9 = центр колонки 68px) */
 }
 
 /* оценка показателей: зелёный — хорошо, красный — плохо, нейтральный — средне */
@@ -322,7 +318,7 @@ td.tone-good, td.tone-bad { font-weight: 600; }
 @media (max-width: 780px) { .cv { grid-template-columns: 1fr; } }
 
 /* разделы бокового меню: высота постоянна, при сворачивании подпись плавно гаснет, а вместо неё проявляется тонкая черта — ничего не прыгает */
-nav .nav-cap { position: relative; flex: none; height: 34px; padding: 0 11px 6px; display: flex; align-items: flex-end; font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; }
+nav .nav-cap { position: relative; flex: none; height: 34px; padding: 0 15px 6px; display: flex; align-items: flex-end; font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; }
 nav h1 + .nav-cap { height: 22px; }
 nav .nav-cap .lbl { max-width: none; opacity: .8; transition: opacity .18s ease; }
 nav .nav-cap::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: 11px; height: 1px; background: var(--line); opacity: 0; transition: opacity .18s ease; }
@@ -379,3 +375,30 @@ textarea.mono { font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
 .ucard .statgrid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 .card h3 + h3, .card .muted + h3 { margin-top: 14px; }
 a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* ---------- типографика: Inter / SF (Apple) для текста, Play (FACEIT) и Motiva Sans (Steam) для заголовков и цифр ---------- */
+body { font-family: var(--font); font-feature-settings: "cv11", "ss01", "tnum" 0; letter-spacing: -.003em; text-rendering: optimizeLegibility; }
+h2, h3, nav h1, nav .nav-cap, .glance-title h3, .faceit-elo b, .stat .val, .statgrid .stat b, .tabs button, .pill { font-family: var(--font-display); }
+h2 { font-size: 28px; font-weight: 700; letter-spacing: .005em; margin: 6px 0 20px; }
+h3 { letter-spacing: .1em; }
+.stat .val, .statgrid .stat b, .faceit-elo b, td, .kv dd, code, .mono { font-variant-numeric: tabular-nums; }
+.btn, button, input, select, textarea { font-family: var(--font); }
+code, pre, .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo, Consolas, monospace; }
+
+/* ---------- страница «Сервер»: воздух между блоками ---------- */
+.glance { padding: 24px; margin-bottom: 24px; }
+.glance-head { gap: 24px; }
+.glance-title > * + * { margin-top: 8px; }
+.glance-title h3 { margin-top: 4px; letter-spacing: .04em; }
+.glance .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin: 24px 0 0; }
+.glance .stat { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; min-height: 92px; }
+.glance .stat .lbl { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.glance .stat .val { font-size: 26px; font-weight: 700; line-height: 1.1; }
+.glance .stat .sub { font-size: 12px; color: var(--muted); margin-top: auto; }
+.glance-players { margin-top: 20px; gap: 8px; }
+.glance-foot { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.grid { gap: 24px; }
+.grid > .card { margin-bottom: 0; padding: 22px; }
+.grid .kv { gap: 10px 14px; margin-bottom: 6px; }
+.grid .card .row { margin: 14px 0 0; gap: 12px; }
+.grid .card .muted.small { margin-top: 14px; line-height: 1.6; }
