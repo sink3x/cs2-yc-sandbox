@@ -43,6 +43,8 @@ const ERR_RU = [
   [/^maps: bad entry (.+)/i, 'Карты: недопустимая запись $1'], [/^Failed to fetch|NetworkError/i, 'Нет связи с панелью'], [/^agent HTTP (\d+)/i, 'Агент ответил ошибкой $1'],
   [/^skin catalog unavailable/i, 'Каталог скинов недоступен (нет доступа к GitHub). Повторите позже'],
   [/^mysql:/i, 'Ошибка базы скинов: '],
+  [/^user not found/i, 'Пользователь не найден'], [/^setup not found/i, 'Сетап не найден или недоступен'], [/^forbidden for players: own card only/i, 'Игроку доступна только своя карточка'],
+  [/^forbidden for players/i, 'Это действие недоступно игроку'], [/^forbidden: /i, 'Менять сетап может только владелец'], [/^forbidden/i, 'Недостаточно прав'], [/^users: bad slug/i, 'Некорректная ссылка пользователя'],
   [/^admins: protected (\d+) cannot be removed/i, 'Владельца сервера ($1) нельзя удалить из админов'], [/^admins: protected (\d+) must keep/i, 'У владельца сервера ($1) нельзя снять права root'],
   [/^state cache empty/i, 'В панели ещё нет копии настроек: запустите сервер один раз (кнопка на «Обзоре»), после этого они будут видны и при выключенной ВМ'],
   [/^(fetch failed|.*(ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|aborted due to timeout|operation was aborted).*)$/i, 'Сервер CS2 недоступен: выключен или ещё запускается'],

@@ -4,17 +4,19 @@
 const PAGES = {
   overview: ['Сервер', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка', pagePractice], maps: ['Карты и режимы', pageMaps],
   console: ['Консоль', pageConsole], settings: ['Настройки', pageSettings], plugins: ['Плагины и флаги', pagePlugins], admins: ['Админы', pageAdmins],
-  look: ['Оформление', pageLook], stats: ['Статистика', pageStats], profile: ['Профиль', pageProfile], info: ['Сервер', pageInfo], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
+  users: ['Пользователи', pageUsers], setups: ['Сетапы', pageSetups], look: ['Оформление', pageLook], stats: ['Статистика', pageStats], profile: ['Профиль', pageProfile], info: ['Сервер', pageInfo], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
 };
 // Главная страница — «Сервер»: у админа это обзор сервера, у игрока — информация о сервере. Логотип и вход ведут только сюда.
 const homePage = () => (S.role === 'player' ? 'info' : 'overview');
-const PLAYER_PAGES = new Set(['skins', 'stats', 'info', 'profile', 'look']);
-const visiblePages = () => Object.entries(PAGES).filter(([k]) => (S.role === 'player' ? PLAYER_PAGES.has(k) : k !== 'info'));
+const PLAYER_PAGES = new Set(['skins', 'stats', 'info', 'profile', 'look', 'setups', 'users']);
+const visiblePages = () => Object.entries(PAGES).filter(([k]) => (S.role === 'player' ? PLAYER_PAGES.has(k) && k !== 'users' : k !== 'info'));
+// Страница доступна по ссылке: у игрока дополнительно своя карточка (#users/<свой slug>), остальное решает сервер.
+const routable = (k) => visiblePages().some(([p]) => p === k) || (S.role === 'player' && k === 'users');
 // Разделы боковой панели: заголовок → страницы (порядок важен).
 const NAV_GROUPS = [
   ['Управление', ['overview', 'info', 'maps', 'settings', 'console']],
-  ['Игра', ['practice', 'skins', 'plugins']],
-  ['Игроки', ['stats', 'admins']],
+  ['Игра', ['practice', 'skins', 'plugins', 'setups']],
+  ['Игроки', ['stats', 'users', 'admins']],
   ['Панель и аккаунт', ['profile', 'look', 'panel', 'backups', 'help']],
 ];
 function navSections(vis) {
@@ -44,6 +46,8 @@ const ICONS = {
   look: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
   backups: '<rect x="3" y="3" width="18" height="5" rx="1.5"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><line x1="10" y1="12" x2="14" y2="12"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9.2a3 3 0 0 1 5.8 1c0 2-2.9 2.6-2.9 4.3"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17.5 14c2.5 0 4 2 4 5"/>',
+  setups: '<rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/>',
   profile: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>',
   stats: '<line x1="5" y1="20" x2="5" y2="11"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="19" y1="20" x2="19" y2="14"/>',
   info: '<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><line x1="7" y1="7.5" x2="7.01" y2="7.5"/><line x1="7" y1="16.5" x2="7.01" y2="16.5"/>',
@@ -87,7 +91,26 @@ function offlineBanner() {
 }
 
 
-function go(page) { S.page = page; location.hash = page; renderPage(); }
+// Адрес: #страница/slug?параметры. S.route — разобранный адрес текущей страницы.
+function parseRoute(hash = location.hash) {
+  const raw = hash.replace(/^#/, ''); const qi = raw.indexOf('?'); const path = qi < 0 ? raw : raw.slice(0, qi);
+  const [page, ...rest] = path.split('/'); let slug = '';
+  try { slug = decodeURIComponent(rest.join('/')); } catch { slug = ''; }
+  return { page, slug: /^[\w-]{0,80}$/.test(slug) ? slug : '', qs: new URLSearchParams(qi < 0 ? '' : raw.slice(qi + 1)) };
+}
+function routeStr(page, slug, qs) { const q = new URLSearchParams(qs || '').toString(); return `${page}${slug ? '/' + encodeURIComponent(slug) : ''}${q ? '?' + q : ''}`; }
+/** Меняет адрес без перерисовки и без записи в историю (фильтры, поиск, страницы списка). */
+function routeQuiet(page, slug, qs) { S.route = { slug: slug || '', qs: new URLSearchParams(qs || '') }; S.hash = routeStr(page, slug, qs); history.replaceState(null, '', `#${S.hash}`); }
+function go(page, slug = '', qs = '') {
+  S.page = page; S.route = { slug, qs: new URLSearchParams(qs) }; S.hash = routeStr(page, slug, qs);
+  if (location.hash.slice(1) !== S.hash) location.hash = S.hash;
+  renderPage();
+}
+addEventListener('hashchange', () => {
+  if (!S.user || location.hash.slice(1) === S.hash) return;
+  const r = parseRoute(); if (!PAGES[r.page] || !routable(r.page)) return;
+  S.page = r.page; S.route = { slug: r.slug, qs: r.qs }; S.hash = routeStr(r.page, r.slug, r.qs); renderPage();
+});
 
 async function fetchState() {
   S.state = await api('GET', '/state'); S.pluginsMeta = S.state.plugins; S.adminFlags = S.state.admin_flags;
@@ -143,11 +166,12 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.
 
 async function boot() {
   await loadBrand();
-  try { const me = await api('GET', '/me'); S.user = me.user; S.display = me.displayName || me.user; S.avatar = me.avatar || ''; S.role = me.role || 'admin'; S.steamid = me.steamid || ''; } catch { return showLogin(); }
+  try { const me = await api('GET', '/me'); S.user = me.user; S.display = me.displayName || me.user; S.avatar = me.avatar || ''; S.role = me.role || 'admin'; S.steamid = me.steamid || ''; S.slug = me.slug || ''; } catch { return showLogin(); }
   { const sp = new URLSearchParams(location.search).get('steam'); if (sp && STEAM_MSG[sp]) { toast(STEAM_MSG[sp], sp === 'linked' ? 's' : 'e'); history.replaceState(null, '', location.pathname); } }
   if (S.role === 'player') { S.page = homePage(); S.catalog = { presets: [], maps: [], catalog: [], toggles: [], fun: [] }; } else S.catalog = await api('GET', '/catalog');
   S.state = null;
-  const hash = location.hash.slice(1); if (PAGES[hash] && visiblePages().some(([k]) => k === hash)) S.page = hash;
+  S.route = { slug: '', qs: new URLSearchParams() };
+  { const r = parseRoute(); if (PAGES[r.page] && routable(r.page)) { S.page = r.page; S.route = { slug: r.slug, qs: r.qs }; } S.hash = routeStr(S.page, S.route.slug, S.route.qs); }
   $app.replaceChildren(h('div', { class: 'shell' }, navEl, h('div', {}, h('div', { style: 'padding:20px 26px 0' }, barEl), mainEl)));
   applyNav();
   await loadOverview();

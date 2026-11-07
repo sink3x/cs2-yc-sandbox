@@ -5,6 +5,7 @@ data "yandex_compute_image" "ubuntu" {
 
 locals {
   bundle_path = "${path.module}/../build/bundle.tgz"
+  public_path = "${path.module}/../build/public.tgz"
 
   ssh_metadata = var.ssh_public_key == "" ? {} : { "ssh-keys" = "ubuntu:${var.ssh_public_key}" }
 
@@ -151,6 +152,7 @@ resource "yandex_compute_instance" "admin" {
     user-data  = local.user_data_admin
     role       = "admin"
     app-bundle = filebase64(local.bundle_path)
+    app-public = filebase64(local.public_path)
     panel-host = local.panel_host
     config-json = jsonencode({
       instanceId = yandex_compute_instance.cs2.id

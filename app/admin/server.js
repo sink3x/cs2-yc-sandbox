@@ -13,6 +13,7 @@ const { CatalogCache } = require('../lib/catalog');
 const practice = require('../lib/practice');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
+const people = require('../lib/people');
 const crypto = require('node:crypto');
 
 const log = makeLogger('admin');
@@ -62,7 +63,8 @@ function validateCustomSkins(input) {
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
 const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/skins/loadout/:steamid',
-  'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid']);
+  'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
+  'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
 const MAX_PLAYER_ACCOUNTS = 300;
 const DEFAULT_SETTINGS = { autoStopIdleMinutes: 30, startupGraceMinutes: 20 };
@@ -99,6 +101,13 @@ function createApp(deps = {}) {
   const roleOf = (name) => ((loadUsers()[name] || {}).role === 'player' ? 'player' : 'admin');
   const playerLoginOn = () => readJson(settingsFile, {}).playerLogin !== false;
   const saveUsers = (users) => writeJsonAtomic(usersFile, { users }, 0o600);
+  const touchLogin = (name) => { const us = loadUsers(); if (us[name]) { us[name].lastLogin = new Date(now()).toISOString(); saveUsers(us); } };
+  const setupsFile = deps.setupsFile || path.join(VAR, 'setups.json');
+  const loadSetups = () => { const r = readJson(setupsFile, { items: [] }); return Array.isArray(r.items) ? r.items : []; };
+  const saveSetups = (items) => writeJsonAtomic(setupsFile, { items }, 0o600);
+  /** Пользователи с постоянными slug (недостающие выдаются и сохраняются). */
+  const usersWithSlugs = () => { const us = loadUsers(); if (people.ensureSlugs(us)) saveUsers(us); return us; };
+  const inGameAdminIds = () => new Set((((readJson(stateCacheFile, null) || {}).state || {}).admins || []).map((a) => String(a.steamid)));
   /** Ник и аватар из публичного Steam-профиля → в запись пользователя (best effort, вход не блокирует). */
   async function refreshPersona(users, name, steamid) {
     const p = await account.steamProfile(steamid, httpGet);
@@ -117,6 +126,12 @@ function createApp(deps = {}) {
     return byName(adm.name) || byName(persona) || (free.length === 1 ? free[0] : null);
   }
   const profileOf = (name) => { const u = loadUsers()[name] || {}; return { user: name, displayName: u.persona || name, avatar: u.avatar || '', email: u.email || '', steamid: u.steamid || '', links: u.links || [], faceitKey: !!readJson(faceitFile, {}).key }; };
+  async function faceitFor(steamid) {
+    const hit = faceitCache.get(steamid);
+    if (hit && hit.exp > now()) return hit.v;
+    const v = await account.faceitLookup(steamid, readJson(faceitFile, {}).key, httpGet);
+    faceitCache.set(steamid, { v, exp: now() + 10 * 60_000 }); return v;
+  }
   const originOf = (req, secure) => (config.publicUrl ? String(config.publicUrl).replace(/\/+$/, '') : `${secure ? 'https' : 'http'}://${req.headers.host}`);
 
   const audit = (user, ip, action, detail) => {
@@ -317,7 +332,7 @@ function createApp(deps = {}) {
   // ---- routes ---------------------------------------------------------------------------------
   const P = (p) => async ({ params, body, query }) => agent('POST', p, body);
   const routes = [
-    ['GET', '/api/me', async ({ user }) => { const u = loadUsers()[user] || {}; return { user, displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
+    ['GET', '/api/me', async ({ user }) => { const u = usersWithSlugs()[user] || {}; return { user, slug: u.slug || '', displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
     ['GET', '/api/public-info', async () => { const o = await overview(); return { ...o.glance, map: o.glance.map.id, mapInfo: o.glance.map }; }],
     ['GET', '/api/overview', async () => overview()],
     ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS, workshop: WORKSHOP_MAPS, workshopCats: WORKSHOP_CATS })],
@@ -416,11 +431,80 @@ function createApp(deps = {}) {
       writeJsonAtomic(faceitFile, key ? { key } : {}, 0o600); faceitCache.clear(); audit(user, ip, 'faceit.key', key ? 'set' : 'cleared');
       return { hasKey: !!key };
     }],
-    ['GET', '/api/faceit/:steamid', async ({ params }) => {
-      const hit = faceitCache.get(params.steamid);
-      if (hit && hit.exp > now()) return hit.v;
-      const v = await account.faceitLookup(params.steamid, readJson(faceitFile, {}).key, httpGet);
-      faceitCache.set(params.steamid, { v, exp: now() + 10 * 60_000 }); return v;
+    ['GET', '/api/faceit/:steamid', async ({ params }) => faceitFor(params.steamid)],
+    // ---- пользователи панели: список и карточка (админам — все, игроку — только своя) ----
+    ['GET', '/api/users', async ({ query, user }) => {
+      if (roleOf(user) !== 'admin') throw Object.assign(new Error('forbidden'), { status: 403 });
+      const us = usersWithSlugs(); const ig = inGameAdminIds();
+      return people.listUsers(Object.entries(us).map(([n, u]) => people.publicUser(n, u, { inGameAdmin: ig.has(String(u.steamid)) })), query);
+    }],
+    ['GET', '/api/people', async () => {
+      const us = usersWithSlugs();
+      return { users: Object.entries(us).map(([n, u]) => { const c = people.publicUser(n, u); return { slug: c.slug, displayName: c.displayName, avatar: c.avatar }; }).sort((a, b) => a.displayName.localeCompare(b.displayName)).slice(0, 500) };
+    }],
+    ['GET', '/api/users/:slug', async ({ params, user, query }) => {
+      if (!people.SLUG_RE.test(params.slug)) throw Object.assign(new Error('users: bad slug'), { status: 400 });
+      const us = usersWithSlugs(); const hit = people.findBySlug(us, params.slug);
+      if (!hit) throw Object.assign(new Error('user not found'), { status: 404 });
+      const [name, u] = hit; const me = roleOf(user) === 'admin' || name === user;
+      if (!me) throw Object.assign(new Error('forbidden'), { status: 403 });
+      if (u.steamid && !u.avatar && now() - (u.personaAt || 0) > 6 * 3600_000) { u.personaAt = now(); try { await refreshPersona(us, name, u.steamid); } catch { /* Steam недоступен */ } saveUsers(us); }
+      const card = people.publicUser(name, u, { full: true, inGameAdmin: inGameAdminIds().has(String(u.steamid)) });
+      const out = { ...card, faceit: null, faceitError: '', stats: null, setups: loadSetups().filter((x) => x.owner === name && people.canView(x, { user, slug: (us[user] || {}).slug, role: roleOf(user) })).map((x) => people.summary(x, card.slug)) };
+      if (card.steamid && query.faceit !== '0') { try { out.faceit = await faceitFor(card.steamid); } catch (e) { out.faceitError = e.message; } }
+      if (card.steamid && query.stats !== '0') { try { const r = await statsGet(`/stats/${card.steamid}`, card.steamid); out.stats = (r.players || [])[0] || null; } catch { /* сервер выключен и кэша нет */ } }
+      return out;
+    }],
+    // ---- сетапы: cfg, параметры запуска, мышь/DPI, видео ----
+    ['GET', '/api/setups', async ({ query, user }) => {
+      const us = usersWithSlugs(); const role = roleOf(user); const mySlug = (us[user] || {}).slug;
+      const scope = ['mine', 'shared', 'all'].includes(query.scope) ? query.scope : 'all';
+      const owner = query.owner && people.SLUG_RE.test(query.owner) ? query.owner : '';
+      const kind = people.KINDS.includes(query.kind) ? query.kind : '';
+      const text = String(query.q || '').slice(0, 40).toLowerCase().trim();
+      const slugOf = (n) => (us[n] || {}).slug || '';
+      let items = loadSetups().filter((x) => people.canView(x, { user, slug: mySlug, role }) && (scope === 'all' || (scope === 'mine') === (x.owner === user)) && (!owner || slugOf(x.owner) === owner) && (!kind || x.kind === kind) && (!text || x.title.toLowerCase().includes(text)));
+      items = items.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
+      const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 30)); const page = Math.max(1, parseInt(query.page, 10) || 1);
+      return { total: items.length, page, limit, scope, owner, kind, q: text, items: items.slice((page - 1) * limit, page * limit).map((x) => { const o = us[x.owner]; const c = o ? people.publicUser(x.owner, o) : null; return people.summary(x, c ? { slug: c.slug, displayName: c.displayName, avatar: c.avatar } : null); }) };
+    }],
+    ['GET', '/api/setups/:ref', async ({ params, user }) => {
+      const id = people.parseSetupRef(params.ref); const us = usersWithSlugs(); const x = loadSetups().find((i) => i.id === id);
+      // чужой приватный сетап неотличим от несуществующего
+      if (!x || !people.canView(x, { user, slug: (us[user] || {}).slug, role: roleOf(user) })) throw Object.assign(new Error('setup not found'), { status: 404 });
+      const o = us[x.owner]; const c = o ? people.publicUser(x.owner, o) : null;
+      return { ...x, ref: people.setupSlug(x), owner: c ? { slug: c.slug, displayName: c.displayName, avatar: c.avatar } : null, mine: x.owner === user, derived: people.derive(x) };
+    }],
+    ['POST', '/api/setups', async ({ body, user, ip }) => {
+      const us = usersWithSlugs(); const items = loadSetups();
+      if (items.filter((x) => x.owner === user).length >= people.MAX_SETUPS_PER_USER) throw Object.assign(new Error(`setups: не больше ${people.MAX_SETUPS_PER_USER} на пользователя`), { status: 409 });
+      const v = people.validateSetup(body, { slugs: new Set(Object.values(us).map((u) => u.slug)) });
+      let id; do { id = people.newId(); } while (items.some((x) => x.id === id));
+      const x = { id, owner: user, ...v, created: new Date(now()).toISOString(), updated: new Date(now()).toISOString() };
+      items.push(x); saveSetups(items); audit(user, ip, 'setup.create', { id, files: v.files.length }); return { ...x, ref: people.setupSlug(x), mine: true, derived: people.derive(x) };
+    }],
+    ['PUT', '/api/setups/:ref', async ({ params, body, user, ip }) => {
+      const id = people.parseSetupRef(params.ref); const us = usersWithSlugs(); const items = loadSetups(); const i = items.findIndex((x) => x.id === id);
+      if (i < 0 || !people.canView(items[i], { user, slug: (us[user] || {}).slug, role: roleOf(user) })) throw Object.assign(new Error('setup not found'), { status: 404 });
+      if (!people.canEdit(items[i], { user })) throw Object.assign(new Error('forbidden: только владелец может менять сетап'), { status: 403 });
+      const v = people.validateSetup(body, { slugs: new Set(Object.values(us).map((u) => u.slug)) });
+      items[i] = { ...items[i], ...v, updated: new Date(now()).toISOString() }; saveSetups(items); audit(user, ip, 'setup.update', { id });
+      return { ...items[i], ref: people.setupSlug(items[i]), mine: true, derived: people.derive(items[i]) };
+    }],
+    ['DELETE', '/api/setups/:ref', async ({ params, user, ip }) => {
+      const id = people.parseSetupRef(params.ref); const us = usersWithSlugs(); const items = loadSetups(); const i = items.findIndex((x) => x.id === id);
+      if (i < 0 || !people.canView(items[i], { user, slug: (us[user] || {}).slug, role: roleOf(user) })) throw Object.assign(new Error('setup not found'), { status: 404 });
+      if (items[i].owner !== user && roleOf(user) !== 'admin') throw Object.assign(new Error('forbidden'), { status: 403 });
+      const [gone] = items.splice(i, 1); saveSetups(items); audit(user, ip, 'setup.delete', { id: gone.id, owner: gone.owner }); return { ok: true };
+    }],
+    ['POST', '/api/setups/:ref/copy', async ({ params, user, ip }) => {
+      const id = people.parseSetupRef(params.ref); const us = usersWithSlugs(); const items = loadSetups(); const src = items.find((x) => x.id === id);
+      if (!src || !people.canView(src, { user, slug: (us[user] || {}).slug, role: roleOf(user) })) throw Object.assign(new Error('setup not found'), { status: 404 });
+      if (items.filter((x) => x.owner === user).length >= people.MAX_SETUPS_PER_USER) throw Object.assign(new Error(`setups: не больше ${people.MAX_SETUPS_PER_USER} на пользователя`), { status: 409 });
+      let nid; do { nid = people.newId(); } while (items.some((x) => x.id === nid));
+      const o = us[src.owner]; const from = o ? (o.persona || src.owner) : src.owner;
+      const x = { ...JSON.parse(JSON.stringify(src)), id: nid, owner: user, visibility: 'private', sharedWith: [], title: `${src.title} (от ${from})`.slice(0, 60), created: new Date(now()).toISOString(), updated: new Date(now()).toISOString() };
+      items.push(x); saveSetups(items); audit(user, ip, 'setup.copy', { from: id, id: nid }); return { ...x, ref: people.setupSlug(x), mine: true, derived: people.derive(x) };
     }],
     ['POST', '/api/link-account', async ({ body, user, ip }) => {
       // Игрок вошёл через Steam, но у него есть админ-аккаунт панели: подтверждаем паролем и объединяем (Steam → этот аккаунт).
@@ -502,7 +586,7 @@ function createApp(deps = {}) {
         const ok = u ? verifyPassword(String(body.password || ''), u.hash) : (verifyPassword('x', 'scrypt$16384$00$00'), false);
         if (!ok) { keys.forEach((k) => limiter.fail(k)); audit(name, ip, 'login.fail'); await sleep(400); return send(res, 401, { error: 'invalid credentials' }, SEC_HEADERS); }
         keys.forEach((k) => limiter.reset(k));
-        const sid = sessions.create(name);
+        const sid = sessions.create(name); touchLogin(name);
         audit(name, ip, 'login.ok');
         return send(res, 200, { user: name }, { ...SEC_HEADERS, 'Set-Cookie': `cs2sid=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}${secure ? '; Secure' : ''}` });
       }
@@ -538,7 +622,7 @@ function createApp(deps = {}) {
             name2 = `p${steamid}`; users[name2] = { role: 'player', steamid, created: new Date(now()).toISOString() }; saveUsers(users); audit(name2, ip, 'player.register', steamid);
           }
           await refreshPersona(users, name2, steamid);
-          const sid2 = sessions.create(name2, { via: 'steam' }); audit(name2, ip, 'login.steam');
+          const sid2 = sessions.create(name2, { via: 'steam' }); touchLogin(name2); audit(name2, ip, 'login.steam');
           return send(res, 302, '', { ...SEC_HEADERS, Location: '/', 'Set-Cookie': `cs2sid=${sid2}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}${secure ? '; Secure' : ''}` });
         } catch (e) { limiter.fail(`ip:${ip}`); log('steam login:', e.message); return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=error' }); }
       }
@@ -558,6 +642,7 @@ function createApp(deps = {}) {
         const key = `${req.method} ${m.pattern}`;
         if (!PLAYER_OK.has(key)) return send(res, 403, { error: 'forbidden for players' }, SEC_HEADERS);
         if (SELF_ONLY.has(key) && m.params.steamid !== self) return send(res, 403, { error: 'forbidden for players: own SteamID only' }, SEC_HEADERS);
+        if (key === 'GET /api/users/:slug' && m.params.slug !== (loadUsers()[session.user] || {}).slug) return send(res, 403, { error: 'forbidden for players: own card only' }, SEC_HEADERS);
         if (key === 'PUT /api/profile') { delete body.links; }
       }
       const result = await m.handler({ params: m.params, body, query: Object.fromEntries(url.searchParams), user: session.user, ip, sid });

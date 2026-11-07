@@ -98,14 +98,10 @@ function faceitRadars(r) {
     pool.length >= 3 ? h('div', {}, h('h4', {}, 'Пул карт: % побед'), radar({ axes: pool.map((m) => ({ label: m.map, value: norm(m.winRate, 30, 70), text: `${m.winRate}%` })), ref: pool.map(() => norm(50, 30, 70)), title: 'Пул карт' })) : null);
 }
 
-function faceitCard(P) {
-  const idIn = h('input', { type: 'text', value: store.get('faceitId', '') || P.steamid || '', placeholder: 'SteamID64 (17 цифр)', style: 'width:220px' });
-  const out = h('div', { class: 'faceit-out' });
-  const level = (n) => faceitLevelBadge(n, 52);
-  const show = (r) => {
-    if (!r.found) { out.replaceChildren(h('div', { class: 'muted' }, 'Игрок с таким SteamID не найден на FACEIT (CS2).')); return; }
-    const st = r.stats;
-    out.replaceChildren(...[h('div', { class: 'faceit-head' }, level(r.level || 0), h('div', {}, h('b', {}, r.nickname || '—'), h('div', { class: 'muted small' }, `${r.region || ''} ${r.country ? '· ' + String(r.country).toUpperCase() : ''}`)),
+/** Блок «FACEIT»: уровень, ELO, статистика, карты, анализ. Общий для профиля и карточки пользователя. */
+function faceitView(r) {
+  const st = r.stats; const level = (n) => faceitLevelBadge(n, 52);
+  return [h('div', { class: 'faceit-head' }, level(r.level || 0), h('div', {}, h('b', {}, r.nickname || '—'), h('div', { class: 'muted small' }, `${r.region || ''} ${r.country ? '· ' + String(r.country).toUpperCase() : ''}`)),
       h('div', { class: 'faceit-elo' }, h('b', {}, String(r.elo || 0)), h('small', {}, 'ELO'))),
     st ? h('div', { class: 'statgrid' }, [['Матчей', st.matches, null], ['Побед, %', st.winRate, 'winRate'], ['K/D', st.kd, 'kd'], ['HS, %', st.hs, 'hs'], ['K/R', st.kr, 'kr'], ['Серия побед', st.streak, 'streak'], ['Рекорд серии', st.longestStreak, null]].map(([k, v, m]) => h('div', { class: `stat ${m ? 'tone-' + tone(m, v) : ''}` }, h('b', {}, v == null ? '—' : String(v)), h('small', {}, k)))) : h('div', { class: 'muted small' }, 'Статистика матчей недоступна.'),
     faceitEloBlock(r),
@@ -115,7 +111,17 @@ function faceitCard(P) {
     r.maps && r.maps.length ? h('div', {}, h('h4', {}, 'Карты FACEIT'), h('table', {}, h('thead', {}, h('tr', {}, ['Карта', 'Матчей', 'Побед, %', 'K/D', 'HS, %'].map((x) => h('th', {}, x)))),
       h('tbody', {}, r.maps.map((m) => h('tr', {}, h('td', {}, m.map), h('td', {}, String(m.matches)), h('td', { class: `tone-${tone('winRate', m.winRate)}` }, String(m.winRate || '—')), h('td', { class: `tone-${tone('kd', m.kd)}` }, String(m.kd || '—')), h('td', { class: `tone-${tone('hs', m.hs)}` }, String(m.hs || '—'))))))) : null,
     r.analysis && r.analysis.length ? h('div', { class: 'tips' }, h('h4', {}, 'Анализ игры'), r.analysis.map((t) => h('div', { class: `insight ${t.kind}` }, h('i'), h('span', {}, tipText(t))))) : null,
-    r.url ? h('div', {}, h('a', { href: r.url, target: '_blank', rel: 'noopener noreferrer' }, 'Открыть профиль на FACEIT ↗')) : null].filter(Boolean));
+    r.url ? h('div', {}, h('a', { href: r.url, target: '_blank', rel: 'noopener noreferrer' }, 'Открыть профиль на FACEIT ↗')) : null].filter(Boolean);
+}
+
+function faceitCard(P) {
+  const idIn = h('input', { type: 'text', value: store.get('faceitId', '') || P.steamid || '', placeholder: 'SteamID64 (17 цифр)', style: 'width:220px' });
+  const out = h('div', { class: 'faceit-out' });
+  const level = (n) => faceitLevelBadge(n, 52);
+  const show = (r) => {
+    if (!r.found) { out.replaceChildren(h('div', { class: 'muted' }, 'Игрок с таким SteamID не найден на FACEIT (CS2).')); return; }
+    const st = r.stats;
+    out.replaceChildren(...faceitView(r));
     P.faceitUrl = r.url; FACEIT_LOOKUP.url = r.url;
   };
   const go = act(async () => {

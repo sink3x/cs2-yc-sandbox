@@ -11,6 +11,13 @@ export DEBIAN_FRONTEND=noninteractive
 log() { echo "[install-admin] $*"; }
 mkdir -p "$STAMP"
 
+# The frontend (app/admin/public) travels in its own metadata value ("app-public") so each stays under the 256 KB limit.
+curl -fsS --retry 12 --retry-delay 3 --retry-connrefused -H 'Metadata-Flavor: Google' \
+  http://169.254.169.254/computeMetadata/v1/instance/attributes/app-public | base64 -d > "$STAMP/public.tgz"
+rm -rf "$APP/app/admin/public"
+mkdir -p "$APP/app/admin/public"
+tar xzf "$STAMP/public.tgz" -C "$APP/app/admin/public"
+
 if [ "$(cat "$STAMP/packages" 2>/dev/null || true)" != "$PKG_VER" ]; then
   log "installing packages"
   # The caddy package tries to start caddy.service from its postinst, and that unit is ordered After cs2-bootstrap
