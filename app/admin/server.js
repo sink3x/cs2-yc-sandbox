@@ -7,7 +7,7 @@ const http = require('node:http');
 const { Sessions, FailureLimiter, verifyPassword, hashPassword, parseCookies } = require('../lib/auth');
 const { readBody, readJsonBody, send, matchRoute } = require('../lib/http');
 const { readJson, writeJsonAtomic, loadEnvFile, makeLogger, sleep } = require('../lib/util');
-const { PRESETS, MAPS, CATALOG } = require('../lib/presets');
+const { PRESETS, MAPS, CATALOG, WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');
 const { YandexCompute } = require('../lib/yc');
 const { CatalogCache } = require('../lib/catalog');
 const practice = require('../lib/practice');
@@ -277,7 +277,7 @@ function createApp(deps = {}) {
     ['GET', '/api/me', async ({ user }) => { const u = loadUsers()[user] || {}; return { user, displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
     ['GET', '/api/public-info', async () => { const o = await overview(); return { status: o.vm ? o.vm.status : null, connect: o.connect || null, map: o.server && o.server.live ? o.server.live.map : null, humans: o.server && o.server.live ? o.server.live.humans : null, maxPlayers: o.server && o.server.live ? o.server.live.maxPlayers : null }; }],
     ['GET', '/api/overview', async () => overview()],
-    ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS })],
+    ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS, workshop: WORKSHOP_MAPS, workshopCats: WORKSHOP_CATS })],
     ['GET', '/api/user-presets', async () => ({ presets: readJson(userPresetsFile, {}) })],
     ['PUT', '/api/user-presets', async ({ body, user, ip }) => { const v = validateUserPresets(body.presets); writeJsonAtomic(userPresetsFile, v); audit(user, ip, 'user-presets', Object.keys(v)); return { presets: v }; }],
     ['GET', '/api/custom-skins', async () => ({ skins: readJson(customSkinsFile, []) })],

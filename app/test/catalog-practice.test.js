@@ -70,3 +70,10 @@ test('practice: animals — chicken spawn, pig/cow cosplay, validation', () => {
   assert.deepEqual(P.buildCommands('animal-clear'), ['ent_fire chicken kill']);
   assert.throws(() => P.buildCommands('animal', { kind: 'dragon' })); assert.throws(() => P.buildCommands('animal', { kind: 'cow', count: 99 }));
 });
+
+test('presets: curated workshop map catalog has valid ids and known categories', () => {
+  const { WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');
+  assert.ok(WORKSHOP_MAPS.length >= 10);
+  for (const w of WORKSHOP_MAPS) { assert.match(w.id, /^\d{6,12}$/); assert.ok(WORKSHOP_CATS[w.cat], w.cat); assert.ok(w.label && w.note); }
+  assert.equal(new Set(WORKSHOP_MAPS.map((w) => w.id)).size, WORKSHOP_MAPS.length);
+});

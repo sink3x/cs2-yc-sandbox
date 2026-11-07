@@ -56,6 +56,24 @@ const MAPS = [
   ['cs_office', 'Office'], ['cs_italy', 'Italy'], ['de_cache', 'Cache'], ['de_edin', 'Edin'],
 ].map(([id, label]) => ({ id, label, img: `https://raw.githubusercontent.com/MurkyYT/cs2-map-icons/main/images/${id}.png` })); // официальные значки карт (MurkyYT/cs2-map-icons)
 
+
+// Подборка воркшоп-карт для тренировки (ID со страниц Steam Workshop; доступность может измениться — проверьте при загрузке).
+const WORKSHOP_CATS = { training: 'Тренировка аима', utility: 'Раскидки', duel: 'Дуэли и AWP', movement: 'Движение и паркур' };
+const WORKSHOP_MAPS = [
+  { id: '3070244462', label: 'Aim Botz', cat: 'training', note: 'Боты-мишени: стрельба, спрей, дистанции' },
+  { id: '3105821815', label: 'Aim_Rush', cat: 'training', note: 'Быстрые цели: реакция и перекрестие' },
+  { id: '3070758981', label: 'Fast Aim / Reflex', cat: 'training', note: 'Разминка на скорость наведения' },
+  { id: '3100869952', label: 'Recoil Master', cat: 'training', note: 'Контроль отдачи по паттернам оружия' },
+  { id: '3267302800', label: 'Mirage Prefire', cat: 'training', note: 'Префаер-маршруты на Mirage' },
+  { id: '3312981414', label: 'Mirage Utility', cat: 'utility', note: 'Раскидки гранат на Mirage' },
+  { id: '3070715607', label: 'Yprac Hub', cat: 'utility', note: 'Практика раскидок и позиций по картам' },
+  { id: '3101654056', label: '1v1 AIM MAP', cat: 'duel', note: 'Дуэли 1 на 1 на арене' },
+  { id: '3240327667', label: 'awp_lego_3', cat: 'duel', note: 'AWP-дуэли на небольшой карте' },
+  { id: '3355497176', label: 'Movement Hub', cat: 'movement', note: 'Тренировка bhop, страфов и прыжков' },
+  { id: '3074758439', label: 'Only Up', cat: 'movement', note: 'Прыжковая башня — паркур вверх' },
+  { id: '3332156801', label: 'Mirage Parkour', cat: 'movement', note: 'Паркур по знакомой Mirage' },
+];
+
 // type: bool | int | float | string | enum:<a|b|c>
 const CATALOG = [
   { group: 'Раунд и экономика', items: [
@@ -112,4 +130,4 @@ const CATALOG = [
   ] },
 ];
 
-module.exports = { PRESETS, MAPS, CATALOG, PRACTICE_CVARS };
+module.exports = { WORKSHOP_CATS, WORKSHOP_MAPS, PRESETS, MAPS, CATALOG, PRACTICE_CVARS };

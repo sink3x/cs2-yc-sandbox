@@ -125,7 +125,8 @@ function pageMaps() {
   setTimeout(async () => { try { userPresets = (await api('GET', '/user-presets')).presets; } catch { /* нет доступа */ } drawPresets(); }, 0);
 
   // ---- карты
-  const metaOf = (m) => MAP_META[m.id] || [/^\d+$/.test(m.id) ? 'workshop' : 'other', /^\d+$/.test(m.id) ? 'Воркшоп-карта' : ''];
+  const wsOf = (id) => (S.catalog.workshop || []).find((w) => w.id === id);
+  const metaOf = (m) => (wsOf(m.id) ? ['workshop', wsOf(m.id).note] : null) || MAP_META[m.id] || [/^\d+$/.test(m.id) ? 'workshop' : 'other', /^\d+$/.test(m.id) ? 'Воркшоп-карта' : ''];
   const allMaps = () => S.catalog.maps.concat(st.maps.filter((m) => !S.catalog.maps.some((x) => x.id === m.id)));
   const drawMaps = () => {
     const list = allMaps().filter((m) => {
@@ -153,6 +154,23 @@ function pageMaps() {
   const drawTabs = () => tabs.replaceChildren(...[['all', 'Все'], ['bomb', 'Бомба'], ['hostage', 'Заложники'], ['workshop', 'Воркшоп'], ['fav', 'Избранные']].map(([k, t]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; drawTabs(); drawMaps(); } }, t)));
   drawTabs(); drawMaps();
 
+  // ---- каталог воркшоп-карт для тренировки
+  let wsCat = 'all'; const wsBox = h('div', { class: 'mapgrid' }); const wsTabs = h('div', { class: 'tabs' });
+  const wsCats = S.catalog.workshopCats || {};
+  const drawWs = () => {
+    wsTabs.replaceChildren(...[['all', 'Все'], ...Object.entries(wsCats)].map(([k, t]) => h('button', { class: wsCat === k ? 'on' : '', onclick: () => { wsCat = k; drawWs(); } }, t)));
+    wsBox.replaceChildren(...(S.catalog.workshop || []).filter((w) => wsCat === 'all' || w.cat === wsCat).map((w) => {
+      const hue = mapHue(w.id); const added = st.maps.some((x) => x.id === w.id);
+      return h('div', { class: `mapcard ${live === w.id ? 'live' : ''}` },
+        h('div', { class: 'mapart', style: `background:linear-gradient(135deg,hsl(${hue} 55% 32%),hsl(${(hue + 50) % 360} 60% 18%))` }, h('span', {}, w.label.replace(/[^A-Za-zА-Яа-я0-9]/g, '').slice(0, 3).toUpperCase())),
+        h('div', { class: 'mapbody' }, h('b', {}, w.label), h('div', { class: 'muted small' }, w.note), h('div', { class: 'row' }, h('span', { class: 'tag' }, wsCats[w.cat] || w.cat), h('a', { class: 'small', href: `https://steamcommunity.com/sharedfiles/filedetails/?id=${w.id}`, target: '_blank', rel: 'noopener noreferrer' }, 'Воркшоп ↗')),
+          h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: act(() => api('POST', '/map', { map: w.id }), `Загружаю ${w.label}`) }, '▶ Играть'),
+            h('button', { class: 'btn', disabled: added, onclick: act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((m) => m.id !== w.id).concat([{ id: w.id, label: w.label }]) } }); renderPage(); }, 'Добавлено в список') }, added ? 'В списке' : '＋ В список'))));
+    }));
+  };
+  drawWs();
+  const addAllWs = act(async () => { const have = new Set(st.maps.map((m) => m.id)); const add = (S.catalog.workshop || []).filter((w) => !have.has(w.id)).map((w) => ({ id: w.id, label: w.label })); if (!add.length) return; S.state = await api('PUT', '/state', { state: { maps: st.maps.concat(add) } }); renderPage(); }, 'Все карты добавлены в список');
+
   // ---- воркшоп / своя карта
   const custom = h('input', { type: 'text', placeholder: 'de_xxx, ID или ссылка на воркшоп', style: 'width:300px' });
   const label = h('input', { type: 'text', placeholder: 'Название (необязательно)', style: 'width:220px' });
@@ -163,6 +181,8 @@ function pageMaps() {
       presetBox,
       h('div', { class: 'row' }, nameIn, h('button', { class: 'btn', onclick: saveCurrent }, 'Сохранить текущие настройки как пресет')),
       h('div', { class: 'muted small' }, `Сейчас: пресет «${st.server.preset}», game_type ${st.server.gameType} / game_mode ${st.server.gameMode}, карта ${st.server.map}. Свои пресеты хранятся на панели и доступны всем админам.`)),
+    h('div', { class: 'card' }, h('h3', {}, 'Воркшоп-карты для тренировки'), h('div', { class: 'row' }, wsTabs, h('button', { class: 'btn', onclick: addAllWs }, '＋ Добавить все в список')), wsBox,
+      h('div', { class: 'muted small' }, 'Подборка карт для аима, раскидок, дуэлей и движения. Для скачивания воркшоп-карт нужен Steam Web API ключ на сервере (-authkey); первая загрузка карты занимает время.')),
     h('div', { class: 'card' }, h('h3', {}, 'Карты'), h('div', { class: 'row' }, searchW, tabs), gridBox,
       h('h3', { style: 'margin-top:16px' }, 'Добавить свою или воркшоп-карту'),
       h('div', { class: 'row' }, custom, label,
