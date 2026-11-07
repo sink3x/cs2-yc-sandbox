@@ -75,6 +75,7 @@
     ['Хранилище звуков заполнено (100 МБ)', 'Sound storage is full (100 MB)', 'Sound-Speicher ist voll (100 MB)', 'Le stockage des sons est plein (100 Mo)'], ['Файл с таким именем уже есть', 'A file with this name already exists', 'Eine Datei mit diesem Namen existiert bereits', 'Un fichier portant ce nom existe déjà'],
     ['Файла нет', 'No such file', 'Datei nicht vorhanden', 'Fichier introuvable'], ['Расширение файла менять нельзя', 'The file extension cannot be changed', 'Die Dateiendung kann nicht geändert werden', 'L’extension du fichier ne peut pas être modifiée'],
     ['Недопустимое имя файла', 'Invalid file name', 'Ungültiger Dateiname', 'Nom de fichier non valide'], ['Файл пустой', 'The file is empty', 'Die Datei ist leer', 'Le fichier est vide'], ['Файл слишком большой', 'The file is too large', 'Die Datei ist zu groß', 'Le fichier est trop volumineux'],
+    ['Не удалось загрузить часть интерфейса', 'Could not load part of the interface', 'Ein Teil der Oberfläche konnte nicht geladen werden', 'Impossible de charger une partie de l’interface'],
   ];
   for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
 })();

@@ -8,3 +8,4 @@ terraform.tfvars
 crash.log
 build/
 node_modules/
+app/admin/public/ui/

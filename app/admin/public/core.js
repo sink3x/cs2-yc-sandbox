@@ -57,6 +57,14 @@ function steamAv(id, size = 28, fallback = '?', onName) {
   return box;
 }
 
+// ---- острова Preact + TypeScript: страница-обёртка подгружает /ui/main.js и монтирует компонент (см. web/) ----------
+function island(name) {
+  const el = h('div');
+  import('/ui/main.js').then((m) => m.mount(name, el, { tr, ruErr, api, toast: (msg, kind) => toast(msg, kind), locale: typeof LOCALE === 'string' ? LOCALE : 'ru' }))
+    .catch((e) => el.replaceChildren(h('div', { class: 'banner' }, `${tr('Не удалось загрузить часть интерфейса')}: ${e.message}`)));
+  return el;
+}
+
 // Перевод типовых ошибок сервера на русский.
 const ERR_RU = [
   [/^only \.wav, \.mp3 and \.ogg files/i, 'Только файлы .wav, .mp3 и .ogg'], [/^content does not look like/i, 'Содержимое не похоже на звуковой файл этого типа'],

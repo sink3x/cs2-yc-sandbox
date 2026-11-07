@@ -34,6 +34,26 @@ jobs:
           path: build/*.tgz
           retention-days: 14
 
+  web:
+    name: Интерфейс (Preact + TypeScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Проверка типов
+        working-directory: web
+        run: npm run typecheck
+      - name: Сборка
+        working-directory: web
+        run: npm run build
+
   terraform:
     name: OpenTofu validate
     runs-on: ubuntu-latest

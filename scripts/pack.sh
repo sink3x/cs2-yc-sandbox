@@ -5,6 +5,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p build
+# Острова Preact + TypeScript (web/) собираются в app/admin/public/ui/ — до упаковки, чтобы попасть в public.tgz.
+if [ -f web/package.json ]; then
+  ( cd web && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent )
+  [ -f app/admin/public/ui/main.js ] || { echo "web build produced no app/admin/public/ui/main.js" >&2; exit 1; }
+fi
 python3 - <<'PY'
 import gzip, io, os, tarfile
 
@@ -60,9 +65,8 @@ check() {
   SIZE=$(stat -c %s "$1" 2>/dev/null || stat -f %z "$1")
   HASH=$( (sha256sum "$1" 2>/dev/null || shasum -a 256 "$1") | cut -c1-16)
   echo "$1: $SIZE bytes, sha256 $HASH"
-  # Yandex metadata limit: 256 KB per value (base64 grows the file by 4/3). Only the bundle goes through metadata;
-  # the frontend (public.tgz) is delivered through Object Storage and has no such limit.
-  if [ "${2:-}" != "nolimit" ] && [ $((SIZE * 4 / 3)) -gt 250000 ]; then echo "$1 too large for one metadata value" >&2; exit 1; fi
+  # Yandex metadata limit: 256 KB per value (base64 grows the file by 4/3)
+  if [ $((SIZE * 4 / 3)) -gt 250000 ]; then echo "$1 too large for one metadata value" >&2; exit 1; fi
 }
 check build/bundle.tgz
-check build/public.tgz nolimit
+check build/public.tgz
