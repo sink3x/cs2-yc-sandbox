@@ -392,6 +392,15 @@ function createApp(deps = {}) {
     ['PUT', '/api/state', async ({ body, user, ip }) => { audit(user, ip, 'state.save', Object.keys(body.state || {})); return putState(body); }],
     ['POST', '/api/preset', async ({ body, user, ip }) => { audit(user, ip, 'preset', body.preset); return agent('POST', '/preset', body, 120000); }],
     ['POST', '/api/map', async ({ body, user, ip }) => { audit(user, ip, 'map', body.map); return agent('POST', '/map', body); }],
+    ['POST', '/api/sounds/play', async ({ body, user, ip }) => {
+      // имя из библиотеки (id) или путь/событие звука; кому: all, #userid или часть ника
+      const sound = String(body.sound || ''); const target = String(body.target || 'all');
+      if (!stateLib.SOUND_PLAY_RE.test(sound)) throw Object.assign(new Error('bad sound'), { status: 400 });
+      if (!/^(all|#\d{1,5}|[A-Za-z0-9_.-]{1,32})$/.test(target)) throw Object.assign(new Error('bad target'), { status: 400 });
+      audit(user, ip, 'sounds.play', { sound, target });
+      const r = await agent('POST', '/rcon', { command: `css_playsound ${sound} ${target}` });
+      return { ok: true, output: r && r.output };
+    }],
     ['POST', '/api/rcon', async ({ body, user, ip }) => { audit(user, ip, 'rcon', String(body.command || '').slice(0, 120)); return agent('POST', '/rcon', body); }],
     ['POST', '/api/apply-live', async ({ user, ip }) => { audit(user, ip, 'apply-live'); return agent('POST', '/apply-live', {}, 40000); }],
     ['POST', '/api/service/:action', async ({ params, user, ip }) => { audit(user, ip, `service.${params.action}`); return agent('POST', `/service/${encodeURIComponent(params.action)}`, {}, 320000); }],
