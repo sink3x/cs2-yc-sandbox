@@ -10,6 +10,7 @@ const { readJson, writeJsonAtomic, loadEnvFile, makeLogger, sleep } = require('.
 const { PRESETS, MAPS, CATALOG, WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');
 const { YandexCompute } = require('../lib/yc');
 const { CatalogCache, StickerCache, queryStickers } = require('../lib/catalog');
+const { DATA: CALLOUTS, CalloutMaps } = require('../lib/callouts');
 const practice = require('../lib/practice');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
@@ -62,7 +63,7 @@ function validateCustomSkins(input) {
   });
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
-const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/skins/loadout/:steamid',
+const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
@@ -86,6 +87,7 @@ function createApp(deps = {}) {
   const userPresetsFile = deps.userPresetsFile || path.join(VAR, 'user-presets.json');
   const customSkinsFile = deps.customSkinsFile || path.join(VAR, 'custom-skins.json');
   const stickerCache = deps.stickerCache || new StickerCache({ file: path.join(VAR, 'sticker-catalog.json') });
+  const calloutMaps = deps.calloutMaps || new CalloutMaps({ dir: path.join(VAR, 'callouts') });
   const catalogCache = deps.catalogCache || new CatalogCache({ file: path.join(VAR, 'skin-catalog.json') });
   const keysBlocked = (ip) => limiter.blocked(`ip:${ip}`);
   const loadUsers = () => (readJson(usersFile, { users: {} }).users) || {};
@@ -368,6 +370,7 @@ function createApp(deps = {}) {
       const d = await stickerCache.get(); const r = queryStickers(d, query || {});
       return { ...r, imgBase: d.imgBase, facets: query && query.facets === '1' ? { types: d.types, effects: d.effects, events: d.events } : undefined };
     }],
+    ['GET', '/api/callouts', async () => CALLOUTS],
     ['GET', '/api/skins/catalog', async () => ({ ...(await catalogCache.get()), custom: readJson(customSkinsFile, []) })],
     ['GET', '/api/skins/players', async () => agent('GET', '/skins/players')],
     ['GET', '/api/skins/loadout/:steamid', async ({ params }) => agent('GET', `/skins/loadout/${encodeURIComponent(params.steamid)}`)],
@@ -624,6 +627,13 @@ function createApp(deps = {}) {
       if (url.pathname === '/brand-logo' && req.method === 'GET') {
         const b = loadBrand(); if (!b.logoType || !fs.existsSync(brandLogoFile)) return send(res, 404, 'not found', SEC_HEADERS);
         return send(res, 200, fs.readFileSync(brandLogoFile), { ...SEC_HEADERS, 'Content-Type': b.logoType, 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox", 'Cache-Control': 'public, max-age=3600' });
+      }
+      const cm = req.method === 'GET' && /^\/callouts\/(de_[a-z0-9]+)\.webp$/.exec(url.pathname);
+      if (cm) { // схема карты: публичная картинка, как иконки; хранится в репозитории sink3x/cs2-callouts
+        try {
+          const b = await calloutMaps.get(cm[1]); if (!b) return send(res, 404, 'not found', SEC_HEADERS);
+          return send(res, 200, b, { ...SEC_HEADERS, 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=604800' });
+        } catch (e) { return send(res, e.status || 503, 'map unavailable', SEC_HEADERS); }
       }
       if (!url.pathname.startsWith('/api/')) {
         const name = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');

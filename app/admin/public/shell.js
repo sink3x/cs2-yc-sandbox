@@ -2,20 +2,20 @@
 // Каркас: навигация, быстрый поиск (Ctrl+K), загрузка данных и запуск панели.
 
 const PAGES = {
-  overview: ['Сервер', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка', pagePractice], maps: ['Карты и режимы', pageMaps],
+  overview: ['Сервер', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка', pagePractice], callouts: ['Callouts', pageCallouts], maps: ['Карты и режимы', pageMaps],
   console: ['Консоль', pageConsole], settings: ['Настройки', pageSettings], plugins: ['Плагины и флаги', pagePlugins], admins: ['Админы', pageAdmins],
   users: ['Пользователи', pageUsers], setups: ['Сетапы', pageSetups], look: ['Оформление', pageLook], stats: ['Статистика', pageStats], profile: ['Профиль', pageProfile], info: ['Сервер', pageInfo], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
 };
 // Главная страница — «Сервер»: у админа это обзор сервера, у игрока — информация о сервере. Логотип и вход ведут только сюда.
 const homePage = () => (S.role === 'player' ? 'info' : 'overview');
-const PLAYER_PAGES = new Set(['skins', 'stats', 'info', 'profile', 'look', 'setups', 'users']);
+const PLAYER_PAGES = new Set(['skins', 'stats', 'info', 'profile', 'look', 'setups', 'users', 'callouts']);
 const visiblePages = () => Object.entries(PAGES).filter(([k]) => (S.role === 'player' ? PLAYER_PAGES.has(k) && k !== 'users' : k !== 'info'));
 // Страница доступна по ссылке: у игрока дополнительно своя карточка (#users/<свой slug>), остальное решает сервер.
 const routable = (k) => visiblePages().some(([p]) => p === k) || (S.role === 'player' && k === 'users');
 // Разделы боковой панели: заголовок → страницы (порядок важен).
 const NAV_GROUPS = [
   ['Управление', ['overview', 'info', 'maps', 'settings', 'console']],
-  ['Игра', ['practice', 'skins', 'plugins', 'setups']],
+  ['Игра', ['practice', 'callouts', 'skins', 'plugins', 'setups']],
   ['Игроки', ['stats', 'users', 'admins']],
   ['Панель и аккаунт', ['profile', 'look', 'panel', 'backups', 'help']],
 ];
@@ -37,6 +37,7 @@ const navEl = h('nav');
 const ICONS = {
   overview: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
   skins: '<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4-4-7.3-9-7.3z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="15.5" cy="7.5" r="1"/>',
+  callouts: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   practice: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
   maps: '<polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>',
   console: '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
