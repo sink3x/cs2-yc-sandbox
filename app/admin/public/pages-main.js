@@ -87,18 +87,28 @@ function pagePlugins() {
   const idleMin = h('input', { type: 'number', min: 0, max: 1440, value: sets.autoStopIdleMinutes, style: 'width:90px' });
   const graceMin = h('input', { type: 'number', min: 0, max: 1440, value: sets.startupGraceMinutes, style: 'width:90px' });
   const boxes = {};
-  const rows = S.pluginsMeta.filter((p) => !p.dependency).map((p) => {
+  const list = S.pluginsMeta.filter((p) => !p.dependency);
+  const cards = list.map((p) => {
     const cb = h('input', { type: 'checkbox', checked: st.plugins[p.id] }); boxes[p.id] = cb;
     const i = inst[p.id];
-    return h('tr', {}, h('td', {}, h('label', { class: 'switch' }, cb, h('b', {}, p.title))),
-      h('td', { class: 'muted' }, p.desc, p.risky ? h('div', { class: 'warn small' }, 'может привести к блокировке GSLT-токена (правила Valve для серверов)') : null),
-      h('td', { class: 'small' }, i ? i.tag : h('span', { class: 'muted' }, 'не установлен')));
+    return h('div', { class: `plg${p.broken ? ' broken' : ''}` },
+      h('label', { class: 'switch plg-h' }, cb, h('b', {}, p.title)),
+      h('div', { class: 'plg-b' },
+        p.risky ? h('span', { class: 'badge warn' }, 'риск блокировки') : null,
+        p.broken ? h('span', { class: 'badge bad' }, 'не совместим') : null,
+        p.default && !p.broken ? h('span', { class: 'badge' }, 'по умолчанию') : null,
+        h('span', { class: 'badge' }, i ? i.tag : 'не установлен')),
+      h('div', { class: 'muted small plg-d' }, p.desc, p.risky ? h('div', { class: 'warn small' }, 'может привести к блокировке GSLT-токена (правила Valve для серверов)') : null),
+      p.repo ? h('a', { class: 'small', href: `https://github.com/${p.repo}`, target: '_blank', rel: 'noopener noreferrer' }, `github.com/${p.repo}`) : null);
   });
+  const bulk = (on) => () => { for (const p of list) if (boxes[p.id]) boxes[p.id].checked = on && !p.risky && !p.broken; };
   const flags = {};
   const flagDefs = [['autoUpdateGame', 'Обновлять CS2 при каждом запуске ВМ'], ['autoUpdatePlugins', 'Обновлять Metamod/CounterStrikeSharp/плагины при запуске'], ['insecure', 'Запуск с -insecure (отключает VAC на сервере)'], ['dotChat', 'Команды в чате с точкой (.команда) — вместе с «!» и «/»; нужен рестарт CS2']];
   const flagRows = flagDefs.map(([k, t]) => { flags[k] = h('input', { type: 'checkbox', checked: st.flags[k] }); return h('div', { class: 'row' }, h('label', { class: 'switch' }, flags[k], t)); });
   return h('div', {}, h('h2', {}, 'Плагины и фича-флаги'),
-    h('div', { class: 'card' }, h('h3', {}, 'Плагины'), h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Плагин'), h('th', {}, 'Описание'), h('th', {}, 'Версия'))), h('tbody', {}, rows)),
+    h('div', { class: 'card' }, h('h3', {}, 'Плагины'),
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: bulk(true) }, 'Включить все безопасные'), h('button', { class: 'btn', onclick: bulk(false) }, 'Выключить все'), h('span', { class: 'muted small' }, 'Рискованные и несовместимые не включаются; после выбора нажмите «Сохранить».')),
+      h('div', { class: 'plg-grid' }, cards),
       h('div', { class: 'muted small' }, 'Включение и выключение применяется после перезапуска CS2. Зависимости (MenuManager и др.) ставятся автоматически.')),
     h('div', { class: 'card' }, h('h3', {}, 'Флаги'), flagRows),
     h('div', { class: 'row' },

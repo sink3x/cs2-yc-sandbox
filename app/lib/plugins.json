@@ -69,6 +69,7 @@
     "dirs": [
       "RockTheVote"
     ],
+    "broken": true,
     "default": false
   },
   {

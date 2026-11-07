@@ -100,6 +100,9 @@
     ['Скрыть место', 'Hide place', 'Ort ausblenden', 'Masquer le lieu'], ['Место скрыто', 'Place hidden', 'Ort ausgeblendet', 'Lieu masqué'], ['Скрытые места', 'Hidden places', 'Ausgeblendete Orte', 'Lieux masqués'],
     ['Скрыть это место? Его можно вернуть в списке скрытых мест.', 'Hide this place? You can bring it back from the hidden places list.', 'Diesen Ort ausblenden? Er lässt sich in der Liste der ausgeblendeten Orte wiederherstellen.', 'Masquer ce lieu ? Vous pourrez le rétablir depuis la liste des lieux masqués.'],
     ['Вернуть', 'Restore', 'Wiederherstellen', 'Rétablir'], ['Вернуть все', 'Restore all', 'Alle wiederherstellen', 'Tout rétablir'], ['Место возвращено', 'Place restored', 'Ort wiederhergestellt', 'Lieu rétabli'],
+    ['Включить все безопасные', 'Enable all safe ones', 'Alle sicheren aktivieren', 'Activer tous les sûrs'], ['Выключить все', 'Disable all', 'Alle deaktivieren', 'Tout désactiver'],
+    ['Рискованные и несовместимые не включаются; после выбора нажмите «Сохранить».', 'Risky and incompatible ones are never enabled; press “Save” after choosing.', 'Riskante und inkompatible werden nie aktiviert; nach der Auswahl auf „Speichern“ klicken.', 'Les plugins risqués et incompatibles ne sont jamais activés ; cliquez sur « Enregistrer » après le choix.'],
+    ['риск блокировки', 'ban risk', 'Sperrrisiko', 'risque de bannissement'], ['не совместим', 'incompatible', 'inkompatibel', 'incompatible'], ['по умолчанию', 'default', 'Standard', 'par défaut'], ['не установлен', 'not installed', 'nicht installiert', 'non installé'],
   ];
   for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
 })();

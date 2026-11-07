@@ -522,3 +522,13 @@ nav button.mob-more { display: none; }
 .cv > :nth-child(even) { justify-self: end; }
 .cv .seg { max-width: 100%; }
 @media (max-width: 780px) { .cv > :nth-child(even) { justify-self: start; } .cv .seg { flex-wrap: wrap; } }
+
+/* Плагины: карточки */
+.plg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin: 10px 0; }
+.plg { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: var(--panel2); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.plg.broken { opacity: .7; }
+.plg-h { font-size: 15px; }
+.plg-b { display: flex; flex-wrap: wrap; gap: 6px; }
+.plg-d { overflow-wrap: anywhere; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.badge.warn { border-color: #e6b34a; color: #e6b34a; } .badge.bad { border-color: #e5484d; color: #e5484d; }
