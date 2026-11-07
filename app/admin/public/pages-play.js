@@ -112,7 +112,7 @@ function pageMaps() {
     const card = (k, p, builtin) => h('div', { class: `btn preset ${st.server.preset === k ? 'on' : ''}`, style: 'cursor:default' },
       h('b', {}, p.label), h('span', { class: 'muted small' }, p.note || `game_type ${p.gameType} / game_mode ${p.gameMode}`),
       h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => applyPreset(k, p, builtin) }, 'Предпросмотр и применение'),
-        !builtin ? h('button', { class: 'btn danger', title: 'Удалить свой пресет', onclick: act(async () => { if (!confirm(`Удалить пресет «${p.label}»?`)) return; const next = { ...userPresets }; delete next[k]; userPresets = (await api('PUT', '/user-presets', { presets: next })).presets; drawPresets(); }) }, '') : null));
+        !builtin ? h('button', { class: 'btn danger', title: 'Удалить свой пресет', onclick: act(async () => { if (!confirm(`Удалить пресет «${p.label}»?`)) return; const next = { ...userPresets }; delete next[k]; userPresets = (await api('PUT', '/user-presets', { presets: next })).presets; drawPresets(); }) }, 'Удалить') : null));
     presetBox.replaceChildren(...Object.entries(S.catalog.presets).map(([k, p]) => card(k, p, true)), ...Object.entries(userPresets).map(([k, p]) => card(k, p, false)));
   };
   const nameIn = h('input', { type: 'text', placeholder: 'Название своего пресета', maxlength: 40 });
@@ -143,7 +143,7 @@ function pageMaps() {
           h('div', { class: 'row' },
             h('button', { class: 'btn primary', onclick: act(() => api('POST', '/map', { map: m.id }), `Загружаю ${m.id}`) }, '▶ Играть'),
             h('button', { class: 'btn', title: 'Сделать картой при запуске сервера', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { server: { map: m.id } } }); renderPage(); }, 'Карта при старте обновлена') }, 'Сделать стартовой'),
-            st.maps.some((x) => x.id === m.id) ? h('button', { class: 'btn danger', title: 'Убрать из списка', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((x) => x.id !== m.id) } }); renderPage(); }) }, '') : null)));
+            st.maps.some((x) => x.id === m.id) ? h('button', { class: 'btn danger', title: 'Убрать из списка', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((x) => x.id !== m.id) } }); renderPage(); }) }, 'Убрать') : null)));
     }) : [h('div', { class: 'muted' }, 'Ничего не найдено.')]));
   };
   const search = h('input', { type: 'text', placeholder: 'Поиск карты (Dust, mirage, ID воркшопа…)', style: 'width:300px' });

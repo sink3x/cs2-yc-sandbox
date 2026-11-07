@@ -62,3 +62,12 @@ test('parseStatus reads map, players and counts', () => {
   assert.deepEqual(s.players.filter((x) => !x.bot).map((x) => x.name), ['alice', 'friend']);
   assert.equal(s.players.filter((x) => x.bot).length, 1);
 });
+
+test('parseStatus handles the real CS2 format (spawngroup line, hibernating 0/0 max)', () => {
+  const text = ['Server:  Running [0.0.0.0:27015]', 'hostname: sandbox', 'version : 1.41.9.6/14196 8803 secure  public', 'loaded spawngroup(  1)  : SV:  [1: de_dust2 | main lump | mapload]',
+    'players : 0 humans, 0 bots (0/0 max) (hibernating) (unreg)'].join('\n');
+  const s = parseStatus(text);
+  assert.equal(s.map, 'de_dust2'); assert.equal(s.humans, 0); assert.equal(s.maxPlayers, null);
+  const w = parseStatus('loaded spawngroup(  1)  : SV:  [1: workshop/3070244462/aim_botz | main lump | mapload]\nplayers : 1 humans, 0 bots (10/10 max) (not hibernating)');
+  assert.equal(w.map, 'workshop/3070244462/aim_botz'); assert.equal(w.maxPlayers, 10);
+});

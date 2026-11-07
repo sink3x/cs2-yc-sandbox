@@ -11,6 +11,9 @@ const { PRESETS, MAPS, CATALOG } = require('../lib/presets');
 const { YandexCompute } = require('../lib/yc');
 const { CatalogCache } = require('../lib/catalog');
 const practice = require('../lib/practice');
+const stateLib = require('../lib/state');
+const account = require('../lib/account');
+const crypto = require('node:crypto');
 
 const log = makeLogger('admin');
 const ETC = process.env.CS2ADMIN_ETC || '/etc/cs2-admin';
@@ -57,9 +60,14 @@ function validateCustomSkins(input) {
     return { def, paint, name, img, weaponName, kind, weaponId: String((s && s.weaponId) || '').replace(/[^a-z0-9_]/g, '').slice(0, 48) };
   });
 }
+// Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
+const PLAYER_OK = new Set(['GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/skins/loadout/:steamid',
+  'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid']);
+const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
+const MAX_PLAYER_ACCOUNTS = 300;
 const DEFAULT_SETTINGS = { autoStopIdleMinutes: 30, startupGraceMinutes: 20 };
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/png', '.png': 'image/png', '.jpg': 'image/jpeg' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/png', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
 
 function createApp(deps = {}) {
   const config = deps.config || readJson(path.join(ETC, 'config.json'), {});
@@ -72,11 +80,27 @@ function createApp(deps = {}) {
   const sessions = deps.sessions || new Sessions({ now });
   const limiter = deps.limiter || new FailureLimiter({ now });
 
+  const stateCacheFile = deps.stateCacheFile || path.join(VAR, 'state-cache.json');
   const userPresetsFile = deps.userPresetsFile || path.join(VAR, 'user-presets.json');
   const customSkinsFile = deps.customSkinsFile || path.join(VAR, 'custom-skins.json');
   const catalogCache = deps.catalogCache || new CatalogCache({ file: path.join(VAR, 'skin-catalog.json') });
+  const keysBlocked = (ip) => limiter.blocked(`ip:${ip}`);
   const loadUsers = () => (readJson(usersFile, { users: {} }).users) || {};
-  const loadSettings = () => ({ ...DEFAULT_SETTINGS, ...readJson(settingsFile, {}) });
+  const loadSettings = () => ({ ...DEFAULT_SETTINGS, ...readJson(settingsFile, {}), playerLogin: readJson(settingsFile, {}).playerLogin !== false });
+  // ---- профиль: почта, Steam, Faceit ----------------------------------------------------------
+  const brandFile = deps.brandFile || path.join(VAR, 'brand.json');
+  const brandLogoFile = deps.brandLogoFile || path.join(VAR, 'brand-logo.bin');
+  const loadBrand = () => { const b = readJson(brandFile, {}); return { name: String(b.name || 'sandbox-cs-1').slice(0, 40), tagline: String(b.tagline || '').slice(0, 80), logoType: b.logoType || '', v: b.v || 0 }; };
+  const statsCacheFile = deps.statsCacheFile || path.join(VAR, 'stats-cache.json');
+  const faceitFile = deps.faceitFile || path.join(VAR, 'faceit.json');
+  const httpGet = deps.httpGet || (async (url, headers) => { const r = await fetch(url, { headers, signal: AbortSignal.timeout(12000) }); return { status: r.status, json: await r.json().catch(() => null) }; });
+  const httpPost = deps.httpPost || (async (url, form) => { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form, signal: AbortSignal.timeout(12000) }); return r.text(); });
+  const steamNonces = new Map(); const linkTokens = new Map(); const faceitCache = new Map();
+  const roleOf = (name) => ((loadUsers()[name] || {}).role === 'player' ? 'player' : 'admin');
+  const playerLoginOn = () => readJson(settingsFile, {}).playerLogin !== false;
+  const saveUsers = (users) => writeJsonAtomic(usersFile, { users }, 0o600);
+  const profileOf = (name) => { const u = loadUsers()[name] || {}; return { user: name, email: u.email || '', steamid: u.steamid || '', links: u.links || [], faceitKey: !!readJson(faceitFile, {}).key }; };
+  const originOf = (req, secure) => (config.publicUrl ? String(config.publicUrl).replace(/\/+$/, '') : `${secure ? 'https' : 'http'}://${req.headers.host}`);
 
   const audit = (user, ip, action, detail) => {
     try {
@@ -96,6 +120,68 @@ function createApp(deps = {}) {
     if (!res.ok) throw Object.assign(new Error(j.error || `agent HTTP ${res.status}`), { status: res.status === 401 ? 502 : res.status });
     return j;
   });
+
+  // ---- state cache: settings live on the CS2 VM, but the panel must show (and accept) them while it is off ----
+  // The last state seen from the agent is kept on the panel disk. Edits made while the agent is unreachable are
+  // validated here, applied to the cached copy and queued; they are replayed to the agent once it is back.
+  const readStateCache = () => readJson(stateCacheFile, null);
+  const writeStateCache = (c) => { try { fs.mkdirSync(path.dirname(stateCacheFile), { recursive: true }); writeJsonAtomic(stateCacheFile, c, 0o600); } catch (e) { log('state cache write failed:', e.message); } };
+  const isOffline = (e) => !e.status; // errors from a reachable agent carry an HTTP status
+
+  async function flushPending() {
+    const c = readStateCache();
+    if (!c || !c.pending || !c.pending.length) return;
+    const rest = [...c.pending];
+    while (rest.length) {
+      try { await agent('PUT', '/state', { state: rest[0] }); } catch (e) {
+        if (isOffline(e)) { writeStateCache({ ...c, pending: rest }); throw e; }
+        log('queued settings change rejected by agent, dropped:', e.message);
+      }
+      rest.shift();
+    }
+    writeStateCache({ ...c, pending: [] });
+  }
+
+  async function getState() {
+    try {
+      await flushPending();
+      const r = await agent('GET', '/state');
+      writeStateCache({ state: r.state, plugins: r.plugins, admin_flags: r.admin_flags, protectedAdmins: r.protectedAdmins || [], savedAt: now(), pending: [] });
+      return r;
+    } catch (e) {
+      if (!isOffline(e)) throw e;
+      const c = readStateCache();
+      if (!c) throw Object.assign(new Error('state cache empty'), { status: 503 });
+      return { state: c.state, plugins: c.plugins, admin_flags: c.admin_flags, protectedAdmins: c.protectedAdmins || [], offline: true, savedAt: c.savedAt, pending: (c.pending || []).length };
+    }
+  }
+
+  async function putState(body) {
+    try {
+      await flushPending();
+      const r = await agent('PUT', '/state', body);
+      const c = readStateCache();
+      if (c) writeStateCache({ ...c, state: r.state, savedAt: now(), pending: [] });
+      return r;
+    } catch (e) {
+      if (!isOffline(e)) throw e;
+      const c = readStateCache();
+      if (!c) throw Object.assign(new Error('state cache empty'), { status: 503 });
+      const v = stateLib.validateState(body.state, c.state, { protect: c.protectedAdmins || [] });
+      if (!v.ok) throw Object.assign(new Error(v.errors.join('; ')), { status: 400 });
+      writeStateCache({ ...c, state: v.state, pending: [...(c.pending || []), body.state] });
+      return { state: v.state, applied: { changed: [] }, needsRestart: false, offline: true, queued: true };
+    }
+  }
+
+  async function stateSyncTick() {
+    const c = readStateCache();
+    const stale = !c || !c.savedAt || now() - c.savedAt > 10 * 60_000 || (c.pending && c.pending.length);
+    if (!stale || vmState.busy) return;
+    let d; try { d = await vmDescribe(); } catch { return; }
+    if (d.status !== 'RUNNING') return;
+    await getState().catch(() => {});
+  }
 
   // ---- VM control with a background "busy" flag -------------------------------------------------
   const vmState = { busy: null, busySince: null, lastError: null, runningSince: null, idleSince: null, lastAutoStop: null };
@@ -150,6 +236,19 @@ function createApp(deps = {}) {
     }
   }
 
+  // Статистика лежит на игровой ВМ; последнюю копию держим здесь, чтобы страница работала при выключенном сервере.
+  async function statsGet(p, only) {
+    const cache = readJson(statsCacheFile, {});
+    try {
+      const r = await agent('GET', p, null, 8000);
+      if (!only) { cache.all = { ...r, savedAt: new Date(now()).toISOString() }; writeJsonAtomic(statsCacheFile, cache); }
+      return r;
+    } catch (e) {
+      if (!cache.all) throw e;
+      const all = cache.all; const players = only ? all.players.filter((x) => x.steamid === only) : all.players;
+      return { ...all, players, offline: true };
+    }
+  }
   async function overview() {
     const out = { vm: null, server: null, busy: vmState.busy, lastError: vmState.lastError, settings: loadSettings(), idleSince: vmState.idleSince ? new Date(vmState.idleSince).toISOString() : null, lastAutoStop: vmState.lastAutoStop };
     try { out.vm = await vmDescribe(); } catch (e) { out.vmError = e.message; return out; }
@@ -163,7 +262,8 @@ function createApp(deps = {}) {
   // ---- routes ---------------------------------------------------------------------------------
   const P = (p) => async ({ params, body, query }) => agent('POST', p, body);
   const routes = [
-    ['GET', '/api/me', async ({ user }) => ({ user })],
+    ['GET', '/api/me', async ({ user }) => { const u = loadUsers()[user] || {}; return { user, role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
+    ['GET', '/api/public-info', async () => { const o = await overview(); return { status: o.vm ? o.vm.status : null, connect: o.connect || null, map: o.server && o.server.live ? o.server.live.map : null, humans: o.server && o.server.live ? o.server.live.humans : null, maxPlayers: o.server && o.server.live ? o.server.live.maxPlayers : null }; }],
     ['GET', '/api/overview', async () => overview()],
     ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS })],
     ['GET', '/api/user-presets', async () => ({ presets: readJson(userPresetsFile, {}) })],
@@ -187,13 +287,14 @@ function createApp(deps = {}) {
     }],
     ['POST', '/api/vm/start', async ({ user, ip }) => startVm(user, ip)],
     ['POST', '/api/vm/stop', async ({ user, ip }) => stopVm(user, ip)],
-    ['GET', '/api/state', async () => agent('GET', '/state')],
-    ['PUT', '/api/state', async ({ body, user, ip }) => { audit(user, ip, 'state.save', Object.keys(body.state || {})); return agent('PUT', '/state', body); }],
+    ['GET', '/api/state', async () => getState()],
+    ['PUT', '/api/state', async ({ body, user, ip }) => { audit(user, ip, 'state.save', Object.keys(body.state || {})); return putState(body); }],
     ['POST', '/api/preset', async ({ body, user, ip }) => { audit(user, ip, 'preset', body.preset); return agent('POST', '/preset', body, 120000); }],
     ['POST', '/api/map', async ({ body, user, ip }) => { audit(user, ip, 'map', body.map); return agent('POST', '/map', body); }],
     ['POST', '/api/rcon', async ({ body, user, ip }) => { audit(user, ip, 'rcon', String(body.command || '').slice(0, 120)); return agent('POST', '/rcon', body); }],
     ['POST', '/api/apply-live', async ({ user, ip }) => { audit(user, ip, 'apply-live'); return agent('POST', '/apply-live', {}, 40000); }],
     ['POST', '/api/service/:action', async ({ params, user, ip }) => { audit(user, ip, `service.${params.action}`); return agent('POST', `/service/${encodeURIComponent(params.action)}`, {}, 320000); }],
+    ['POST', '/api/cleanup', async ({ body, user, ip }) => { audit(user, ip, 'cleanup', body.actions); return agent('POST', '/cleanup', { actions: body.actions }, 60000); }],
     ['POST', '/api/update', async ({ user, ip }) => { audit(user, ip, 'update'); return agent('POST', '/update', {}); }],
     ['POST', '/api/backup', async ({ user, ip }) => { audit(user, ip, 'backup'); return agent('POST', '/backup', {}); }],
     ['GET', '/api/backups', async () => agent('GET', '/backups')],
@@ -210,9 +311,61 @@ function createApp(deps = {}) {
         if (!Number.isInteger(n) || n < 0 || n > 1440) throw Object.assign(new Error(`${k}: integer 0-1440`), { status: 400 });
         next[k] = n;
       }
+      if (body.playerLogin !== undefined) next.playerLogin = !!body.playerLogin;
       writeJsonAtomic(settingsFile, next);
       audit(user, ip, 'settings', next);
-      return next;
+      return { ...next, playerLogin: next.playerLogin !== false };
+    }],
+    ['PUT', '/api/brand', async ({ body, user, ip }) => {
+      const b = readJson(brandFile, {});
+      if (body.name !== undefined) { const n = String(body.name).trim(); if (!n || n.length > 40 || /[<>]/.test(n)) throw Object.assign(new Error('brand: name 1–40 chars, no < >'), { status: 400 }); b.name = n; }
+      if (body.tagline !== undefined) { const t = String(body.tagline).trim(); if (t.length > 80 || /[<>]/.test(t)) throw Object.assign(new Error('brand: tagline up to 80 chars, no < >'), { status: 400 }); b.tagline = t; }
+      if (body.removeLogo) { b.logoType = ''; try { fs.unlinkSync(brandLogoFile); } catch { /* нет файла */ } b.v = (b.v || 0) + 1; }
+      writeJsonAtomic(brandFile, b); audit(user, ip, 'brand', { name: b.name }); const o = loadBrand(); return { name: o.name, tagline: o.tagline, logo: o.logoType ? `/brand-logo?v=${o.v}` : '' };
+    }],
+    ['POST', '/api/brand/logo', async ({ body, user, ip }) => {
+      const m = /^data:(image\/(?:png|jpeg|webp|svg\+xml));base64,([A-Za-z0-9+/=]+)$/.exec(String(body.dataUrl || ''));
+      if (!m) throw Object.assign(new Error('brand: PNG, JPEG, WebP or SVG (data URL)'), { status: 400 });
+      const buf = Buffer.from(m[2], 'base64');
+      if (buf.length > 300 * 1024) throw Object.assign(new Error('brand: logo up to 300 KB'), { status: 400 });
+      fs.mkdirSync(path.dirname(brandLogoFile), { recursive: true }); fs.writeFileSync(brandLogoFile, buf, { mode: 0o600 });
+      const b = readJson(brandFile, {}); b.logoType = m[1]; b.v = (b.v || 0) + 1; writeJsonAtomic(brandFile, b); audit(user, ip, 'brand.logo', { type: m[1], bytes: buf.length });
+      const o = loadBrand(); return { name: o.name, tagline: o.tagline, logo: `/brand-logo?v=${o.v}` };
+    }],
+    ['GET', '/api/stats', async () => statsGet('/stats')],
+    ['GET', '/api/stats/:steamid', async ({ params }) => {
+      if (!/^\d{17}$/.test(params.steamid)) throw Object.assign(new Error('stats: bad SteamID64'), { status: 400 });
+      const r = await statsGet(`/stats/${params.steamid}`, params.steamid); return r;
+    }],
+    ['POST', '/api/stats/reset', async ({ user, ip }) => { audit(user, ip, 'stats.reset'); try { fs.unlinkSync(statsCacheFile); } catch { /* нет кэша */ } return agent('POST', '/stats/reset', {}); }],
+    ['GET', '/api/profile', async ({ user }) => profileOf(user)],
+    ['PUT', '/api/profile', async ({ body, user, ip }) => {
+      const users = loadUsers(); const u = users[user]; if (!u) throw Object.assign(new Error('not found'), { status: 404 });
+      if (body.email !== undefined) u.email = account.validateEmail(body.email);
+      if (body.links !== undefined) u.links = account.validateLinks(body.links);
+      saveUsers(users); audit(user, ip, 'profile.save', { email: !!u.email, links: (u.links || []).length });
+      return profileOf(user);
+    }],
+    ['POST', '/api/profile/steam-link', async ({ user }) => {
+      for (const [k, v] of linkTokens) if (v.exp < now()) linkTokens.delete(k);
+      const token = crypto.randomBytes(18).toString('hex'); linkTokens.set(token, { user, exp: now() + 10 * 60_000 });
+      return { url: `/api/auth/steam?link=${token}` };
+    }],
+    ['POST', '/api/profile/steam-unlink', async ({ user, ip }) => {
+      const users = loadUsers(); if (users[user]) { delete users[user].steamid; saveUsers(users); }
+      audit(user, ip, 'steam.unlink'); return profileOf(user);
+    }],
+    ['PUT', '/api/faceit-key', async ({ body, user, ip }) => {
+      const key = String(body.key || '').trim();
+      if (key && !/^[A-Za-z0-9-]{16,80}$/.test(key)) throw Object.assign(new Error('faceit: bad API key format'), { status: 400 });
+      writeJsonAtomic(faceitFile, key ? { key } : {}, 0o600); faceitCache.clear(); audit(user, ip, 'faceit.key', key ? 'set' : 'cleared');
+      return { hasKey: !!key };
+    }],
+    ['GET', '/api/faceit/:steamid', async ({ params }) => {
+      const hit = faceitCache.get(params.steamid);
+      if (hit && hit.exp > now()) return hit.v;
+      const v = await account.faceitLookup(params.steamid, readJson(faceitFile, {}).key, httpGet);
+      faceitCache.set(params.steamid, { v, exp: now() + 10 * 60_000 }); return v;
     }],
     ['POST', '/api/password', async ({ body, user, ip, sid }) => {
       const users = readJson(usersFile, { users: {} });
@@ -261,6 +414,10 @@ function createApp(deps = {}) {
     const url = new URL(req.url, 'http://x');
     const secure = String(req.headers['x-forwarded-proto'] || '') === 'https';
     try {
+      if (url.pathname === '/brand-logo' && req.method === 'GET') {
+        const b = loadBrand(); if (!b.logoType || !fs.existsSync(brandLogoFile)) return send(res, 404, 'not found', SEC_HEADERS);
+        return send(res, 200, fs.readFileSync(brandLogoFile), { ...SEC_HEADERS, 'Content-Type': b.logoType, 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox", 'Cache-Control': 'public, max-age=3600' });
+      }
       if (!url.pathname.startsWith('/api/')) {
         const name = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
         const f = staticFile(name);
@@ -280,6 +437,40 @@ function createApp(deps = {}) {
         audit(name, ip, 'login.ok');
         return send(res, 200, { user: name }, { ...SEC_HEADERS, 'Set-Cookie': `cs2sid=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}${secure ? '; Secure' : ''}` });
       }
+      if (url.pathname === '/api/brand' && req.method === 'GET') { const b = loadBrand(); return send(res, 200, { name: b.name, tagline: b.tagline, logo: b.logoType ? `/brand-logo?v=${b.v}` : '' }, SEC_HEADERS); }
+      if (url.pathname === '/api/auth/steam' && req.method === 'GET') {
+        const link = url.searchParams.get('link');
+        if (link && !(linkTokens.get(link) && linkTokens.get(link).exp > now())) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=expired' });
+        const origin = originOf(req, secure);
+        return send(res, 302, '', { ...SEC_HEADERS, Location: account.steamAuthUrl(`${origin}/api/auth/steam/callback${link ? `?link=${link}` : ''}`, origin) });
+      }
+      if (url.pathname === '/api/auth/steam/callback' && req.method === 'GET') {
+        const link = url.searchParams.get('link');
+        const origin = originOf(req, secure);
+        const q = Object.fromEntries(url.searchParams);
+        if (keysBlocked(ip)) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=error' });
+        try {
+          const steamid = await account.verifySteamAssertion(q, `${origin}/api/auth/steam/callback${link ? `?link=${link}` : ''}`, httpPost, steamNonces, now());
+          const users = loadUsers();
+          if (link) {
+            const t = linkTokens.get(link); linkTokens.delete(link);
+            if (!t || t.exp < now() || !users[t.user]) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=expired' });
+            const other = Object.keys(users).find((n) => users[n].steamid === steamid && n !== t.user);
+            if (other) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=taken' });
+            users[t.user].steamid = steamid; saveUsers(users); audit(t.user, ip, 'steam.link', steamid);
+            return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=linked' });
+          }
+          const name = Object.keys(users).find((n) => users[n].steamid === steamid);
+          let name2 = name;
+          if (!name2) {
+            const players = Object.keys(users).filter((n) => users[n].role === 'player').length;
+            if (!playerLoginOn() || players >= MAX_PLAYER_ACCOUNTS) { limiter.fail(`ip:${ip}`); audit(steamid, ip, 'login.steam.unlinked'); return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=unlinked' }); }
+            name2 = `p${steamid}`; users[name2] = { role: 'player', steamid, created: new Date(now()).toISOString() }; saveUsers(users); audit(name2, ip, 'player.register', steamid);
+          }
+          const sid2 = sessions.create(name2); audit(name2, ip, 'login.steam');
+          return send(res, 302, '', { ...SEC_HEADERS, Location: '/', 'Set-Cookie': `cs2sid=${sid2}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}${secure ? '; Secure' : ''}` });
+        } catch (e) { limiter.fail(`ip:${ip}`); log('steam login:', e.message); return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=error' }); }
+      }
       const sid = parseCookies(req.headers.cookie).cs2sid;
       const session = sid && sessions.get(sid);
       if (url.pathname === '/api/logout' && req.method === 'POST') {
@@ -291,6 +482,13 @@ function createApp(deps = {}) {
       const m = matchRoute(routes, req.method, url.pathname);
       if (!m) return send(res, 404, { error: 'not found' }, SEC_HEADERS);
       const body = req.method === 'GET' ? {} : await readJsonBody(req);
+      if (roleOf(session.user) === 'player') {
+        const self = (loadUsers()[session.user] || {}).steamid;
+        const key = `${req.method} ${m.pattern}`;
+        if (!PLAYER_OK.has(key)) return send(res, 403, { error: 'forbidden for players' }, SEC_HEADERS);
+        if (SELF_ONLY.has(key) && m.params.steamid !== self) return send(res, 403, { error: 'forbidden for players: own SteamID only' }, SEC_HEADERS);
+        if (key === 'PUT /api/profile') { delete body.links; }
+      }
       const result = await m.handler({ params: m.params, body, query: Object.fromEntries(url.searchParams), user: session.user, ip, sid });
       return send(res, 200, result, SEC_HEADERS);
     } catch (e) {
@@ -301,10 +499,10 @@ function createApp(deps = {}) {
 
   let timer = null;
   return {
-    server, sessions, limiter, vmState, idleTick, overview, startVm, stopVm,
+    server, sessions, limiter, vmState, idleTick, stateSyncTick, getState, putState, overview, startVm, stopVm,
     listen(port = Number(config.publicPort || 8080), host = '127.0.0.1') {
       return new Promise((resolve) => server.listen(port, host, () => {
-        timer = setInterval(() => { idleTick().catch((e) => log('idle tick:', e.message)); sessions.sweep(); }, 60_000);
+        timer = setInterval(() => { idleTick().catch((e) => log('idle tick:', e.message)); stateSyncTick().catch((e) => log('state sync:', e.message)); sessions.sweep(); }, 60_000);
         timer.unref();
         resolve();
       }));

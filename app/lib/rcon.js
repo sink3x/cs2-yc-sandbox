@@ -115,10 +115,12 @@ function parseStatus(text) {
   let m;
   if ((m = /hostname\s*:\s*(.+)/i.exec(t))) out.hostname = m[1].trim();
   if ((m = /version\s*:\s*(.+)/i.exec(t))) out.version = m[1].trim();
-  if ((m = /spawn(?:group)?\s*\d*[^\n]*map(?:name)?[:=\s]+([A-Za-z0-9_\-/.]+)/i.exec(t))) out.map = m[1].trim();
+  // CS2: "loaded spawngroup(  1)  : SV:  [1: de_dust2 | main lump | mapload]" (также workshop/123456/de_x)
+  if ((m = /loaded spawngroup\(\s*\d+\)\s*:\s*SV:\s*\[\d+:\s*([^\s|\]]+)/i.exec(t))) out.map = m[1].trim();
+  if (!out.map && (m = /spawn(?:group)?\s*\d*[^\n]*map(?:name)?[:=\s]+([A-Za-z0-9_\-/.]+)/i.exec(t))) out.map = m[1].trim();
   if (!out.map && (m = /map\s*:\s*([A-Za-z0-9_\-/.]+)/i.exec(t))) out.map = m[1].trim();
-  if ((m = /players\s*:\s*(\d+)\s*humans?,\s*(\d+)\s*bots?\s*\((\d+)(?:\s*\/\s*\d+)?\s*max/i.exec(t))) {
-    out.humans = Number(m[1]); out.bots = Number(m[2]); out.maxPlayers = Number(m[3]);
+  if ((m = /players\s*:\s*(\d+)\s*humans?,\s*(\d+)\s*bots?\s*\((\d+)(?:\s*\/\s*(\d+))?\s*max/i.exec(t))) {
+    out.humans = Number(m[1]); out.bots = Number(m[2]); out.maxPlayers = Number(m[4] || m[3]) || Number(m[3]) || null;
   }
   for (const line of t.split('\n')) {
     // "  2   00:35   42    0     active 786432 192.0.2.1:27005 'name'"

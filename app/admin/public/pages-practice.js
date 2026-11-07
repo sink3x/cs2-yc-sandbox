@@ -102,6 +102,12 @@ function lookView(redraw) {
       h('div', { class: 'hint' }, 'Погода и сезон — это эффекты панели. Погоду внутри самой CS2 сервер изменить не может: она часть клиентской графики и карты.')),
     h('div', { class: 'card' }, h('h3', {}, 'Тема'), h('div', { class: 'grid' }, themes.map(([k, t]) => h('button', { class: `btn preset ${look.theme === k ? 'on' : ''}`, onclick: () => { saveLook({ theme: k }); redraw(); } },
       h('span', { class: 'swatch', style: `background:${THEME_SWATCH[k]}` }), h('b', { style: 'margin-top:6px' }, t))))),
+    S.role === 'admin' ? brandCard(redraw) : null,
+    h('div', { class: 'card' }, h('h3', {}, 'Язык'), langSwitch(), h('div', { class: 'hint' }, 'Русский · English · Deutsch · Français. Длинные справочные тексты пока на русском.')),
+    h('div', { class: 'card' }, h('h3', {}, 'Акцентный цвет'),
+      h('div', { class: 'swatches' }, ACCENTS.map(([c, name]) => h('button', { class: `dot ${(look.accent || '') === c ? 'on' : ''}`, title: name, 'aria-label': name, style: `--c:${c || 'var(--text)'}`, onclick: () => { saveLook({ accent: c }); redraw(); } }))),
+      h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Свой цвет:'), h('input', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(look.accent || '') ? look.accent : '#0a84ff', onchange: (e) => { saveLook({ accent: e.target.value }); redraw(); } })),
+      h('div', { class: 'hint' }, 'Цвет применяется к кнопкам, выбранным пунктам и переключателям. «Моно» — чёрно-белый стиль.')),
     h('div', { class: 'card' }, h('h3', {}, 'Погода интерфейса'),
       h('div', { class: 'seg', style: 'flex-wrap:wrap' }, Object.entries(WEATHERS).map(([k, t]) => h('button', { class: eff.weather === k ? 'on' : '', disabled: look.auto, onclick: () => { saveLook({ weather: k }); redraw(); } }, t))),
       h('div', { class: 'row' }, 'Густота:', dens),
@@ -131,4 +137,26 @@ function pageHelp() {
     h('div', { class: 'muted small' }, CHAT_NOTE),
     h('div', { class: 'card' }, h('h3', {}, 'Вопросы и ответы'), faq.map(([q, a]) => h('details', { style: 'margin:6px 0' }, h('summary', { style: 'cursor:pointer' }, q), h('div', { class: 'muted', style: 'padding:6px 0 6px 14px' }, a)))),
     h('div', { class: 'card' }, h('h3', {}, 'Пасхалки'), h('div', { class: 'muted' }, 'Они есть. Подсказки: старый добрый код с аркадных автоматов, любимое имя из Valve, если набрать его не в поле ввода, и логотип, по которому можно кликать упорнее обычного.')));
+}
+
+/** Название и логотип панели (вместо стандартного значка). */
+function brandCard(redraw) {
+  const name = h('input', { type: 'text', value: BRAND.name, maxlength: 40, style: 'width:220px' }); const tag = h('input', { type: 'text', value: BRAND.tagline, maxlength: 80, placeholder: 'Подпись (необязательно)', style: 'width:260px' });
+  const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml', hidden: true });
+  const apply = (r) => { Object.assign(BRAND, r); applyBrand(); redraw(); };
+  const toDataUrl = (f) => new Promise((ok, no) => {
+    const fr = new FileReader(); fr.onerror = () => no(new Error('Не удалось прочитать файл'));
+    fr.onload = () => {
+      if (f.type === 'image/svg+xml') return ok(fr.result);
+      const img = new Image(); img.onerror = () => no(new Error('Не удалось открыть изображение'));
+      img.onload = () => { const k = Math.min(1, 256 / Math.max(img.width, img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/png')); };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(f);
+  });
+  file.addEventListener('change', act(async () => { if (!file.files[0]) return; apply(await api('POST', '/brand/logo', { dataUrl: await toDataUrl(file.files[0]) })); }, 'Логотип обновлён'));
+  return h('div', { class: 'card' }, h('h3', {}, 'Логотип и название'),
+    h('div', { class: 'row' }, brandMark(40) || svgIcon('logo', 36), name, tag, h('button', { class: 'btn', onclick: act(async () => apply(await api('PUT', '/brand', { name: name.value, tagline: tag.value })), 'Сохранено') }, 'Сохранить')),
+    h('div', { class: 'row' }, file, h('button', { class: 'btn', onclick: () => file.click() }, 'Загрузить логотип'), BRAND.logo ? h('button', { class: 'btn', onclick: act(async () => apply(await api('PUT', '/brand', { removeLogo: true })), 'Логотип убран') }, 'Убрать логотип') : null),
+    h('div', { class: 'hint' }, 'PNG, JPEG, WebP или SVG до 300 КБ (растровые сжимаются до 256 px). Логотип и название видны на входе, в меню, во вкладке браузера и на иконке приложения. Внутри самой CS2 клиентам файлы не передаются — там логотип игры заменить нельзя.'));
 }

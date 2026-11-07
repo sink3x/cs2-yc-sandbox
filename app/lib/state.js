@@ -30,7 +30,7 @@ function defaultState({ hostname = 'sandbox-cs-1', admins = [] } = {}) {
 }
 
 /** Validate + normalise user supplied state. Returns { ok, errors, state }. */
-function validateState(input, base = defaultState()) {
+function validateState(input, base = defaultState(), opts = {}) {
   const errors = [];
   const s = JSON.parse(JSON.stringify(base));
   const inp = input && typeof input === 'object' ? input : {};
@@ -106,6 +106,12 @@ function validateState(input, base = defaultState()) {
         seen.add(a.steamid);
         list.push({ name, steamid: String(a.steamid), flags });
       }
+      // Защищённые админы (владелец): их нельзя удалить и нельзя лишить @css/root — иначе можно запереть себя на собственном сервере.
+      for (const id of opts.protect || []) {
+        const a = list.find((x) => x.steamid === id);
+        if (!a) bad(`admins: protected ${id} cannot be removed`);
+        else if (!a.flags.includes('@css/root')) bad(`admins: protected ${id} must keep @css/root`);
+      }
       s.admins = list;
     }
   }
@@ -153,6 +159,7 @@ function renderServerCfg(state, secrets = {}) {
     `rcon_password "${secrets.RCON_PASSWORD || ''}"`,
     'sv_hibernate_when_empty 0',
     'sv_logfile 1',
+    'mp_logdetail 3', // урон/убийства в лог — для статистики панели
     'log on',
     'exec sandbox/overrides.cfg',
   ];

@@ -1,6 +1,7 @@
 'use strict';
 // Admin panel UI. Vanilla JS, no build step.
 const $app = document.getElementById('app');
+const TR_ATTR = new Set(['placeholder', 'title', 'aria-label', 'data-tip', 'alt']);
 const h = (tag, props, ...children) => {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
@@ -8,11 +9,13 @@ const h = (tag, props, ...children) => {
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else if (k === 'value') e.value = v;
     else if (k === 'checked') e.checked = !!v;
-    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+    else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : (TR_ATTR.has(k) ? tr(String(v)) : v));
   }
-  for (const c of children.flat(Infinity)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  for (const c of children.flat(Infinity)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(tr(String(c)))); }
   return e;
 };
+/** replaceChildren без null/false (иначе в DOM попадёт текст «null»). */
+const put = (root, ...nodes) => root.replaceChildren(...nodes.flat(Infinity).filter((n) => n != null && n !== false));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function api(method, path, body) {
@@ -23,6 +26,7 @@ async function api(method, path, body) {
   if (r.status === 401 && path !== '/me') { showLogin(); throw new Error(path === '/login' ? 'Неверный логин или пароль' : 'Нужен вход'); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(ruErr(j.error || r.statusText));
+  if (j && j.queued) toast('Сервер выключен: изменения сохранены в панели и применятся после его запуска', 's');
   return j;
 }
 
@@ -39,6 +43,9 @@ const ERR_RU = [
   [/^maps: bad entry (.+)/i, 'Карты: недопустимая запись $1'], [/^Failed to fetch|NetworkError/i, 'Нет связи с панелью'], [/^agent HTTP (\d+)/i, 'Агент ответил ошибкой $1'],
   [/^skin catalog unavailable/i, 'Каталог скинов недоступен (нет доступа к GitHub). Повторите позже'],
   [/^mysql:/i, 'Ошибка базы скинов: '],
+  [/^admins: protected (\d+) cannot be removed/i, 'Владельца сервера ($1) нельзя удалить из админов'], [/^admins: protected (\d+) must keep/i, 'У владельца сервера ($1) нельзя снять права root'],
+  [/^state cache empty/i, 'В панели ещё нет копии настроек: запустите сервер один раз (кнопка на «Обзоре»), после этого они будут видны и при выключенной ВМ'],
+  [/^(fetch failed|.*(ECONNREFUSED|ETIMEDOUT|EHOSTUNREACH|aborted due to timeout|operation was aborted).*)$/i, 'Сервер CS2 недоступен: выключен или ещё запускается'],
 ];
 function ruErr(m) {
   const t = String(m || '');
@@ -58,9 +65,26 @@ const act = (fn, okMsg) => async (ev) => {
   try { const r = await fn(); if (okMsg) toast(okMsg, 's'); return r; } catch (e) { toast(e.message, 'e'); } finally { if (btn) btn.disabled = false; }
 };
 
-const S = { user: null, ov: null, page: 'overview', catalog: null, state: null, pluginsMeta: [], adminFlags: [], settings: null, pollTimer: null };
+const BRAND = { name: 'sandbox-cs-1', tagline: '', logo: '' };
+async function loadBrand() {
+  try { Object.assign(BRAND, await (await fetch('/api/brand')).json()); } catch { /* по умолчанию */ }
+  applyBrand();
+}
+function applyBrand() {
+  document.title = `${BRAND.name} · ${tr('панель управления')}`;
+  if (BRAND.logo) for (const l of document.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]')) { l.href = BRAND.logo; l.removeAttribute('sizes'); l.type = ''; }
+}
+const brandMark = (size = 20) => (BRAND.logo ? h('img', { class: 'brand-img', src: BRAND.logo, alt: '', width: size, height: size }) : null);
+const S = { user: null, role: 'admin', steamid: '', ov: null, page: 'overview', catalog: null, state: null, pluginsMeta: [], adminFlags: [], settings: null, pollTimer: null };
 
 // ---------------------------------------------------------------- login
+const STEAM_MSG = { unlinked: 'Не удалось войти с этим Steam-аккаунтом: вход для новых игроков сейчас закрыт.', error: 'Не удалось проверить вход через Steam. Попробуйте ещё раз.', expired: 'Ссылка привязки устарела — повторите из профиля.', taken: 'Этот Steam уже привязан к другому пользователю.', linked: 'Steam привязан. Теперь можно входить через Steam.' };
+function loginNote() {
+  const k = new URLSearchParams(location.search).get('steam');
+  if (!k || !STEAM_MSG[k]) return null;
+  history.replaceState(null, '', location.pathname);
+  return h('div', { class: k === 'linked' ? 'banner ok' : 'banner' }, STEAM_MSG[k]);
+}
 function showLogin() {
   clearInterval(S.pollTimer);
   const u = h('input', { type: 'text', placeholder: 'Логин', autocomplete: 'username' });
@@ -70,7 +94,9 @@ function showLogin() {
   };
   p.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
   $app.replaceChildren(h('div', { class: 'login' }, h('div', { class: 'card' },
-    h('h2', {}, 'sandbox-cs-1'), u, p, h('button', { class: 'btn primary', onclick: go }, 'Войти'))));
+    h('div', { class: 'login-brand' }, brandMark(44), h('h2', {}, BRAND.name), BRAND.tagline ? h('div', { class: 'muted small' }, BRAND.tagline) : null), loginNote(), u, p, h('button', { class: 'btn primary', onclick: go }, 'Войти'),
+    h('div', { class: 'login-or' }, h('span', {}, 'или')),
+    h('a', { class: 'btn steam', href: '/api/auth/steam' }, 'Войти через Steam'), langSwitch())));
   u.focus();
 }
 
@@ -81,6 +107,13 @@ const copy = (text) => async () => { try { await navigator.clipboard.writeText(t
 const phaseText = (p) => p && ({ init: 'подготовка', restore: 'восстановление из бэкапа', 'update-game': 'обновление CS2', plugins: 'установка плагинов', configure: 'настройка', starting: 'запуск', failed: 'ошибка' }[p.phase] || p.phase);
 
 async function loadOverview() {
+  if (S.role === 'player') {
+    try {
+      const r = await api('GET', '/public-info'); const ip = r.connect ? r.connect.replace(/^connect\s+/, '').split(':')[0] : null;
+      S.ov = { vm: { status: r.status, publicIp: ip }, server: r.map ? { live: { map: r.map, humans: r.humans, maxPlayers: r.maxPlayers } } : null };
+    } catch (e) { if (e.message !== 'Нужен вход') S.ov = { error: e.message }; }
+    renderBar(); if (S.page === 'overview') renderPage(); return;
+  }
   try { S.ov = await api('GET', '/overview'); } catch (e) { if (e.message !== 'Нужен вход') S.ov = { error: e.message }; }
   if (serverUp() && !S.state && !S.stateTried) {
     S.stateTried = true;
@@ -100,6 +133,7 @@ function connectUrl() {
 function connectButton(big) {
   const o = S.ov || {}; const st = o.vm && o.vm.status; const cls = `connect${big ? ' big' : ''}`;
   if (!o.vm) return h('span', { class: `${cls} off` }, 'Подключиться');
+  if (st === 'STOPPED' && S.role === 'player') return h('span', { class: `${cls} off` }, 'Сервер выключен');
   if (st === 'STOPPED') return h('button', { class: cls, onclick: act(async () => { await api('POST', '/vm/start'); await loadOverview(); }, 'Запускаю сервер. Когда он будет готов, здесь появится «Подключиться»') }, 'Запустить сервер');
   if (!serverUp()) return h('span', { class: `${cls} off`, title: 'Дождитесь запуска CS2' }, st === 'STOPPING' || o.busy ? 'Выключается…' : 'Сервер запускается…');
   return h('a', { class: cls, href: connectUrl(), title: 'Откроет Steam и подключит к серверу', onclick: () => toast('Открываю Steam… Если ничего не произошло — скопируйте строку connect и вставьте в консоль CS2 (Steam должен быть запущен).') }, 'Подключиться');
@@ -138,7 +172,7 @@ function modal(title, content, buttons = []) {
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   document.addEventListener('keydown', onKey);
   back.append(h('div', { class: 'modal', role: 'dialog', 'aria-label': title },
-    h('div', { class: 'modal-h' }, h('b', {}, title), h('button', { class: 'btn', onclick: close, 'aria-label': 'Закрыть' }, '')),
+    h('div', { class: 'modal-h' }, h('b', {}, title), h('button', { class: 'btn', onclick: close, 'aria-label': 'Закрыть' }, '×')),
     h('div', { class: 'modal-b' }, content),
     buttons.length ? h('div', { class: 'row modal-f' }, buttons.map((b) => h('button', { class: `btn ${b.kind || ''}`, onclick: async (ev) => { ev.currentTarget.disabled = true; try { const keep = await b.run(); if (keep !== false) close(); } catch (e) { toast(e.message, 'e'); ev.currentTarget.disabled = false; } } }, b.text))) : null));
   document.body.append(back);
@@ -202,3 +236,6 @@ function parseSteamId(text) {
   if ((m = /^\[U:1:(\d+)\]$/i.exec(t))) return String(76561197960265728n + BigInt(m[1]));
   return null;
 }
+
+// confirm()/alert() тоже переводим
+{ const _c = window.confirm.bind(window); window.confirm = (m) => _c(tr(String(m))); const _a = window.alert.bind(window); window.alert = (m) => _a(tr(String(m))); }

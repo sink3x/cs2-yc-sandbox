@@ -36,7 +36,7 @@ function matchRoute(routes, method, pathname) {
     const names = [];
     const re = new RegExp('^' + pattern.replace(/:([A-Za-z]+)/g, (_x, n) => { names.push(n); return '([^/]+)'; }) + '$');
     const mm = re.exec(pathname);
-    if (mm) return { handler, params: Object.fromEntries(names.map((n, i) => [n, decodeURIComponent(mm[i + 1])])) };
+    if (mm) return { handler, pattern, params: Object.fromEntries(names.map((n, i) => [n, decodeURIComponent(mm[i + 1])])) };
   }
   return null;
 }

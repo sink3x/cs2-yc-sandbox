@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
   <title>sandbox-cs-1 · панель управления</title>
   <meta name="theme-color" content="#0b0b0c" media="(prefers-color-scheme: dark)">
@@ -10,10 +10,16 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CS2 панель">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div id="app"></div>
+  <script src="/i18n.js"></script>
   <script src="/core.js"></script>
   <script src="/data.js"></script>
   <script src="/fx.js"></script>
@@ -21,6 +27,8 @@
   <script src="/pages-play.js"></script>
   <script src="/pages-skins.js"></script>
   <script src="/pages-practice.js"></script>
+  <script src="/pages-account.js"></script>
+  <script src="/pages-stats.js"></script>
   <script src="/shell.js"></script>
 </body>
 </html>

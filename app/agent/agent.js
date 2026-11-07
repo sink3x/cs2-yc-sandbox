@@ -13,6 +13,9 @@ const { readBody, readJsonBody, send, matchRoute } = require('../lib/http');
 const { readJson, writeJsonAtomic, safeEqual, makeLogger, sleep, randomToken } = require('../lib/util');
 const { applyState, patchWeaponPaints } = require('./apply');
 const backup = require('./backup');
+const cleanup = require('./cleanup');
+const statsLib = require('./stats');
+let tracker = null;
 const skins = require('./skins').createSkinsService();
 const { parseOnlinePlayers, isSteamId } = require('./skins');
 
@@ -37,7 +40,13 @@ let liveCache = { at: 0, value: null };
 async function liveStatus() {
   if (Date.now() - liveCache.at < 2000) return liveCache.value;
   let value = null;
-  try { value = parseStatus((await rconRun(['status'], 4000))[0]); } catch { value = null; }
+  try {
+    value = parseStatus((await rconRun(['status'], 4000))[0]);
+    // CS2 в спячке/на старте печатает неполный status: добираем из настроек панели, чтобы «Обзор» не показывал пустоту
+    const sv = (loadState().server) || {};
+    if (!value.map && sv.map) { value.map = sv.map; value.mapGuess = true; }
+    if (!value.maxPlayers && sv.maxPlayers) value.maxPlayers = sv.maxPlayers;
+  } catch { value = null; }
   liveCache = { at: Date.now(), value };
   return value;
 }
@@ -115,12 +124,15 @@ function overrideCommands(state) {
   return Object.entries(state.cvars).map(([k, v]) => `${k} "${v}"`);
 }
 
+// Владелец сервера = первый админ из конфигурации Terraform: его нельзя удалить из админов.
+const protectedAdmins = () => (config.admins || []).slice(0, 1).map((a) => String(a.steamid));
+
 const routes = [
   ['GET', '/health', async () => ({ ok: true })],
   ['GET', '/status', async () => status()],
-  ['GET', '/state', async () => ({ state: loadState(), plugins: S.registry, admin_flags: S.ADMIN_FLAGS })],
+  ['GET', '/state', async () => ({ state: loadState(), plugins: S.registry, admin_flags: S.ADMIN_FLAGS, protectedAdmins: protectedAdmins() })],
   ['PUT', '/state', async ({ body }) => {
-    const { ok, errors, state } = S.validateState(body.state, loadState());
+    const { ok, errors, state } = S.validateState(body.state, loadState(), { protect: protectedAdmins() });
     if (!ok) throw Object.assign(new Error(errors.join('; ')), { status: 400 });
     saveState(state);
     const res = applyState(state, secrets);
@@ -174,6 +186,14 @@ const routes = [
   }],
   ['POST', '/skins/reload', async () => ({ output: (await rconRun(['css_plugins reload WeaponPaints'], 10000))[0] })],
   ['POST', '/service/:action', async ({ params }) => systemctl(params.action)],
+  ['GET', '/stats', async () => (tracker ? tracker.stats.summary() : { since: null, map: null, players: [], maps: [] })],
+  ['GET', '/stats/:steamid', async ({ params }) => (tracker ? tracker.stats.summary(String(params.steamid)) : { since: null, map: null, players: [], maps: [] })],
+  ['POST', '/stats/reset', async () => { if (tracker) { tracker.stats.data = { since: new Date().toISOString(), players: {}, maps: {} }; tracker.stats.sessions.clear(); tracker.stats.dirty = true; tracker.save(); } return { ok: true }; }],
+  ['POST', '/cleanup', async ({ body }) => {
+    const ok = ['ram', 'journal', 'files', 'world']; const actions = (Array.isArray(body.actions) ? body.actions : ['files', 'journal', 'ram']).filter((a) => ok.includes(a));
+    if (!actions.length) throw Object.assign(new Error('cleanup: no valid actions'), { status: 400 });
+    return cleanup.runCleanup(actions, { exec, rcon: (cmds) => rconRun(cmds, 6000), gameDir: E.gamePaths.gameDir });
+  }],
   ['POST', '/update', async () => {
     fs.writeFileSync(E.files.forceUpdate, new Date().toISOString());
     systemctl('restart').catch((e) => log('update restart failed:', e.message));
@@ -225,6 +245,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 if (require.main === module) {
+  tracker = statsLib.startTracker({ file: require('node:path').join(E.dirs.data, 'stats.json'), readJson, writeJsonAtomic, log });
+  process.on('SIGTERM', () => { try { tracker.stop(); } catch { /* ok */ } process.exit(0); });
   const port = Number(config.agentPort || 8081);
   server.listen(port, config.agentBind || '0.0.0.0', () => log(`listening on ${config.agentBind || '0.0.0.0'}:${port}`));
   // WeaponPaints writes its default config on the first load. Give it the DB credentials and reload it.

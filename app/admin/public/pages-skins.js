@@ -1,7 +1,10 @@
 'use strict';
 // Редактор скинов: игрок → оружие/нож/перчатки/агент/музыка → предпросмотр → запись в базу WeaponPaints.
 
-const K = { cat: null, players: [], steamid: store.get('skinPlayer', ''), loadout: null, tab: 'Rifles', weapon: null, q: '', sel: null, shown: 48, err: null };
+const K = { cat: null, players: [], steamid: store.get('skinPlayer', ''), loadout: null, tab: 'Rifles', weapon: null, q: '', sel: null, shown: 48, err: null, sort: store.get('skinSort', 'default') };
+const SORTS = [['default', 'По умолчанию'], ['name', 'По названию А–Я'], ['rar', 'Редкость: высокая → низкая'], ['rar_asc', 'Редкость: низкая → высокая'], ['float', 'Float: меньше → больше'], ['float_desc', 'Float: больше → меньше'], ['eq', 'Надетые первыми']];
+const RAR_ORDER = ['consumer', 'industrial', 'mil-spec', 'restricted', 'classified', 'covert', 'contraband', 'extraordinary'];
+const rarRank = (r) => { const n = String((r && r.n) || '').toLowerCase(); const i = RAR_ORDER.findIndex((x) => n.includes(x)); return i < 0 ? (n === 'своё' ? 99 : -1) : i; };
 const SKIN_TABS = [['Knives', 'Ножи'], ['Gloves', 'Перчатки'], ['Rifles', 'Винтовки'], ['Pistols', 'Пистолеты'], ['SMGs', 'Пистолеты-пулемёты'], ['Heavy', 'Тяжёлое'], ['Equipment', 'Zeus'], ['Agents', 'Агенты'], ['Music', 'Музыка'], ['Custom', 'Свои']];
 const WEAR_PRESETS = [['FN', 0.03], ['MW', 0.1], ['FT', 0.25], ['WW', 0.41], ['BS', 0.6]];
 const wearName = (w) => (w < 0.07 ? 'Прямо с завода' : w < 0.15 ? 'Немного поношенное' : w < 0.38 ? 'После полевых' : w < 0.45 ? 'Поношенное' : 'Закалённое в боях');
@@ -29,6 +32,7 @@ async function loadSkinCatalog() {
   K.cat = await api('GET', '/skins/catalog'); K.items = null; skinItems();
 }
 async function loadPlayers() {
+  if (S.role === 'player') { K.players = [{ steamid: S.steamid, name: S.user, self: true }]; K.steamid = S.steamid; return; }
   const base = []; const admins = (S.state && S.state.state.admins) || [];
   for (const a of admins) base.push({ steamid: a.steamid, name: a.name, admin: true });
   try { const r = await api('GET', '/skins/players'); for (const p of r.players) { const e = base.find((x) => x.steamid === p.steamid); if (e) Object.assign(e, p, { name: p.name || e.name }); else base.push(p); } } catch { /* сервер выключен */ }
@@ -74,7 +78,30 @@ function skinsView(redraw) {
   // ---- вкладки и оружия
   const tabs = h('div', { class: 'tabs' }, SKIN_TABS.map(([k, t]) => h('button', { class: K.tab === k ? 'on' : '', onclick: () => { K.tab = k; K.weapon = null; K.shown = 48; redraw(); } }, t)));
   const catWeapons = K.weapons.filter((w) => w.cat === K.tab && items.some((s) => s.weapon === w));
-  const weaponChips = ['Agents', 'Music', 'Custom'].includes(K.tab) && K.tab !== 'Custom' ? null : h('div', { class: 'chips', style: 'margin-bottom:10px' },
+  // ---- точный выбор оружия из любой категории + сортировка
+  const allWeapons = K.weapons.filter((w) => items.some((s) => s.weapon === w));
+  const wInput = h('input', { type: 'text', placeholder: 'Конкретное оружие: ak-47, m4a1-s, awp, карамбит…', style: 'width:300px' });
+  const wBox = autocomplete(wInput, (t) => rank(allWeapons.map((w) => ({ value: w.name, desc: SKIN_TABS.find((x) => x[0] === w.cat)?.[1] || w.cat, w })), t), {
+    limit: 10, onPick: (o) => { K.tab = o.w.cat; K.weapon = o.w.def; K.q = ''; K.shown = 48; redraw(); } });
+  const curW = K.weapon !== null ? K.weapons.find((w) => w.def === K.weapon) : null;
+  if (curW) wInput.value = curW.name;
+  const sortSel = h('select', { title: 'Сортировка' }, SORTS.map(([k, t]) => h('option', { value: k, selected: K.sort === k }, t)));
+  sortSel.addEventListener('change', () => { K.sort = sortSel.value; store.set('skinSort', K.sort); K.shown = 48; gridUpdate(); });
+  const resetW = curW ? h('button', { class: 'btn', onclick: () => { K.weapon = null; K.shown = 48; redraw(); } }, 'Все ' + (SKIN_TABS.find((x) => x[0] === K.tab)?.[1] || '').toLowerCase()) : null;
+  const weaponBar = ['Agents', 'Music'].includes(K.tab) ? null : h('div', { class: 'row', style: 'margin-bottom:10px' }, wBox, resetW, h('span', { class: 'spacer' }), 'Сортировка:', sortSel);
+
+  // ---- выбор модели ножа (отдельно, с картинками)
+  const knifePicker = K.tab !== 'Knives' ? null : h('div', { style: 'margin-bottom:12px' },
+    h('div', { class: 'muted small', style: 'margin-bottom:6px' }, 'Выберите модель ножа — ниже появятся только его скины. Нож надевается кнопкой «Применить» в редакторе справа.'),
+    h('div', { class: 'skin-grid knife-grid' }, [null].concat(K.weapons.filter((w) => w.cat === 'Knives' && items.some((s) => s.weapon === w))).map((w) => {
+      const van = w && items.find((s) => s.weapon === w && s.paint === 0);
+      const any = w && (van || items.find((s) => s.weapon === w && s.img));
+      const isEq = w && L && L.knives.some((k) => k.knife === w.id);
+      return h('button', { class: `skin ${(w ? K.weapon === w.def : K.weapon === null) ? 'sel' : ''} ${isEq ? 'eq' : ''}`, onclick: () => { K.weapon = w ? w.def : null; K.q = ''; K.shown = 48; redraw(); } },
+        h('div', { class: 'img' }, w ? skinImg(any && any.img, w.name) : h('span', { class: 'muted' }, 'Все')),
+        h('div', { class: 'nm' }, w ? w.name : 'Все ножи', h('small', {}, w ? `${items.filter((s) => s.weapon === w).length} скинов` : '')));
+    })));
+  const weaponChips = ['Agents', 'Music', 'Custom', 'Knives'].includes(K.tab) && K.tab !== 'Custom' ? null : h('div', { class: 'chips', style: 'margin-bottom:10px' },
     h('span', { class: 'chip', style: K.weapon === null ? 'border-color:var(--accent)' : '', onclick: () => { K.weapon = null; K.shown = 48; redraw(); } }, 'Все'),
     (K.tab === 'Custom' ? K.weapons.filter((w) => items.some((s) => s.custom && s.weapon === w)) : catWeapons).map((w) => h('span', { class: 'chip', style: K.weapon === w.def ? 'border-color:var(--accent);color:var(--accent)' : '', onclick: () => { K.weapon = w.def; K.shown = 48; redraw(); } }, w.name)));
 
@@ -100,7 +127,14 @@ function skinsView(redraw) {
     } else {
       let list = items;
       if (K.q) list = list.filter((s) => `${s.weapon.name} ${s.name}`.toLowerCase().includes(K.q));
-      else { list = list.filter((s) => s.weapon.cat === K.tab || (K.tab === 'Custom' && s.custom)); if (K.weapon !== null) list = list.filter((s) => s.weapon.def === K.weapon); }
+      else list = list.filter((s) => s.weapon.cat === K.tab || (K.tab === 'Custom' && s.custom));
+      if (K.weapon !== null) list = list.filter((s) => s.weapon.def === K.weapon);
+      if (K.sort !== 'default') {
+        const fl = (s) => (s.paint === 0 ? -1 : s.min);
+        const cmp = { name: (a, b) => a.name.localeCompare(b.name, 'ru'), rar: (a, b) => rarRank(b.rar) - rarRank(a.rar), rar_asc: (a, b) => rarRank(a.rar) - rarRank(b.rar),
+          float: (a, b) => fl(a) - fl(b) || a.max - b.max, float_desc: (a, b) => b.max - a.max || b.min - a.min, eq: (a, b) => Number(equipped(b)) - Number(equipped(a)) }[K.sort];
+        if (cmp) list = list.slice().sort(cmp);
+      }
       const total = list.length; list = list.slice(0, K.shown);
       nodes = list.map((s) => card({ img: s.img, title: s.paint === 0 ? 'Ваниль' : s.name, sub: s.weapon.name, color: s.rar.c, eq: equipped(s), sel: K.sel && K.sel.skin === s, badge: s.custom ? 'своё' : null, onclick: () => { K.sel = { skin: s }; initEdit(); redraw(); } }));
       if (total > K.shown) nodes.push(h('button', { class: 'btn', onclick: () => { K.shown += 96; gridUpdate(); } }, `Показать ещё (${total - K.shown})`));
@@ -114,13 +148,13 @@ function skinsView(redraw) {
   gridUpdate();
 
   return h('div', {}, h('h2', {}, 'Скины, ножи, перчатки, агенты'),
-    h('div', { class: 'card' }, h('div', { class: 'row' }, 'Игрок:', sel, h('button', { class: 'btn', onclick: act(async () => { await loadPlayers(); await loadLoadout(); redraw(); }, 'Список обновлён') }, '')),
-      h('div', { class: 'row' }, manual, h('button', { class: 'btn', onclick: openManual }, 'Открыть по SteamID')),
+    h('div', { class: 'card' }, S.role === 'player' ? null : h('div', { class: 'row' }, 'Игрок:', sel, h('button', { class: 'btn', onclick: act(async () => { await loadPlayers(); await loadLoadout(); redraw(); }, 'Список обновлён') }, 'Обновить')),
+      S.role === 'player' ? null : h('div', { class: 'row' }, manual, h('button', { class: 'btn', onclick: openManual }, 'Открыть по SteamID')),
       warn() ? h('div', { class: 'warn small' }, warn()) : h('div', { class: 'muted small' }, `${player && player.name ? player.name + ' · ' : ''}${K.steamid}. Скины попадают в базу сразу; в игре игрок пишет !wp (или перезаходит). Новые игроки появляются в списке после первого входа и выбора скина или через ввод SteamID.`)),
     h('div', { class: 'skin-layout' },
-      h('div', {}, h('div', { class: 'row' }, searchW), tabs, weaponChips, gridBox),
+      h('div', {}, h('div', { class: 'row' }, searchW), tabs, weaponBar, knifePicker, weaponChips, gridBox),
       h('div', {}, previewPanel(redraw, L), loadoutPanel(redraw, L))),
-    customSkinForm(redraw));
+    S.role === 'admin' ? customSkinForm(redraw) : null);
 }
 
 // ---------------------------------------------------------------- редактор выбранного предмета

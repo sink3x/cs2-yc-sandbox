@@ -10,7 +10,10 @@ const SEASONS = {
 };
 const seasonNow = (d = new Date()) => { const m = d.getMonth() + 1; return m === 12 || m <= 2 ? 'winter' : m <= 5 ? 'spring' : m <= 8 ? 'summer' : 'autumn'; };
 
-const LOOK_DEFAULT = { auto: false, theme: 'auto', weather: 'none', density: 1 };
+// Основные цвета (системная палитра в духе Apple). '' — монохром (акцент = цвет текста темы).
+const ACCENTS = [['', 'Моно'], ['#0a84ff', 'Синий'], ['#32ade6', 'Голубой'], ['#30d158', 'Зелёный'], ['#ffd60a', 'Жёлтый'], ['#ff9f0a', 'Оранжевый'], ['#ff453a', 'Красный'], ['#ff375f', 'Розовый'], ['#bf5af2', 'Фиолетовый']];
+const onColor = (hex) => { const n = parseInt(hex.slice(1), 16); const l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; return l > 0.62 ? '#111113' : '#ffffff'; };
+const LOOK_DEFAULT = { auto: false, theme: 'auto', weather: 'none', density: 1, accent: '' };
 const look = { ...LOOK_DEFAULT, ...store.get('look', {}) };
 if (!THEMES[look.theme]) look.theme = 'auto'; // старые цветные темы больше не поддерживаются
 const systemDark = () => !(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
@@ -88,6 +91,8 @@ function confetti(n = 160) {
 function applyLook() {
   const e = effectiveLook();
   document.documentElement.dataset.theme = e.theme;
+  const root = document.documentElement.style;
+  if (/^#[0-9a-f]{6}$/i.test(look.accent || '')) { root.setProperty('--accent', look.accent); root.setProperty('--on-accent', onColor(look.accent)); } else { root.removeProperty('--accent'); root.removeProperty('--on-accent'); }
   setWeather(e.weather);
 }
 function saveLook(patch) { Object.assign(look, patch); store.set('look', look); applyLook(); }

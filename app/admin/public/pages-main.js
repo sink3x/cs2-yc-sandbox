@@ -82,15 +82,22 @@ function pagePlugins() {
 
 function pageAdmins() {
   const st = S.state.state;
+  const locked = new Set(S.state.protectedAdmins || S.protectedAdmins || []);
+  S.protectedAdmins = [...locked];
   let list = st.admins.map((a) => ({ ...a, flags: [...a.flags] }));
   const box = h('div');
   const draw = () => {
     const head = h('tr', {}, h('th', {}, 'Имя'), h('th', {}, 'SteamID64'), h('th', {}, 'Права'), h('th', {}));
     const rows = list.map((a, idx) => {
-      const flagSel = h('div', { class: 'chips' }, S.adminFlags.map((f) => { const on = a.flags.includes(f); return h('span', { class: 'chip', style: on ? 'border-color:var(--accent);color:var(--accent)' : '', onclick: () => { a.flags = on ? a.flags.filter((x) => x !== f) : a.flags.concat([f]); draw(); } }, f.replace('@css/', '')); }));
+      const own = locked.has(a.steamid); // владелец: нельзя удалить, нельзя снять root, нельзя сменить SteamID
+      const flagSel = h('div', { class: 'chips' }, S.adminFlags.map((f) => {
+        const on = a.flags.includes(f); const fixed = own && f === '@css/root';
+        return h('span', { class: 'chip', title: fixed ? 'Права владельца менять нельзя' : '', style: `${on ? 'border-color:var(--accent);color:var(--accent);' : ''}${fixed ? 'opacity:.6;cursor:not-allowed;' : ''}`, onclick: () => { if (fixed) return; a.flags = on ? a.flags.filter((x) => x !== f) : a.flags.concat([f]); draw(); } }, f.replace('@css/', ''));
+      }));
       return h('tr', {}, h('td', {}, h('input', { type: 'text', value: a.name, style: 'width:140px', oninput: (e) => { a.name = e.target.value; } })),
-        h('td', {}, h('input', { type: 'text', value: a.steamid, style: 'width:180px', oninput: (e) => { a.steamid = e.target.value.trim(); } })), h('td', {}, flagSel),
-        h('td', {}, h('button', { class: 'btn danger', onclick: () => { list.splice(idx, 1); draw(); } }, '')));
+        h('td', {}, h('input', { type: 'text', value: a.steamid, style: 'width:180px', readonly: own, oninput: (e) => { a.steamid = e.target.value.trim(); } })), h('td', {}, flagSel),
+        h('td', {}, own ? h('span', { class: 'tag', title: 'Это владелец сервера: удалить его из админов нельзя' }, 'владелец')
+          : h('button', { class: 'btn danger', onclick: () => { list.splice(idx, 1); draw(); } }, 'Удалить')));
     });
     box.replaceChildren(h('table', {}, h('thead', {}, head), h('tbody', {}, rows)));
   };
@@ -117,6 +124,7 @@ function pageBackups() {
     h('div', { class: 'card' }, h('h3', {}, 'Бэкапы (Object Storage)'), listBox,
       h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: act(async () => { await api('POST', '/backup'); await sleep(4000); await loadList(); }, 'Бэкап создаётся') }, 'Сделать бэкап сейчас')),
       h('div', { class: 'muted small' }, 'В бэкап входят: настройки панели, конфиги CS2/плагинов, база скинов. Сам CS2 (≈60 ГБ) лежит на постоянном диске. Бэкап делается автоматически при выключении и каждую ночь.')),
+    cleanupCard(),
     h('div', { class: 'card' }, h('h3', {}, 'Логи'), h('div', { class: 'row' }, unit, h('button', { class: 'btn', onclick: loadLogs }, 'Обновить')), logBox));
 }
 
@@ -127,4 +135,22 @@ function pagePanel() {
   return h('div', {}, h('h2', {}, 'Панель'),
     h('div', { class: 'card' }, h('h3', {}, `Пользователь: ${S.user}`), h('div', { class: 'row' }, o, n, h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/password', { oldPassword: o.value, newPassword: n.value }); o.value = ''; n.value = ''; }, 'Пароль изменён') }, 'Сменить пароль'))),
     h('div', { class: 'card' }, h('h3', {}, 'Журнал действий'), auditBox));
+}
+
+/** Очистка кэшей и мусора на игровой ВМ (против лагов). */
+function cleanupCard() {
+  const opts = [['files', 'Старые логи, демо, крэш-дампы, временные файлы', true], ['journal', 'Журнал systemd (оставить ≤100 МБ / 7 дней)', true], ['ram', 'Страничный кэш ОС (освободить RAM; лучше на пустом сервере)', false], ['world', 'Мир на карте: рестарт раунда (убирает выпавшее оружие, декали, лишние сущности)', false]];
+  const boxes = opts.map(([k, , on]) => h('input', { type: 'checkbox', checked: on, 'data-k': k }));
+  const out = h('div', { class: 'muted small' });
+  const run = act(async () => {
+    const actions = boxes.filter((b) => b.checked).map((b) => b.dataset.k); if (!actions.length) throw new Error('Отметьте, что чистить');
+    if (actions.includes('world') && !confirm('Рестарт раунда выбросит текущий раунд. Продолжить?')) return;
+    const r = await api('POST', '/cleanup', { actions });
+    out.replaceChildren(h('div', {}, `Готово: ${r.done.map((d) => ({ files: `файлы (${d.files} шт., ${d.mb} МБ)`, journal: 'журнал', ram: 'кэш ОС', world: 'мир' }[d.action] || d.action)).join(', ')}.`),
+      h('div', {}, `Свободная RAM: ${r.mem.before.freeMb} → ${r.mem.after.freeMb} МБ.`), ...(r.skipped || []).map((x) => h('div', { class: 'warn small' }, `${x.action}: ${x.reason}`)));
+  }, 'Очистка выполнена');
+  return h('div', { class: 'card' }, h('h3', {}, 'Очистка кэшей и мусора'),
+    h('div', { class: 'muted small' }, 'Нужна включённая игровая ВМ. Файлы игры, скины и настройки не затрагиваются.'),
+    ...opts.map(([k, t], i) => h('label', { class: 'row' }, boxes[i], t)),
+    h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: run }, 'Очистить')), out);
 }
