@@ -14,6 +14,7 @@ const { CatalogCache, StickerCache, queryStickers } = require('../lib/catalog');
 const { DATA: CALLOUTS, CalloutMaps, validateCustom: validateCalloutCustom, EMPTY_CUSTOM: EMPTY_CALLOUT_CUSTOM } = require('../lib/callouts');
 const practice = require('../lib/practice');
 const online = require('../lib/online');
+const { createVote } = require('../lib/vote');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
 const people = require('../lib/people');
@@ -65,7 +66,7 @@ function validateCustomSkins(input) {
   });
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
-const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/skins/loadout/:steamid',
+const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
@@ -405,6 +406,16 @@ function createApp(deps = {}) {
     return { id, label: id, img: null, workshop: /workshop/i.test(String(id)) };
   }
 
+  // Голосование за карту (в памяти: живёт минуты, перезапуск панели его сбрасывает).
+  const vote = createVote({ now });
+  const voteView = (user) => { const w = vote.view(user); return { ...w, options: (w.options || []).map((o) => ({ ...o, label: mapInfo(o.id).label || o.label })) }; };
+  /** Закрыло срок → если включено автоприменение и сервер работает, меняем карту (один раз). */
+  async function voteTick() {
+    const done = vote.takePending(); if (!done) return;
+    audit('vote', '-', 'vote.result', { winner: done.winner, votes: done.votes.size });
+    try { await agent('POST', '/map', { map: done.winner }, 15000); } catch (e) { log('vote apply:', e.message); }
+  }
+
   let glanceStats = { at: 0, value: null };
   /** Краткая сводка для страницы «Сервер»: пинг, карта, игроки, счётчики статистики. Одинакова для админа и игрока. */
   async function glance(o) {
@@ -468,6 +479,15 @@ function createApp(deps = {}) {
       const { outputs } = await agent('POST', '/rcon-batch', { commands: names }, 30000);
       return { values: Object.fromEntries(names.map((n, i) => [n, practice.parseCvarOutput(n, outputs[i])]).filter(([, v]) => v !== null)) };
     }],
+    ['GET', '/api/vote', async ({ user }) => { await voteTick(); return voteView(user); }],
+    ['POST', '/api/vote/cast', async ({ body, user }) => { vote.cast(user, String(body.option || '')); return voteView(user); }],
+    ['POST', '/api/vote/start', async ({ body, user, ip }) => {
+      const options = (Array.isArray(body.options) ? body.options : []).slice(0, 12).map((id) => ({ id: String(id), label: mapInfo(String(id)).label || String(id) }));
+      vote.start({ options, minutes: body.minutes, auto: body.auto !== false, by: user });
+      audit(user, ip, 'vote.start', { options: options.map((o) => o.id), minutes: body.minutes });
+      return voteView(user);
+    }],
+    ['POST', '/api/vote/stop', async ({ user, ip }) => { vote.stop(); audit(user, ip, 'vote.stop'); await voteTick(); return voteView(user); }],
     ['POST', '/api/online/act', async ({ body, user, ip }) => {
       const cmd = online.playerCommand(String(body.action || ''), body.id, body);
       audit(user, ip, 'online.act', { action: body.action, id: Number(body.id) });
@@ -862,17 +882,18 @@ function createApp(deps = {}) {
     }
   });
 
-  let timer = null;
+  let timer = null; let voteTimer = null;
   return {
     server, sessions, limiter, vmState, idleTick, stateSyncTick, soundSyncTick, syncSounds, soundStore, getState, putState, overview, startVm, stopVm,
     listen(port = Number(config.publicPort || 8080), host = '127.0.0.1') {
       return new Promise((resolve) => server.listen(port, host, () => {
         timer = setInterval(() => { idleTick().catch((e) => log('idle tick:', e.message)); soundSyncTick().catch((e) => log('sound sync:', e.message)); stateSyncTick().catch((e) => log('state sync:', e.message)); sessions.sweep(); }, 60_000);
         timer.unref();
+        voteTimer = setInterval(() => { voteTick().catch((e) => log('vote tick:', e.message)); }, 5000); voteTimer.unref();
         resolve();
       }));
     },
-    close() { clearInterval(timer); server.close(); },
+    close() { clearInterval(timer); clearInterval(voteTimer); server.close(); },
   };
 }
 

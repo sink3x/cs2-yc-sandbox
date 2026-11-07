@@ -36,6 +36,44 @@ function serverGlance(g) {
       st.top && st.top.length ? ` · топ: ${st.top.map((x) => `${x.name} (${x.kills})`).join(', ')}` : '') : null);
 }
 
+/** Голосование за карту: игроки голосуют, админ запускает и останавливает. Выбор карт админа живёт вне карточки (она перерисовывается вместе с обзором). */
+const VOTE_SEL = { maps: new Set(), minutes: '3', auto: true }; let VOTE_LAST = null; // последний ответ: обзор перерисовывается раз в 4 с, карточка не должна мигать
+function voteCard() {
+  const box = h('div', { class: 'card vote', hidden: true });
+  let d = VOTE_LAST; let busy = false; let timer = null;
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const draw = () => {
+    const isAdmin = S.role !== 'player';
+    if (!d || (!d.active && !d.finished && !isAdmin)) { box.hidden = true; return; }
+    box.hidden = false;
+    const kids = [h('h3', {}, 'Голосование за карту')];
+    if (d.active || d.finished) {
+      const max = Math.max(1, ...d.options.map((o) => o.votes));
+      kids.push(h('div', { class: 'muted small' }, d.active ? `${tr('Осталось')} ${mmss(d.remainingSec)} · ${tr('проголосовали')}: ${d.total}` : `${tr('Голосование завершено')} · ${tr('проголосовали')}: ${d.total}`),
+        h('div', { class: 'vote-list' }, d.options.map((o) => h('button', { class: `vote-opt${d.myVote === o.id ? ' sel' : ''}${d.finished && d.winner === o.id ? ' win' : ''}`, disabled: !d.active || busy, onclick: async () => {
+          busy = true; try { d = await api('POST', '/vote/cast', { option: o.id }); } catch (e) { toast(e.message, 'e'); } busy = false; draw();
+        } }, h('span', { class: 'vote-bar', style: `width:${Math.round(100 * o.votes / max)}%` }), h('span', { class: 'vote-t' }, o.label), h('span', { class: 'vote-n' }, String(o.votes))))));
+      if (d.finished) kids.push(h('div', { class: 'small' }, d.winner ? `${tr('Победила карта')}: ${(d.options.find((o) => o.id === d.winner) || {}).label || d.winner}${d.auto ? ` · ${tr('карта меняется автоматически')}` : ''}` : tr('Голосов не было — карта не меняется.')));
+    }
+    if (isAdmin) {
+      if (d.active) kids.push(h('div', { class: 'row' }, h('button', { class: 'btn danger', onclick: act(async () => { d = await api('POST', '/vote/stop', {}); draw(); }, 'Голосование остановлено') }, 'Остановить сейчас')));
+      else {
+        const maps = ((S.catalog && S.catalog.maps) || []).concat((S.state && S.state.state && S.state.state.maps) || []);
+        const sel = h('select', { 'aria-label': tr('Срок голосования'), onchange: (e) => { VOTE_SEL.minutes = e.target.value; } }, ['1', '2', '3', '5', '10'].map((m) => h('option', { value: m, selected: m === VOTE_SEL.minutes }, `${m} ${tr('мин')}`)));
+        const auto = h('input', { type: 'checkbox', checked: VOTE_SEL.auto, onchange: (e) => { VOTE_SEL.auto = e.target.checked; } });
+        kids.push(h('div', { class: 'muted small', style: d.finished ? 'margin-top:12px' : '' }, `${tr('Новое голосование: выберите от 2 до 6 карт')} (${VOTE_SEL.maps.size})`),
+          h('div', { class: 'chips' }, maps.map((m) => h('button', { class: `chip${VOTE_SEL.maps.has(m.id) ? ' sel' : ''}`, onclick: (e) => { const on = VOTE_SEL.maps.has(m.id); if (!on && VOTE_SEL.maps.size >= 6) return toast(tr('Не больше 6 карт'), 'e'); on ? VOTE_SEL.maps.delete(m.id) : VOTE_SEL.maps.add(m.id); e.currentTarget.classList.toggle('sel', !on); draw(); } }, m.label || m.id))),
+          h('div', { class: 'row', style: 'margin-top:8px' }, sel, h('label', { class: 'row' }, auto, tr('Сразу сменить карту по итогам')),
+            h('button', { class: 'btn primary', disabled: VOTE_SEL.maps.size < 2, onclick: act(async () => { d = await api('POST', '/vote/start', { options: [...VOTE_SEL.maps], minutes: Number(VOTE_SEL.minutes), auto: VOTE_SEL.auto }); draw(); }, 'Голосование запущено') }, 'Начать голосование')));
+      }
+    }
+    box.replaceChildren(...kids);
+  };
+  const load = async () => { if (busy) return; try { d = await api('GET', '/vote'); VOTE_LAST = d; draw(); } catch { /* не критично */ } };
+  draw(); load(); timer = setInterval(() => { if (!box.isConnected && timer) { clearInterval(timer); timer = null; return; } load(); }, 3000);
+  return box;
+}
+
 function pageOverview() {
   const o = S.ov;
   if (!o) return h('div', { class: 'muted' }, 'Загрузка…');
@@ -48,6 +86,7 @@ function pageOverview() {
   return h('div', {},
     h('h2', {}, 'Сервер'),
     serverGlance(o.glance),
+    voteCard(),
     h('div', { class: 'grid' },
       h('div', { class: 'card' }, h('h3', {}, 'Виртуальная машина'),
         h('dl', { class: 'kv' },

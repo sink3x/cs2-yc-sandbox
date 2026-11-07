@@ -225,7 +225,7 @@ function pageInfo() {
     try { const r = await api('GET', '/public-info'); put(box, serverGlance(r)); } catch (e) { box.replaceChildren(h('div', { class: 'banner' }, e.message)); }
   };
   setTimeout(load, 0);
-  return h('div', {}, h('h2', {}, 'Сервер'), box);
+  return h('div', {}, h('h2', {}, 'Сервер'), box, voteCard());
 }
 
 /** Переключатель языка (RU / EN / DE / FR). */

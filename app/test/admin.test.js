@@ -408,3 +408,29 @@ test('Steam login: автопривязка по списку админов с�
     assert.match(av('avatars.fastly.steamstatic.com'), /^https:\/\/avatars\.fastly/); assert.match(av('avatars.cloudflare.steamstatic.com'), /cloudflare/); assert.equal(av('evil.example'), '');
   } finally { t.close(); }
 });
+
+test('vote: admin starts, players vote, winner is applied via agent /map once; players cannot start/stop', async () => {
+  let clock = 5_000_000;
+  const t = await setup({ deps: { now: () => clock } });
+  try {
+    const uf = path.join(t.dir, 'users.json'); const U = JSON.parse(fs.readFileSync(uf, 'utf8'));
+    U.users.tester = { hash: hashPassword('hunter2hunter2'), role: 'player' }; fs.writeFileSync(uf, JSON.stringify(U));
+    const admin = await t.login();
+    const ply = (await t.req('POST', '/api/login', { username: 'tester', password: 'hunter2hunter2' })).cookie;
+    assert.equal((await t.req('GET', '/api/vote', undefined, ply)).json.active, false);
+    assert.equal((await t.req('POST', '/api/vote/start', { options: ['de_dust2', 'de_mirage'], minutes: 2 }, ply, CSRF)).status, 403);
+    assert.equal((await t.req('POST', '/api/vote/start', { options: ['de_dust2'], minutes: 2 }, admin, CSRF)).status, 400);
+    const st = await t.req('POST', '/api/vote/start', { options: ['de_dust2', 'de_mirage', 'de_nuke'], minutes: 2 }, admin, CSRF);
+    assert.equal(st.status, 200); assert.equal(st.json.active, true); assert.equal(st.json.options[1].label, 'Mirage');
+    assert.equal((await t.req('POST', '/api/vote/start', { options: ['de_dust2', 'de_mirage'], minutes: 2 }, admin, CSRF)).status, 409);
+    assert.equal((await t.req('POST', '/api/vote/cast', { option: 'de_inferno' }, ply, CSRF)).status, 400);
+    assert.equal((await t.req('POST', '/api/vote/cast', { option: 'de_mirage' }, ply, CSRF)).json.myVote, 'de_mirage');
+    await t.req('POST', '/api/vote/cast', { option: 'de_mirage' }, admin, CSRF);
+    assert.equal((await t.req('POST', '/api/vote/stop', {}, ply, CSRF)).status, 403);
+    clock += 121_000;
+    const done = await t.req('GET', '/api/vote', undefined, ply);
+    assert.equal(done.json.finished, true); assert.equal(done.json.winner, 'de_mirage');
+    await t.req('GET', '/api/vote', undefined, admin);
+    assert.equal(t.calls.filter((c) => c === 'POST /map').length, 1); // карта применена ровно один раз
+  } finally { t.close(); }
+});
