@@ -74,14 +74,14 @@ const ANIMALS = {
   cow: { title: 'Корова (косплей курицы)', color: '245 245 245', scale: 3.2 },
 };
 const ACTIONS = {
+  // Спавн идёт командами плагина CS2Panel (≥0.2.0): ent_create из RCON не работает — у консоли сервера нет «прицела».
   animal: (a) => {
-    const kind = pick(a.kind ?? 'chicken', Object.keys(ANIMALS), 'kind'); const n = int(a.count ?? 1, 1, 30, 'count'); const an = ANIMALS[kind];
-    const out = ['sv_cheats "1"', ...Array(n).fill('ent_create chicken')];
-    if (an.color) out.push(`ent_fire chicken color "${an.color}"`);
-    if (an.scale) out.push(`ent_fire chicken addoutput "modelscale ${an.scale}"`);
-    return out;
+    const kind = pick(a.kind ?? 'chicken', Object.keys(ANIMALS), 'kind'); const n = int(a.count ?? 1, 1, 30, 'count');
+    const target = String(a.target || '').trim();
+    if (target && !/^(#\d{1,5}|[A-Za-z0-9_.-]{1,32})$/.test(target)) throw err('bad target');
+    return [`css_spawnanimal ${kind} ${n}${target ? ` ${target}` : ''}`];
   },
-  'animal-clear': () => ['ent_fire chicken kill'],
+  'animal-clear': () => ['css_killanimals'],
   'bot-add': (a) => {
     const team = pick(a.team ?? 'any', ['ct', 't', 'any'], 'team');
     const n = int(a.count ?? 1, 1, 10, 'count');

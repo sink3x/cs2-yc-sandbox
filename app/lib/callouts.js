@@ -60,7 +60,7 @@ const cleanName = (v) => String(v == null ? '' : v).trim();
  * Пустое название = сброс. Неизвестные места и неверные значения — ошибка, правки целиком не применяются.
  */
 function validateCustom(input) {
-  const errors = []; const out = { rename: {}, move: {}, added: {} };
+  const errors = []; const out = { rename: {}, move: {}, added: {}, side: {}, deleted: [] };
   const inp = input && typeof input === 'object' ? input : {};
   const known = (key) => { const [m, en] = String(key).split('|'); const map = DATA.maps[m]; return !!(map && map.places.some((p) => p[0] === en)); };
   const rn = inp.rename && typeof inp.rename === 'object' ? Object.entries(inp.rename) : [];
@@ -80,6 +80,16 @@ function validateCustom(input) {
       out.move[k] = [x, y];
     }
   }
+  // side — смена стороны у официального места; deleted — скрытые официальные места (их можно вернуть)
+  const sd = inp.side && typeof inp.side === 'object' ? Object.entries(inp.side) : [];
+  for (const [k, v] of sd) {
+    if (!known(k)) { errors.push(`side: unknown place ${k}`); continue; }
+    if (!['t', 'm', 'ct'].includes(v)) { errors.push(`side: bad value for ${k}`); continue; }
+    out.side[k] = v;
+  }
+  const dl = Array.isArray(inp.deleted) ? inp.deleted : [];
+  if (dl.length > 600) errors.push('too many deleted');
+  else for (const k of new Set(dl)) { if (!known(k)) errors.push(`deleted: unknown place ${k}`); else out.deleted.push(String(k)); }
   const ad = inp.added && typeof inp.added === 'object' ? Object.entries(inp.added) : [];
   for (const [m, arr] of ad) {
     if (!DATA.maps[m] || !Array.isArray(arr) || arr.length > 60) { errors.push(`added: bad map ${m}`); continue; }
@@ -94,6 +104,6 @@ function validateCustom(input) {
   return { ok: errors.length === 0, errors, custom: out };
 }
 
-const EMPTY_CUSTOM = () => ({ rename: {}, move: {}, added: {} });
+const EMPTY_CUSTOM = () => ({ rename: {}, move: {}, added: {}, side: {}, deleted: [] });
 
 module.exports = { DATA, MAP_IDS, CalloutMaps, isWebp, BASE, validateCustom, EMPTY_CUSTOM };

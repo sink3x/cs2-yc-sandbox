@@ -19,23 +19,28 @@ function pagePractice() {
 }
 
 
-// Животные: курицы (настоящие), «свиньи» и «коровы» (курицы в другом цвете и размере). Спавн — серверной командой ent_create; если сервер её не примет
-// без игрока, те же команды можно выполнить в своей консоли (кнопка «Скопировать»).
+// Животные: настоящие курицы, «свиньи» и «коровы» (курицы другого цвета и размера). Спавн — командой плагина CS2Panel
+// рядом с живым игроком (ent_create из RCON не работает: у консоли сервера нет прицела).
 const ANIMAL_DEFS = [
-  { kind: 'chicken', icon: '🐔', title: 'Курицы', note: 'Настоящая курица CS2.', cmds: ['ent_create chicken'] },
-  { kind: 'pig', icon: '🐖', title: 'Свиньи', note: 'Розовая увеличенная курица: свиней в CS2 нет.', cmds: ['ent_create chicken', 'ent_fire chicken color "255 150 175"', 'ent_fire chicken addoutput "modelscale 2.2"'] },
-  { kind: 'cow', icon: '🐄', title: 'Коровы', note: 'Белая большая курица: коров в CS2 нет.', cmds: ['ent_create chicken', 'ent_fire chicken color "245 245 245"', 'ent_fire chicken addoutput "modelscale 3.2"'] },
+  { kind: 'chicken', icon: '🐔', title: 'Курицы', note: 'Настоящая курица CS2.' },
+  { kind: 'pig', icon: '🐖', title: 'Свиньи', note: 'Розовая увеличенная курица: свиней в CS2 нет.' },
+  { kind: 'cow', icon: '🐄', title: 'Коровы', note: 'Белая большая курица: коров в CS2 нет.' },
 ];
 function animalsCard(live, redraw) {
   let cnt = 5;
+  const target = h('input', { type: 'text', placeholder: 'Рядом с кем (ник или #userid; пусто — первый живой игрок)', maxlength: 32, style: 'width:360px' });
   const cntSel = h('div', { class: 'seg' }, [1, 5, 10, 20].map((n) => h('button', { class: n === cnt ? 'on' : '', onclick: (e) => { cnt = n; [...e.currentTarget.parentNode.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); } }, `×${n}`)));
-  const spawn = (d) => act(async () => { const r = await prSend('animal', { kind: d.kind, count: cnt }); toast(`${d.title}: команды отправлены (${(r.outputs || []).length ? 'ответ сервера получен' : 'без ответа'})`, 's'); await prRead(); redraw(); });
-  const copy = (d) => async () => { const text = ['sv_cheats 1', ...Array(cnt).fill(d.cmds[0]), ...d.cmds.slice(1)].join('; '); try { await navigator.clipboard.writeText(text); toast('Скопировано: вставьте в консоль CS2 (~), смотря на пол', 's'); } catch { toast(text, 's'); } };
-  return h('div', { class: 'card' }, h('h3', {}, 'Животные'), h('div', { class: 'row' }, 'Сколько:', cntSel),
+  const spawn = (d) => act(async () => {
+    const r = await prSend('animal', { kind: d.kind, count: cnt, target: target.value.trim() });
+    const out = JSON.stringify(r.outputs || r || '');
+    if (/Unknown command|unknown command/i.test(out)) throw new Error('На сервере нет плагина CS2Panel ≥ 0.2.0: включите его на странице «Плагины» и перезапустите ВМ, когда на ней никого нет.');
+    toast(`${d.title}: запрос отправлен`, 's'); await prRead(); redraw();
+  });
+  return h('div', { class: 'card' }, h('h3', {}, 'Животные'), h('div', { class: 'row' }, 'Сколько:', cntSel), h('div', { class: 'row' }, target),
     h('div', { class: 'grid' }, ANIMAL_DEFS.map((d) => h('div', { class: 'preset' }, h('b', {}, `${d.icon} ${d.title}`), h('div', { class: 'muted small' }, d.note),
-      h('div', { class: 'row' }, h('button', { class: 'btn primary', disabled: !live, onclick: spawn(d) }, 'Заспавнить'), h('button', { class: 'btn', onclick: copy(d) }, 'Скопировать для консоли'))))),
-    h('div', { class: 'row' }, h('button', { class: 'btn danger', disabled: !live, onclick: act(async () => { await prSend('animal-clear'); toast('Всех куриц убрали', 's'); redraw(); }) }, 'Убрать всех животных')),
-    h('div', { class: 'hint' }, 'Честно: в CS2 есть только курица (ent_create chicken, нужны читы — панель включит sv_cheats сама). Свиньи и коровы — перекрашенные увеличенные курицы; цвет и размер применяются ко всем курицам сразу. Если сервер не примет спавн без игрока, нажмите «Скопировать для консоли» и вставьте команды в свою консоль, глядя на место появления.'));
+      h('div', { class: 'row' }, h('button', { class: 'btn primary', disabled: !live, onclick: spawn(d) }, 'Заспавнить'))))),
+    h('div', { class: 'row' }, h('button', { class: 'btn danger', disabled: !live, onclick: act(async () => { await prSend('animal-clear'); toast('Животных убрали', 's'); redraw(); }) }, 'Убрать всех животных')),
+    h('div', { class: 'hint' }, 'Животные появляются рядом с выбранным живым игроком: он должен быть на сервере и жив. Нужен плагин CS2Panel 0.2.0+. Честно: в CS2 есть только курица; свиньи и коровы — перекрашенные увеличенные курицы, настоящих моделей в игре нет.'));
 }
 
 function practiceView(redraw) {

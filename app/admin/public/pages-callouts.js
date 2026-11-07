@@ -17,7 +17,7 @@ const CO_CONF = {
 const coName = (data, en) => { const n = data.names[en]; return LANG === 'en' || !n ? en : (n[LANG] || en); };
 const coText = (s) => document.createTextNode(s);
 const coCan = () => S.role !== 'player'; // правки — только админам
-const coCustom = () => { const c = (CO.data && CO.data.custom) || {}; return { rename: c.rename || {}, move: c.move || {}, added: c.added || {} }; };
+const coCustom = () => { const c = (CO.data && CO.data.custom) || {}; return { rename: c.rename || {}, move: c.move || {}, added: c.added || {}, side: c.side || {}, deleted: c.deleted || [] }; };
 const coClone = (o) => JSON.parse(JSON.stringify(o));
 
 function coSvg(tag, attrs = {}, parent) {
@@ -30,9 +30,9 @@ function coSvg(tag, attrs = {}, parent) {
 /** Места карты с учётом правок: официальные (возможно переименованные/сдвинутые) + свои. key уникален среди всех карт. */
 function coPlaces(d, id) {
   const cu = coCustom();
-  const base = d.maps[id].places.map(([en, x, y, side, near, lvl]) => {
-    const key = `${id}|${en}`; const mv = cu.move[key];
-    return { key, en, x: mv ? mv[0] : x, y: mv ? mv[1] : y, side, near, lvl, custom: false, renamed: !!cu.rename[key], moved: !!mv, name: cu.rename[key] || coName(d, en) };
+  const base = d.maps[id].places.filter(([en]) => !cu.deleted.includes(`${id}|${en}`)).map(([en, x, y, side, near, lvl]) => {
+    const key = `${id}|${en}`; const mv = cu.move[key]; const sd = cu.side[key];
+    return { key, en, x: mv ? mv[0] : x, y: mv ? mv[1] : y, side: sd || side, near, lvl, custom: false, renamed: !!cu.rename[key], moved: !!mv, sided: !!sd && sd !== side, name: cu.rename[key] || coName(d, en) };
   });
   const own = (cu.added[id] || []).map((a) => ({ key: `${id}|${a.id}`, id: a.id, en: '', x: a.x, y: a.y, side: a.side, near: 'm', lvl: -1, custom: true, renamed: false, moved: false, name: a.name }));
   return base.concat(own);
@@ -145,6 +145,7 @@ function coRender(root) {
       h('div', {}, mapBox, h('div', { class: 'row' }, allBtn, addBtn, count)),
       h('div', {}, h('div', { class: 'row' }, search, h('div', { class: 'seg', role: 'group' }, sideBtns.map(([, b]) => b))),
         multi ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Высота'), h('div', { class: 'seg', role: 'group' }, lvlBtns.map(([, b]) => b))) : null, list, detail)),
+    coHidden(root, d, id, can),
     h('p', { class: 'muted co-note' }, 'Схема построена по навигационной сетке карты (это не радар Valve). Названия мест — официальные, из данных Valve; ru/de/fr — общепринятые термины сообщества. Источник данных: awpy (MIT).'));
   update();
 }
@@ -179,19 +180,27 @@ function coDetail(root, d, id, p, map) {
       else if (!nm || nm === coName(d, p.en)) delete n.rename[p.key]; else n.rename[p.key] = nm;
       await coSave(root, n, 'Сохранено');
     });
-    const reset = act(async () => { const n = next(); delete n.rename[p.key]; delete n.move[p.key]; await coSave(root, n, 'Сброшено к исходному'); });
+    const reset = act(async () => { const n = next(); delete n.rename[p.key]; delete n.move[p.key]; delete n.side[p.key]; await coSave(root, n, 'Сброшено к исходному'); });
     const del = act(async () => {
-      if (!confirm(tr('Удалить это место?'))) return;
-      const n = next(); n.added[id] = (n.added[id] || []).filter((a) => a.id !== p.id); if (!n.added[id].length) delete n.added[id];
-      CO.sel = null; await coSave(root, n, 'Место удалено');
+      if (!confirm(tr(p.custom ? 'Удалить это место?' : 'Скрыть это место? Его можно вернуть в списке скрытых мест.'))) return;
+      const n = next();
+      if (p.custom) { n.added[id] = (n.added[id] || []).filter((a) => a.id !== p.id); if (!n.added[id].length) delete n.added[id]; }
+      else { n.deleted = [...new Set([...n.deleted, p.key])]; delete n.rename[p.key]; delete n.move[p.key]; delete n.side[p.key]; } // официальное место только скрываем: его можно вернуть
+      CO.sel = null; await coSave(root, n, p.custom ? 'Место удалено' : 'Место скрыто');
     });
-    const sideSeg = !p.custom ? null : h('div', { class: 'seg', role: 'group' }, [['t', 'T'], ['m', 'Центр'], ['ct', 'CT']].map(([key, t]) => h('button', { class: p.side === key ? 'on' : '', onclick: act(async () => { const n = next(); n.added[id] = n.added[id].map((a) => (a.id === p.id ? { ...a, side: key } : a)); await coSave(root, n); }) }, t)));
+    const setSide = (key) => act(async () => {
+      const n = next();
+      if (p.custom) n.added[id] = n.added[id].map((a) => (a.id === p.id ? { ...a, side: key } : a)); else n.side[p.key] = key;
+      await coSave(root, n);
+    });
+    const sideSeg = h('div', { class: 'seg', role: 'group' }, [['t', 'T'], ['m', 'Центр'], ['ct', 'CT']].map(([key, t]) => h('button', { class: p.side === key ? 'on' : '', onclick: setSide(key) }, t)));
     return h('div', { class: 'co-edit' },
       h('div', { class: 'row' }, input, h('button', { class: 'btn primary', onclick: saveName }, 'Сохранить название')),
-      sideSeg ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Сторона'), sideSeg) : null,
+      h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Сторона'), sideSeg),
       h('div', { class: 'row' },
         h('button', { class: `btn${CO.mode === 'move' ? ' on' : ''}`, onclick: () => { CO.mode = CO.mode === 'move' ? null : 'move'; coRender(root); } }, 'Перенести метку'),
-        p.custom ? h('button', { class: 'btn danger', onclick: del }, 'Удалить место') : (p.renamed || p.moved ? h('button', { class: 'btn', onclick: reset }, 'Сбросить к исходному') : null)));
+        !p.custom && (p.renamed || p.moved || p.sided) ? h('button', { class: 'btn', onclick: reset }, 'Сбросить к исходному') : null,
+        h('button', { class: 'btn danger', onclick: del }, p.custom ? 'Удалить место' : 'Скрыть место')));
   })();
   return h('div', {},
     h('h3', {}, map.name),
@@ -202,4 +211,14 @@ function coDetail(root, d, id, p, map) {
       p.lvl >= 0 ? [h('dt', {}, 'Высота'), h('dd', {}, CO_LVL[p.lvl])] : null),
     h('div', { class: 'row' }, h('button', { class: 'btn', onclick: copy }, 'Скопировать название')),
     edit);
+}
+
+/** Скрытые официальные места карты: список с возвратом (только админам). */
+function coHidden(root, d, id, can) {
+  const cu = coCustom(); const hidden = cu.deleted.filter((k) => k.startsWith(`${id}|`));
+  if (!can || !hidden.length) return null;
+  const back = (keys) => act(async () => { const n = coClone(coCustom()); n.deleted = n.deleted.filter((k) => !keys.includes(k)); await coSave(root, n, 'Место возвращено'); });
+  return h('div', { class: 'card co-hidden' }, h('h3', {}, `${tr('Скрытые места')} (${hidden.length})`),
+    h('div', { class: 'chips' }, hidden.map((k) => { const en = k.slice(id.length + 1); return h('button', { class: 'chip', title: tr('Вернуть'), onclick: back([k]) }, `↩ ${coName(d, en)}`); })),
+    h('div', { class: 'row' }, h('button', { class: 'btn', onclick: back(hidden) }, 'Вернуть все')));
 }

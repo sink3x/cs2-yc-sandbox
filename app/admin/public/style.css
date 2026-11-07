@@ -517,3 +517,8 @@ nav button.mob-more { display: none; }
 .snd-trim-row input[type=number] { width: 92px; }
 .snd-fade { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 @media (max-width: 780px) { .snd-row { flex-wrap: wrap; } .snd-row .snd-name { flex: 1 1 100%; } .snd-row .btn { flex: 1 1 auto; } .snd-wave { height: 140px; } }
+
+/* Параметры: элементы управления прижаты к правому краю, без пустоты справа */
+.cv > :nth-child(even) { justify-self: end; }
+.cv .seg { max-width: 100%; }
+@media (max-width: 780px) { .cv > :nth-child(even) { justify-self: start; } .cv .seg { flex-wrap: wrap; } }

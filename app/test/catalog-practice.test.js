@@ -62,14 +62,14 @@ test('buildCatalog: картинка «голого» оружия из base_wea
   assert.equal(buildCatalog(SRC).weapons[0].img, undefined);
 });
 
-test('practice: animals — chicken spawn, pig/cow cosplay, validation', () => {
-  const c = P.buildCommands('animal', { kind: 'chicken', count: 3 });
-  assert.deepEqual(c, ['sv_cheats "1"', 'ent_create chicken', 'ent_create chicken', 'ent_create chicken']);
-  const pig = P.buildCommands('animal', { kind: 'pig', count: 1 });
-  assert.ok(pig.includes('ent_fire chicken color "255 150 175"')); assert.ok(pig.some((x) => /modelscale 2\.2/.test(x)));
-  assert.deepEqual(P.buildCommands('animal-clear'), ['ent_fire chicken kill']);
+test('practice: animals — команды плагина, цель и валидация', () => {
+  assert.deepEqual(P.buildCommands('animal', { kind: 'chicken', count: 3 }), ['css_spawnanimal chicken 3']);
+  assert.deepEqual(P.buildCommands('animal', { kind: 'pig', count: 1, target: 'sink333' }), ['css_spawnanimal pig 1 sink333']);
+  assert.deepEqual(P.buildCommands('animal-clear'), ['css_killanimals']);
   assert.throws(() => P.buildCommands('animal', { kind: 'dragon' })); assert.throws(() => P.buildCommands('animal', { kind: 'cow', count: 99 }));
+  assert.throws(() => P.buildCommands('animal', { kind: 'cow', count: 1, target: 'a; quit' }));
 });
+
 
 test('presets: curated workshop map catalog has valid ids and known categories', () => {
   const { WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');

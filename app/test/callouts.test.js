@@ -91,7 +91,10 @@ test('правки callouts: переименование, перенос и с�
     { added: { de_mirage: [{ id: 'c1', name: 'x', x: 1, y: 1 }, { id: 'c1', name: 'y', x: 2, y: 2 }] } }, { added: { de_nope: [] } },
     { added: { de_mirage: Array.from({ length: 61 }, (_x, i) => ({ id: `c${i}`, name: 'x', x: 1, y: 1 })) } },
   ]) assert.ok(!validateCustom(bad).ok, JSON.stringify(bad).slice(0, 80));
-  assert.deepEqual(validateCustom(null).custom, { rename: {}, move: {}, added: {} });
+  assert.deepEqual(validateCustom(null).custom, { rename: {}, move: {}, added: {}, side: {}, deleted: [] });
+  const sd = validateCustom({ side: { 'de_mirage|Jungle': 'ct' }, deleted: ['de_mirage|Shop', 'de_mirage|Shop'] });
+  assert.ok(sd.ok, sd.errors.join()); assert.deepEqual(sd.custom.side, { 'de_mirage|Jungle': 'ct' }); assert.deepEqual(sd.custom.deleted, ['de_mirage|Shop']);
+  assert.ok(!validateCustom({ side: { 'de_mirage|Jungle': 'zz' } }).ok); assert.ok(!validateCustom({ deleted: ['de_mirage|Nope'] }).ok);
 });
 
 test('сервер: правки callouts сохраняются админом, отдаются в /api/callouts, мусор отклоняется', async () => {

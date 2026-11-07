@@ -448,7 +448,7 @@ function createApp(deps = {}) {
     ['PUT', '/api/callouts/custom', async ({ body, user, ip }) => { // правки названий и мест: только админы (в PLAYER_OK маршрута нет)
       const v = validateCalloutCustom(body); if (!v.ok) throw Object.assign(new Error(v.errors.slice(0, 3).join('; ')), { status: 400 });
       writeJsonAtomic(calloutsCustomFile, v.custom);
-      audit(user, ip, 'callouts.custom', { renamed: Object.keys(v.custom.rename).length, moved: Object.keys(v.custom.move).length, added: Object.values(v.custom.added).reduce((n, l) => n + l.length, 0) });
+      audit(user, ip, 'callouts.custom', { renamed: Object.keys(v.custom.rename).length, moved: Object.keys(v.custom.move).length, added: Object.values(v.custom.added).reduce((n, l) => n + l.length, 0), deleted: v.custom.deleted.length });
       return { custom: v.custom };
     }],
     ['GET', '/api/skins/catalog', async () => ({ ...(await catalogCache.get()), custom: readJson(customSkinsFile, []) })],
