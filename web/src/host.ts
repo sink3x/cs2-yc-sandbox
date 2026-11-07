@@ -9,6 +9,14 @@ export interface Host {
   toast(message: string, kind?: 's' | 'e'): void;
   /** Язык интерфейса для дат. */
   locale: string;
+  /** Код языка интерфейса: ru | en | de | fr. */
+  lang: string;
+  /** Роль текущего пользователя: admin | player. */
+  role: string;
+  /** Параметр маршрута (например, карта на странице callouts). */
+  slug: string;
+  /** Переход на страницу старого интерфейса. */
+  go(page: string, slug?: string): void;
 }
 
 let current: Host | null = null;

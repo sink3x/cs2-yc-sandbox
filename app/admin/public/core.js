@@ -60,7 +60,7 @@ function steamAv(id, size = 28, fallback = '?', onName) {
 // ---- острова Preact + TypeScript: страница-обёртка подгружает /ui/main.js и монтирует компонент (см. web/) ----------
 function island(name) {
   const el = h('div');
-  import('/ui/main.js').then((m) => m.mount(name, el, { tr, ruErr, api, toast: (msg, kind) => toast(msg, kind), locale: typeof LOCALE === 'string' ? LOCALE : 'ru' }))
+  import('/ui/main.js').then((m) => m.mount(name, el, { tr, ruErr, api, toast: (msg, kind) => toast(msg, kind), locale: typeof LOCALE === 'string' ? LOCALE : 'ru', lang: typeof LANG === 'string' ? LANG : 'ru', role: S.role, slug: (S.route && S.route.slug) || '', go: (page, slug) => go(page, slug) }))
     .catch((e) => el.replaceChildren(h('div', { class: 'banner' }, `${tr('Не удалось загрузить часть интерфейса')}: ${e.message}`)));
   return el;
 }
