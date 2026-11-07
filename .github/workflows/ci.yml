@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Тесты и сборка бандла
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Тесты
+        working-directory: app
+        run: node --test
+      - name: Сборка бандла (проверка лимита метаданных)
+        run: scripts/pack.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle
+          path: build/*.tgz
+          retention-days: 14
+
+  terraform:
+    name: OpenTofu validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+      - name: Бандлы нужны модулю (filebase64)
+        run: scripts/pack.sh
+      - name: fmt
+        working-directory: terraform
+        run: tofu fmt -check -recursive -diff
+      - name: init без бэкенда
+        working-directory: terraform
+        run: tofu init -backend=false -input=false
+      - name: validate
+        working-directory: terraform
+        run: tofu validate

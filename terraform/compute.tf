@@ -21,13 +21,13 @@ locals {
   panel_host = var.panel_domain != "" ? var.panel_domain : "${replace(yandex_vpc_address.admin.external_ipv4_address[0].address, ".", "-")}.sslip.io"
 
   cs2_config = {
-    hostname   = var.server_hostname
-    admins     = var.cs2_admins
-    bucket     = yandex_storage_bucket.backups.bucket
-    endpoint   = "https://storage.yandexcloud.net"
-    region     = "ru-central1"
-    agentPort  = 8081
-    agentBind  = var.cs2_private_ip
+    hostname  = var.server_hostname
+    admins    = var.cs2_admins
+    bucket    = yandex_storage_bucket.backups.bucket
+    endpoint  = "https://storage.yandexcloud.net"
+    region    = "ru-central1"
+    agentPort = 8081
+    agentBind = var.cs2_private_ip
   }
 }
 
