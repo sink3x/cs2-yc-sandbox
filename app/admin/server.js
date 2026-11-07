@@ -81,7 +81,8 @@ function createApp(deps = {}) {
   const auditFile = deps.auditFile || path.join(VAR, 'audit.log');
   const compute = deps.compute || new YandexCompute({ instanceId: config.instanceId });
   const now = deps.now || (() => Date.now());
-  const sessions = deps.sessions || new Sessions({ now });
+  const sessions = deps.sessions || new Sessions({ now, file: deps.sessionsFile || path.join(deps.usersFile ? path.dirname(deps.usersFile) : VAR, 'sessions.json') });
+  const sessionCookie = (sid, maxAge, secure) => `cs2sid=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
   const limiter = deps.limiter || new FailureLimiter({ now });
 
   const stateCacheFile = deps.stateCacheFile || path.join(VAR, 'state-cache.json');
@@ -770,7 +771,7 @@ function createApp(deps = {}) {
         keys.forEach((k) => limiter.reset(k));
         const sid = sessions.create(name); touchLogin(name);
         audit(name, ip, 'login.ok');
-        return send(res, 200, { user: name }, { ...SEC_HEADERS, 'Set-Cookie': `cs2sid=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}${secure ? '; Secure' : ''}` });
+        return send(res, 200, { user: name }, { ...SEC_HEADERS, 'Set-Cookie': sessionCookie(sid, Math.floor(sessions.ttlMs / 1000), secure) });
       }
       if (url.pathname === '/api/brand' && req.method === 'GET') { const b = loadBrand(); return send(res, 200, { name: b.name, tagline: b.tagline, logo: b.logoType ? `/brand-logo?v=${b.v}` : '' }, SEC_HEADERS); }
       if (url.pathname === '/api/auth/steam' && req.method === 'GET') {
@@ -812,7 +813,7 @@ function createApp(deps = {}) {
           }
           await refreshPersona(users, name2, steamid);
           const sid2 = sessions.create(name2, { via: 'steam' }); touchLogin(name2); audit(name2, ip, 'login.steam');
-          return send(res, 302, '', { ...SEC_HEADERS, Location: '/', 'Set-Cookie': `cs2sid=${sid2}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${12 * 3600}${secure ? '; Secure' : ''}` });
+          return send(res, 302, '', { ...SEC_HEADERS, Location: '/', 'Set-Cookie': sessionCookie(sid2, Math.floor(sessions.ttlMs / 1000), secure) });
         } catch (e) { limiter.fail(`ip:${ip}`); log('steam login:', e.message); return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=error' }); }
       }
       const sid = parseCookies(req.headers.cookie).cs2sid;
@@ -822,6 +823,7 @@ function createApp(deps = {}) {
         return send(res, 200, { ok: true }, { ...SEC_HEADERS, 'Set-Cookie': 'cs2sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0' });
       }
       if (!session) return send(res, 401, { error: 'not logged in' }, SEC_HEADERS);
+      if (sessions.takeRenewed(session)) res.setHeader('Set-Cookie', sessionCookie(sid, sessions.maxAgeSec(session), secure)); // скользящее продление: cookie получает новый срок
       if (req.method !== 'GET' && req.headers['x-requested-with'] !== 'cs2panel') return send(res, 403, { error: 'missing CSRF header' }, SEC_HEADERS);
       const m = matchRoute(routes, req.method, url.pathname);
       if (!m) return send(res, 404, { error: 'not found' }, SEC_HEADERS);
