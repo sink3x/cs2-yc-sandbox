@@ -125,6 +125,18 @@ function createApp(deps = {}) {
     const byName = (v) => (v ? free.find((n) => n.toLowerCase() === String(v).toLowerCase()) : null);
     return byName(adm.name) || byName(persona) || (free.length === 1 ? free[0] : null);
   }
+  /** Steam-игрок (аккаунт p<steamid>, без пароля) вливается в панельный аккаунт: сетапы и профиль переходят, аккаунт игрока удаляется. */
+  function absorbPlayer(users, from, into) {
+    const p = users[from]; const t = users[into];
+    if (!p || !t || from === into || p.role !== 'player' || p.hash) return false;
+    for (const k of ['persona', 'avatar', 'email']) if (p[k] && !t[k]) t[k] = p[k];
+    if (Array.isArray(p.links) && p.links.length && !(t.links || []).length) t.links = p.links;
+    const items = loadSetups(); let ch = false;
+    for (const x of items) if (x.owner === from) { x.owner = into; ch = true; }
+    if (ch) saveSetups(items);
+    delete users[from]; sessions.destroyUser(from);
+    return true;
+  }
   const profileOf = (name) => { const u = loadUsers()[name] || {}; return { user: name, displayName: u.persona || name, avatar: u.avatar || '', email: u.email || '', steamid: u.steamid || '', links: u.links || [], faceitKey: !!readJson(faceitFile, {}).key }; };
   async function faceitFor(steamid) {
     const hit = faceitCache.get(steamid);
@@ -514,8 +526,10 @@ function createApp(deps = {}) {
       const target = String(body.user || ''); const t = users[target];
       if (!t || t.role === 'player' || !t.hash || !verifyPassword(String(body.password || ''), t.hash)) { limiter.fail(`ip:${ip}`); audit(user, ip, 'link-account.fail', target.slice(0, 32)); throw Object.assign(new Error('wrong account or password'), { status: 403 }); }
       if (t.steamid) throw Object.assign(new Error('this account is already linked to a Steam ID'), { status: 409 });
-      t.steamid = me.steamid; if (me.persona) { t.persona = me.persona; t.avatar = me.avatar || ''; }
-      delete users[user]; saveUsers(users); sessions.destroyUser(user); audit(target, ip, 'steam.link-account', me.steamid);
+      const sid64 = me.steamid; const pers = me.persona; const av = me.avatar || '';
+      absorbPlayer(users, user, target);
+      t.steamid = sid64; if (pers) { t.persona = pers; t.avatar = av; }
+      saveUsers(users); audit(target, ip, 'steam.link-account', me.steamid);
       return { ok: true, user: target };
     }],
     ['POST', '/api/password', async ({ body, user, ip, sid }) => {
@@ -609,12 +623,19 @@ function createApp(deps = {}) {
             const t = linkTokens.get(link); linkTokens.delete(link);
             if (!t || t.exp < now() || !users[t.user]) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=expired' });
             const other = Object.keys(users).find((n) => users[n].steamid === steamid && n !== t.user);
-            if (other) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=taken' });
+            // t.user уже подтверждён паролем: если этот Steam раньше входил как «игрок» — объединяем, а не отказываем
+            if (other && !absorbPlayer(users, other, t.user)) return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=taken' });
             users[t.user].steamid = steamid; saveUsers(users); audit(t.user, ip, 'steam.link', steamid); await refreshPersona(users, t.user, steamid);
             return send(res, 302, '', { ...SEC_HEADERS, Location: '/?steam=linked' });
           }
           let name2 = Object.keys(users).find((n) => users[n].steamid === steamid);
           let persona = null;
+          if (name2 && users[name2].role === 'player') {
+            // Steam уже входил как игрок, а потом SteamID внесли в админы сервера / есть свободный админ-аккаунт → объединяем
+            const pr = await account.steamProfile(steamid, httpGet); persona = pr && pr.name;
+            const t = autoLinkTarget(users, steamid, persona);
+            if (t && absorbPlayer(users, name2, t)) { users[t].steamid = steamid; saveUsers(users); audit(t, ip, 'steam.autolink', steamid); name2 = t; }
+          }
           if (!name2) { const pr = await account.steamProfile(steamid, httpGet); persona = pr && pr.name; const t = autoLinkTarget(users, steamid, persona); if (t) { users[t].steamid = steamid; saveUsers(users); name2 = t; audit(t, ip, 'steam.autolink', steamid); } }
           if (!name2) {
             const players = Object.keys(users).filter((n) => users[n].role === 'player').length;

@@ -257,6 +257,16 @@ test('profile: e-mail, links, password policy and Steam link/login via OpenID', 
     assert.ok(posts.every((f) => /check_authentication/.test(f)));
     // отвязка
     assert.equal((await t.req('POST', '/api/profile/steam-unlink', {}, c, CSRF)).json.steamid, '');
+    // этот Steam раньше входил как «игрок» (аккаунт p<steamid>) → привязка из админ-аккаунта объединяет, а не отвечает «taken»
+    assert.equal((await t.req('PUT', '/api/settings', { playerLogin: true }, c, CSRF)).json.playerLogin, true);
+    const asPlayer = await raw('/api/auth/steam/callback?' + assertion(rt0, STEAM, 'b1'));
+    assert.equal((await t.req('GET', '/api/me', undefined, asPlayer.cookie)).json.user, `p${STEAM}`);
+    const tok2 = (await t.req('POST', '/api/profile/steam-link', {}, c, CSRF)).json.url.split('link=')[1];
+    const rt2 = `${host}/api/auth/steam/callback?link=${tok2}`;
+    assert.match((await raw(`/api/auth/steam/callback?link=${tok2}&` + assertion(rt2, STEAM, 'b2'))).loc, /steam=linked/);
+    assert.equal((await t.req('GET', '/api/me', undefined, asPlayer.cookie)).status, 401);
+    const merged = await raw('/api/auth/steam/callback?' + assertion(rt0, STEAM, 'b3'));
+    assert.equal((await t.req('GET', '/api/me', undefined, merged.cookie)).json.user, 'alice');
   } finally { t.close(); }
 });
 
