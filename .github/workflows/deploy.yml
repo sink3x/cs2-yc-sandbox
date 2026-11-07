@@ -16,10 +16,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: deploy # в Object Storage нет блокировок состояния: два apply одновременно запускать нельзя
-  cancel-in-progress: false
-
 env:
   FOLDER_ID: b1gxxxxxxxxxxxxxxxxx
   PANEL_INSTANCE_ID: fhmxxxxxxxxxxxxxxxxx
@@ -33,6 +29,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
+    # в Object Storage нет блокировок состояния: два apply одновременно запускать нельзя.
+    # Группа на уровне задачи: пропущенные (skipped) запуски не занимают очередь и не вытесняют настоящий деплой.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_KEY }}
