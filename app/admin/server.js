@@ -13,6 +13,7 @@ const { YandexCompute } = require('../lib/yc');
 const { CatalogCache, StickerCache, queryStickers } = require('../lib/catalog');
 const { DATA: CALLOUTS, CalloutMaps, validateCustom: validateCalloutCustom, EMPTY_CUSTOM: EMPTY_CALLOUT_CUSTOM } = require('../lib/callouts');
 const practice = require('../lib/practice');
+const online = require('../lib/online');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
 const people = require('../lib/people');
@@ -466,6 +467,13 @@ function createApp(deps = {}) {
       const names = [...practice.READABLE];
       const { outputs } = await agent('POST', '/rcon-batch', { commands: names }, 30000);
       return { values: Object.fromEntries(names.map((n, i) => [n, practice.parseCvarOutput(n, outputs[i])]).filter(([, v]) => v !== null)) };
+    }],
+    ['POST', '/api/online/act', async ({ body, user, ip }) => {
+      const cmd = online.playerCommand(String(body.action || ''), body.id, body);
+      audit(user, ip, 'online.act', { action: body.action, id: Number(body.id) });
+      const out = (await agent('POST', '/rcon', { command: cmd }, 15000)).output;
+      online.checkOutput(String(body.action), out);
+      return { ok: true, output: String(out || '').trim().slice(0, 300) };
     }],
     ['POST', '/api/vm/start', async ({ user, ip }) => startVm(user, ip)],
     ['POST', '/api/vm/stop', async ({ user, ip }) => stopVm(user, ip)],

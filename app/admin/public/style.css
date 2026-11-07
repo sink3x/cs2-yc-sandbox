@@ -538,3 +538,10 @@ nav button.mob-more { display: none; }
 .geo:empty{display:none}
 .geo-f{font-size:15px;line-height:1}
 .geo-c{font-variant-numeric:tabular-nums;letter-spacing:.03em}
+
+/* игроки онлайн */
+.onl-row .adm-grid{grid-template-columns:minmax(160px,1.2fr) minmax(110px,.7fr) auto;align-items:center}
+.onl-act{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+@media (max-width:780px){.onl-row .adm-grid{grid-template-columns:1fr}.onl-act{justify-content:flex-start}}
+.card > .adm-list{margin-top:10px}
+@media (max-width:780px){.onl-row .onl-act{display:flex;flex-wrap:wrap}.onl-row .onl-act .btn{width:auto;flex:1 1 28%}}

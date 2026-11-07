@@ -4,7 +4,7 @@
 const PAGES = {
   overview: ['Сервер', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка', pagePractice], callouts: ['Callouts', pageCallouts], sounds: ['Звуки', pageSounds], maps: ['Карты и режимы', pageMaps],
   console: ['Консоль', pageConsole], settings: ['Настройки', pageSettings], plugins: ['Плагины и флаги', pagePlugins], admins: ['Админы', pageAdmins],
-  users: ['Пользователи', pageUsers], setups: ['Сетапы', pageSetups], look: ['Оформление', pageLook], stats: ['Статистика', pageStats], profile: ['Профиль', pageProfile], info: ['Сервер', pageInfo], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
+  users: ['Пользователи', pageUsers], online: ['Игроки онлайн', pageOnline], setups: ['Сетапы', pageSetups], look: ['Оформление', pageLook], stats: ['Статистика', pageStats], profile: ['Профиль', pageProfile], info: ['Сервер', pageInfo], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
 };
 // Главная страница — «Сервер»: у админа это обзор сервера, у игрока — информация о сервере. Логотип и вход ведут только сюда.
 const homePage = () => (S.role === 'player' ? 'info' : 'overview');
@@ -16,7 +16,7 @@ const routable = (k) => visiblePages().some(([p]) => p === k) || (S.role === 'pl
 const NAV_GROUPS = [
   ['Управление', ['overview', 'info', 'maps', 'settings', 'console']],
   ['Игра', ['practice', 'callouts', 'skins', 'plugins', 'setups', 'sounds']],
-  ['Игроки', ['stats', 'users', 'admins']],
+  ['Игроки', ['online', 'stats', 'users', 'admins']],
   ['Панель и аккаунт', ['profile', 'look', 'panel', 'backups', 'help']],
 ];
 // Мобильная нижняя панель: 4 основных пункта + «Ещё» (остальное — в листе меню, как в мобильных приложениях).
@@ -68,6 +68,7 @@ const ICONS = {
   look: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
   backups: '<rect x="3" y="3" width="18" height="5" rx="1.5"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><line x1="10" y1="12" x2="14" y2="12"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9.2a3 3 0 0 1 5.8 1c0 2-2.9 2.6-2.9 4.3"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/>',
+  online: '<circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4M3.5 3.5a12 12 0 0 0 0 17M20.5 3.5a12 12 0 0 1 0 17"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17.5 14c2.5 0 4 2 4 5"/>',
   setups: '<rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="13" y2="16"/>',
   profile: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>',

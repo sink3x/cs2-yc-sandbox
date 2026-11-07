@@ -178,6 +178,7 @@ async function loadOverview() {
   }
   renderBar();
   if (S.page === 'overview' || S.page === 'info') renderPage();
+  else if (S.page === 'online' && S.onOverview) S.onOverview();
 }
 
 /** steam://connect/ip:порт[/пароль] — открывает Steam и заходит на сервер. */
