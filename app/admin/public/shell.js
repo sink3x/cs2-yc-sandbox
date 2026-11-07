@@ -2,12 +2,30 @@
 // Каркас: навигация, быстрый поиск (Ctrl+K), загрузка данных и запуск панели.
 
 const PAGES = {
-  overview: ['Обзор', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка и приколы', pagePractice], maps: ['Карты и режимы', pageMaps],
+  overview: ['Обзор', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка', pagePractice], maps: ['Карты и режимы', pageMaps],
   console: ['Консоль', pageConsole], settings: ['Настройки', pageSettings], plugins: ['Плагины и флаги', pagePlugins], admins: ['Админы', pageAdmins],
   look: ['Оформление', pageLook], stats: ['Статистика', pageStats], profile: ['Профиль', pageProfile], info: ['Сервер', pageInfo], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
 };
 const PLAYER_PAGES = new Set(['skins', 'stats', 'info', 'profile', 'look']);
 const visiblePages = () => Object.entries(PAGES).filter(([k]) => (S.role === 'player' ? PLAYER_PAGES.has(k) : k !== 'info'));
+// Разделы боковой панели: заголовок → страницы (порядок важен).
+const NAV_GROUPS = [
+  ['Сервер', ['overview', 'info', 'maps', 'settings', 'console']],
+  ['Игра', ['practice', 'skins', 'plugins']],
+  ['Игроки', ['stats', 'admins']],
+  ['Панель и аккаунт', ['profile', 'look', 'panel', 'backups', 'help']],
+];
+function navSections(vis) {
+  const by = new Map(vis); const used = new Set(); const out = [];
+  for (const [cap, keys] of NAV_GROUPS) {
+    const items = keys.filter((k) => by.has(k)); if (!items.length) continue;
+    items.forEach((k) => used.add(k));
+    out.push(h('div', { class: 'nav-cap', role: 'presentation' }, h('span', { class: 'lbl' }, cap)));
+    items.forEach((k) => out.push(navBtn(k, by.get(k)[0], { class: S.page === k ? 'on' : '', onclick: () => go(k) })));
+  }
+  for (const [k, v] of vis) if (!used.has(k)) out.push(navBtn(k, v[0], { class: S.page === k ? 'on' : '', onclick: () => go(k) }));
+  return out;
+}
 const needsState = new Set(['maps', 'settings', 'plugins', 'admins']);
 const mainEl = h('main');
 const navEl = h('nav');
@@ -75,7 +93,7 @@ async function fetchState() {
 async function renderPage() {
   navEl.replaceChildren(
     h('h1', { onclick: () => { document.dispatchEvent(new Event('logo-click')); const home = S.role === 'player' ? 'skins' : 'overview'; if (S.page !== home) go(home); }, role: 'link', tabindex: '0', style: 'cursor:pointer', 'data-tip': BRAND.name }, brandMark(22) || svgIcon('logo', 20), h('span', { class: 'lbl' }, BRAND.name)),
-    ...visiblePages().map(([k, [t]]) => navBtn(k, t, { class: S.page === k ? 'on' : '', onclick: () => go(k) })),
+    ...navSections(visiblePages()),
     h('div', { class: 'sp' }),
     navBtn('search', 'Поиск (Ctrl+K)', { onclick: openPalette }),
     navBtn('logout', `Выйти (${S.display || S.user})`, { onclick: async () => { await api('POST', '/logout'); showLogin(); } }),

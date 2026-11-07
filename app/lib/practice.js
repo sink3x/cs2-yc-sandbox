@@ -66,7 +66,22 @@ const READABLE = new Set([...TOGGLES.map((t) => t.cvar), ...Object.keys(FUN_DEFA
 
 const q = (k, v) => `${k} "${v}"`;
 
+// Животные. В CS2 штатно есть только курица (ent_create chicken). «Свинья» и «корова» — та же курица, перекрашенная и увеличенная:
+// настоящих моделей свиней/коров в игре нет (нужен плагин + Workshop-модель).
+const ANIMALS = {
+  chicken: { title: 'Курица', color: null, scale: null },
+  pig: { title: 'Свинья (косплей курицы)', color: '255 150 175', scale: 2.2 },
+  cow: { title: 'Корова (косплей курицы)', color: '245 245 245', scale: 3.2 },
+};
 const ACTIONS = {
+  animal: (a) => {
+    const kind = pick(a.kind ?? 'chicken', Object.keys(ANIMALS), 'kind'); const n = int(a.count ?? 1, 1, 30, 'count'); const an = ANIMALS[kind];
+    const out = ['sv_cheats "1"', ...Array(n).fill('ent_create chicken')];
+    if (an.color) out.push(`ent_fire chicken color "${an.color}"`);
+    if (an.scale) out.push(`ent_fire chicken addoutput "modelscale ${an.scale}"`);
+    return out;
+  },
+  'animal-clear': () => ['ent_fire chicken kill'],
   'bot-add': (a) => {
     const team = pick(a.team ?? 'any', ['ct', 't', 'any'], 'team');
     const n = int(a.count ?? 1, 1, 10, 'count');
@@ -120,4 +135,4 @@ function parseCvarOutput(name, text) {
   return m ? m[1] : null;
 }
 
-module.exports = { TOGGLES, FUN_PRESETS, FUN_DEFAULTS, READABLE, ACTIONS, buildCommands, parseCvarOutput, CVAR_NAME };
+module.exports = { ANIMALS, TOGGLES, FUN_PRESETS, FUN_DEFAULTS, READABLE, ACTIONS, buildCommands, parseCvarOutput, CVAR_NAME };

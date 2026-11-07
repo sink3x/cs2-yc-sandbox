@@ -18,6 +18,26 @@ function pagePractice() {
   return root;
 }
 
+
+// Животные: курицы (настоящие), «свиньи» и «коровы» (курицы в другом цвете и размере). Спавн — серверной командой ent_create; если сервер её не примет
+// без игрока, те же команды можно выполнить в своей консоли (кнопка «Скопировать»).
+const ANIMAL_DEFS = [
+  { kind: 'chicken', icon: '🐔', title: 'Курицы', note: 'Настоящая курица CS2.', cmds: ['ent_create chicken'] },
+  { kind: 'pig', icon: '🐖', title: 'Свиньи', note: 'Розовая увеличенная курица: свиней в CS2 нет.', cmds: ['ent_create chicken', 'ent_fire chicken color "255 150 175"', 'ent_fire chicken addoutput "modelscale 2.2"'] },
+  { kind: 'cow', icon: '🐄', title: 'Коровы', note: 'Белая большая курица: коров в CS2 нет.', cmds: ['ent_create chicken', 'ent_fire chicken color "245 245 245"', 'ent_fire chicken addoutput "modelscale 3.2"'] },
+];
+function animalsCard(live, redraw) {
+  let cnt = 5;
+  const cntSel = h('div', { class: 'seg' }, [1, 5, 10, 20].map((n) => h('button', { class: n === cnt ? 'on' : '', onclick: (e) => { cnt = n; [...e.currentTarget.parentNode.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); } }, `×${n}`)));
+  const spawn = (d) => act(async () => { const r = await prSend('animal', { kind: d.kind, count: cnt }); toast(`${d.title}: команды отправлены (${(r.outputs || []).length ? 'ответ сервера получен' : 'без ответа'})`, 's'); await prRead(); redraw(); });
+  const copy = (d) => async () => { const text = ['sv_cheats 1', ...Array(cnt).fill(d.cmds[0]), ...d.cmds.slice(1)].join('; '); try { await navigator.clipboard.writeText(text); toast('Скопировано: вставьте в консоль CS2 (~), смотря на пол', 's'); } catch { toast(text, 's'); } };
+  return h('div', { class: 'card' }, h('h3', {}, 'Животные'), h('div', { class: 'row' }, 'Сколько:', cntSel),
+    h('div', { class: 'grid' }, ANIMAL_DEFS.map((d) => h('div', { class: 'preset' }, h('b', {}, `${d.icon} ${d.title}`), h('div', { class: 'muted small' }, d.note),
+      h('div', { class: 'row' }, h('button', { class: 'btn primary', disabled: !live, onclick: spawn(d) }, 'Заспавнить'), h('button', { class: 'btn', onclick: copy(d) }, 'Скопировать для консоли'))))),
+    h('div', { class: 'row' }, h('button', { class: 'btn danger', disabled: !live, onclick: act(async () => { await prSend('animal-clear'); toast('Всех куриц убрали', 's'); redraw(); }) }, 'Убрать всех животных')),
+    h('div', { class: 'hint' }, 'Честно: в CS2 есть только курица (ent_create chicken, нужны читы — панель включит sv_cheats сама). Свиньи и коровы — перекрашенные увеличенные курицы; цвет и размер применяются ко всем курицам сразу. Если сервер не примет спавн без игрока, нажмите «Скопировать для консоли» и вставьте команды в свою консоль, глядя на место появления.'));
+}
+
 function practiceView(redraw) {
   const live = serverUp(); const up = S.ov && S.ov.server && S.ov.server.live;
   const set = (pairs) => act(async () => { await prSend('cvars', { pairs }); await prRead(); redraw(); });
@@ -26,9 +46,9 @@ function practiceView(redraw) {
   // ---- переключатели
   const control = (t) => {
     const v = val(t.cvar);
-    if (t.type === 'bool') { const cb = h('input', { type: 'checkbox', checked: v === '1', disabled: !live }); cb.addEventListener('change', () => set({ [t.cvar]: cb.checked ? '1' : '0' })()); return h('label', { class: 'switch' }, cb, v === undefined ? '…' : v === '1' ? 'вкл' : 'выкл'); }
+    if (t.type === 'bool') { const cb = h('input', { type: 'checkbox', checked: v === '1', disabled: !live }); cb.addEventListener('change', () => set({ [t.cvar]: cb.checked ? '1' : '0' })()); return h('label', { class: 'switch' }, cb, v === undefined ? h('span', { class: 'muted small' }, live ? 'не считано' : 'сервер выкл.') : v === '1' ? 'вкл' : 'выкл'); }
     if (t.type === 'enum') return h('div', { class: 'seg' }, t.options.map((o) => h('button', { class: v === o ? 'on' : '', disabled: !live, onclick: set({ [t.cvar]: o }) }, o)));
-    const num = h('span', { class: 'small muted', style: 'width:46px;display:inline-block' }, v ?? '…');
+    const num = h('span', { class: 'small muted cv-num' }, v ?? (live ? 'не считано' : 'сервер выкл.'));
     const r = h('input', { type: 'range', min: t.min, max: t.max, step: t.step, value: v ?? t.min, disabled: !live });
     r.addEventListener('input', () => { num.textContent = r.value; }); r.addEventListener('change', () => set({ [t.cvar]: r.value })());
     return h('div', { class: 'row', style: 'margin:0' }, r, num);
@@ -56,7 +76,7 @@ function practiceView(redraw) {
   const funCard = (f) => h('button', { class: 'btn preset', disabled: !live, onclick: act(async () => { await prSend('fun', { id: f.id }); toast(`${f.title}: включено (до смены карты или сброса)`, 's'); await prRead(); redraw(); }) }, h('b', {}, `${f.title}${f.secret ? ' (секрет)' : ''}`), h('span', { class: 'muted small' }, f.note + (f.cheats ? ' Включает sv_cheats.' : '')));
 
   const sayIn = h('input', { type: 'text', placeholder: 'Сообщение всем игрокам в чат', style: 'width:340px', maxlength: 120 });
-  return h('div', {}, h('h2', {}, 'Тренировка, боты и приколы'),
+  return h('div', {}, h('h2', {}, 'Тренировка'),
     !live ? h('div', { class: 'banner' }, 'Сервер CS2 не запущен: управление ботами и cvar заработает после старта. Режим тренировки можно включить и без него (он применится при запуске).') : null,
     h('div', { class: 'card' }, h('h3', {}, 'Режим'), h('div', { class: 'row' },
       h('button', { class: 'btn primary', onclick: act(async () => { if (!confirm('Включить тренировочный режим? Текущие cvar будут заменены пресетом.')) return; await api('POST', '/preset', { preset: 'practice', restart: false }); if (live) await api('POST', '/apply-live'); S.state = null; toast('Тренировка включена. В игре: .prac, .bot, .nade…', 's'); await prRead(); redraw(); }) }, 'Включить тренировку'),
@@ -75,6 +95,7 @@ function practiceView(redraw) {
       h('div', { class: 'muted small' }, 'Люди за CT, зомби — боты T с ножами, быстрый респавн. Это имитация на штатных cvar без плагина; настоящий зомби-мод (заражение, классы) требует отдельного плагина — пока не ставлю, чтобы не ломать совместимость.'),
       h('div', { class: 'row' }, 'Зомби:', zRange, zNum), h('div', { class: 'row' }, zSeg),
       h('div', { class: 'row' }, h('button', { class: 'btn primary', disabled: !live, onclick: zStart }, '▶ Начать осаду'), h('button', { class: 'btn', disabled: !live, onclick: zStop }, '■ Закончить'))),
+    animalsCard(live, redraw),
     h('div', { class: 'card' }, h('h3', {}, 'Приколы'), h('div', { class: 'grid' }, funs.map(funCard)),
       h('div', { class: 'row' }, h('button', { class: 'btn danger', disabled: !live, onclick: act(async () => { await prSend('fun', { id: 'reset' }); toast('Всё вернул к стандарту (для 100% сброса смените карту)', 's'); await prRead(); redraw(); }) }, 'Сбросить все приколы')),
       h('div', { class: 'hint' }, 'Приколы действуют, пока вы не сбросите их или не смените карту; в постоянные настройки они не пишутся.' + (secretsOn() ? '' : ' Говорят, есть и секретные режимы…'))),

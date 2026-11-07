@@ -19,7 +19,7 @@ function builtinLinks(steamid, faceitUrl) {
 }
 
 // Оценка показателя FACEIT: 'good' (зелёный) / 'bad' (красный) / 'mid' (нейтральный). Пороги — ориентиры для среднего уровня FACEIT.
-const TONES = { winRate: [54, 47], kd: [1.12, 0.95], hs: [48, 35], kr: [0.74, 0.62], streak: [3, 0] };
+const TONES = { winRate: [54, 47], kd: [1.12, 0.95], hs: [48, 35], kr: [0.74, 0.62], streak: [3, 0], adr: [80, 65], rating: [1.1, 0.95] };
 function tone(metric, v) {
   const n = Number(v); const t = TONES[metric];
   if (v == null || v === '' || !Number.isFinite(n) || n === 0 && metric !== 'streak' || !t) return 'mid';
@@ -27,6 +27,61 @@ function tone(metric, v) {
   return n >= t[0] ? 'good' : n < t[1] ? 'bad' : 'mid';
 }
 const recentTone = (rec) => { const w = rec.filter((x) => x === '1').length; const r = rec.length ? w / rec.length : 0.5; return r >= 0.6 ? 'good' : r <= 0.4 ? 'bad' : 'mid'; };
+
+// Значок уровня FACEIT как на сайте: тёмный круг, цветное кольцо из 10 сегментов (закрашены до уровня) и номер.
+const FACEIT_LV_COLOR = ['#5b5b5b', '#eeeeee', '#1ce400', '#1ce400', '#ffc800', '#ffc800', '#ffc800', '#ffc800', '#ff6309', '#ff6309', '#fe1f00'];
+function faceitLevelBadge(n, size = 44) {
+  const lv = Math.max(0, Math.min(10, Number(n) || 0)); const col = FACEIT_LV_COLOR[lv];
+  const NS = 'http://www.w3.org/2000/svg'; const el = (tag, a = {}, p) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); if (p) p.appendChild(e); return e; };
+  const svg = el('svg', { viewBox: '0 0 48 48', width: size, height: size, class: 'fc-lvl', role: 'img', 'aria-label': `FACEIT level ${lv}` });
+  el('circle', { cx: 24, cy: 24, r: 22, fill: '#1f1f22' }, svg);
+  const R = 20; const gap = 0.16; const seg = (Math.PI * 2) / 10;
+  for (let i = 0; i < 10; i++) {
+    const a0 = -Math.PI / 2 + i * seg + gap / 2; const a1 = -Math.PI / 2 + (i + 1) * seg - gap / 2;
+    const p = (a) => `${(24 + R * Math.cos(a)).toFixed(2)} ${(24 + R * Math.sin(a)).toFixed(2)}`;
+    el('path', { d: `M ${p(a0)} A ${R} ${R} 0 0 1 ${p(a1)}`, fill: 'none', stroke: i < lv ? col : '#3a3a3f', 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
+  }
+  const t = el('text', { x: 24, y: 24, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: col, 'font-size': lv === 10 ? 17 : 20, 'font-weight': 800, 'font-family': 'system-ui, sans-serif' }, svg); t.textContent = String(lv || '–');
+  return svg;
+}
+
+
+const FC_LEVEL_MIN = [0, 100, 501, 751, 901, 1051, 1201, 1351, 1531, 1751, 2001];
+// Блок «ELO и уровень»: значок, прогресс до следующего уровня и запас до вылета.
+function faceitEloBlock(r) {
+  const lv = r.level || 0; const elo = r.elo || 0; if (!lv) return null;
+  const lo = FC_LEVEL_MIN[lv]; const hi = lv < 10 ? FC_LEVEL_MIN[lv + 1] : null; const pct = hi ? Math.max(0, Math.min(100, Math.round(((elo - lo) / (hi - lo)) * 100))) : 100;
+  const col = FACEIT_LV_COLOR[lv];
+  return h('div', { class: 'fc-elo' },
+    h('div', { class: 'fc-bar', style: `--c:${col}` }, h('i', { style: `width:${pct}%` })),
+    h('div', { class: 'fc-bar-lbl small muted' }, h('span', {}, lv > 1 ? `${lo} (ур. ${lv})` : `ур. ${lv}`), h('b', {}, `${elo} ELO`), h('span', {}, hi ? `${hi} (ур. ${lv + 1})` : 'макс. уровень')),
+    h('div', { class: 'small muted' }, hi ? `До уровня ${lv + 1}: ${Math.max(0, hi - elo)} ELO` : 'Вы на максимальном уровне', lv > 1 ? ` · запас до вылета: ${Math.max(0, elo - lo)} ELO` : ''));
+}
+// Свои расчёты по последним матчам: плитки, динамика K/D, таблица матчей.
+function faceitDetails(r) {
+  const c = r.calc; if (!c) return null;
+  const T = (label, v, metric, sub) => h('div', { class: `stat ${metric ? 'tone-' + tone(metric, v) : ''}` }, h('b', {}, v == null ? '—' : String(v)), h('small', {}, label), sub ? h('small', { class: 'sub' }, sub) : null);
+  const delta = (a, b) => (a == null || b == null ? null : `${a >= b ? '▲' : '▼'} ${Math.abs(a - b).toFixed(2)} к прошлым`);
+  const tiles = [
+    T(`Рейтинг (HLTV 1.0), ${c.n} матчей`, c.rating, 'rating', c.rating10 != null ? `последние 10: ${c.rating10}` : null),
+    T('ADR (урон за раунд)', c.adr, 'adr', c.adr10 != null ? `последние 10: ${c.adr10}` : null),
+    T('K/D', c.kd, 'kd', delta(c.kd10, c.kdPrev) ? `10 посл.: ${c.kd10} ${delta(c.kd10, c.kdPrev)}` : null),
+    T('Убийств / смертей', `${c.kills} / ${c.deaths}`, null, `ассистов ${c.assists}, MVP ${c.mvps}`),
+    T('Побед, %', c.winRate, 'winRate', c.winRate10 != null ? `10 посл.: ${c.winRate10}%` : null),
+    T('Хедшоты, %', c.hs, 'hs', c.hsPrev != null ? `10 посл.: ${c.hs10}%` : null),
+    T('Стабильность (разброс K/D)', c.consistency, null, c.consistency <= 0.3 ? 'очень стабильно' : c.consistency >= 0.45 ? 'сильные скачки' : 'нормально'),
+    T('Мультикиллы за матч', c.multiPerMatch, null, c.bestKills ? `рекорд: ${c.bestKills.kills} убийств (${c.bestKills.map})` : null),
+  ];
+  const ms = r.matches || [];
+  const maxKd = Math.max(1.5, ...ms.map((m) => m.kd));
+  const spark = ms.length ? h('div', { class: 'fc-spark', role: 'img', 'aria-label': 'K/D по последним матчам' }, ms.slice().reverse().map((m) => h('i', { class: m.win ? 'w' : 'l', style: `height:${Math.max(6, Math.round((m.kd / maxKd) * 100))}%`, title: `${m.map} ${m.score} · ${m.kills}/${m.deaths} · K/D ${m.kd}` }))) : null;
+  return h('div', { class: 'fc-details' }, h('h4', {}, 'Подробная статистика (по последним матчам)'), h('div', { class: 'statgrid' }, tiles),
+    ms.length ? h('div', {}, h('h4', {}, 'K/D по матчам (старые → новые)'), spark, h('div', { class: 'small muted' }, 'Высота столбца — K/D матча; зелёный — победа, красный — поражение.')) : null,
+    ms.length ? h('div', {}, h('h4', {}, 'Последние матчи'), h('table', {}, h('thead', {}, h('tr', {}, ['Карта', 'Итог', 'Счёт', 'У/С/А', 'K/D', 'HS %', 'ADR', 'Рейтинг'].map((x) => h('th', {}, x)))),
+      h('tbody', {}, ms.slice(0, 15).map((m) => h('tr', {}, h('td', {}, m.map.replace(/^de_/, '')), h('td', { class: m.win ? 'tone-good' : 'tone-bad' }, m.win ? 'Победа' : 'Поражение'), h('td', {}, m.score || '—'), h('td', {}, `${m.kills}/${m.deaths}/${m.assists}`),
+        h('td', { class: `tone-${tone('kd', m.kd)}` }, String(m.kd)), h('td', { class: `tone-${tone('hs', m.hs)}` }, String(m.hs || '—')), h('td', { class: `tone-${tone('adr', m.adr)}` }, m.adr == null ? '—' : String(m.adr)), h('td', { class: `tone-${tone('rating', m.rating)}` }, m.rating == null ? '—' : String(m.rating))))))) : null,
+    h('div', { class: 'small muted' }, 'Рейтинг и оценки считаются панелью из данных FACEIT по формуле HLTV 1.0 — это ориентир, а не официальная цифра.'));
+}
 
 function faceitRadars(r) {
   const st = r.stats; const rec = st.recent || []; const form = rec.length ? rec.filter((x) => x === '1').length / rec.length : null;
@@ -46,14 +101,16 @@ function faceitRadars(r) {
 function faceitCard(P) {
   const idIn = h('input', { type: 'text', value: store.get('faceitId', '') || P.steamid || '', placeholder: 'SteamID64 (17 цифр)', style: 'width:220px' });
   const out = h('div', { class: 'faceit-out' });
-  const level = (n) => h('span', { class: 'lvl', style: `--lv:${n}` }, String(n));
+  const level = (n) => faceitLevelBadge(n, 52);
   const show = (r) => {
     if (!r.found) { out.replaceChildren(h('div', { class: 'muted' }, 'Игрок с таким SteamID не найден на FACEIT (CS2).')); return; }
     const st = r.stats;
     out.replaceChildren(...[h('div', { class: 'faceit-head' }, level(r.level || 0), h('div', {}, h('b', {}, r.nickname || '—'), h('div', { class: 'muted small' }, `${r.region || ''} ${r.country ? '· ' + String(r.country).toUpperCase() : ''}`)),
       h('div', { class: 'faceit-elo' }, h('b', {}, String(r.elo || 0)), h('small', {}, 'ELO'))),
     st ? h('div', { class: 'statgrid' }, [['Матчей', st.matches, null], ['Побед, %', st.winRate, 'winRate'], ['K/D', st.kd, 'kd'], ['HS, %', st.hs, 'hs'], ['K/R', st.kr, 'kr'], ['Серия побед', st.streak, 'streak'], ['Рекорд серии', st.longestStreak, null]].map(([k, v, m]) => h('div', { class: `stat ${m ? 'tone-' + tone(m, v) : ''}` }, h('b', {}, v == null ? '—' : String(v)), h('small', {}, k)))) : h('div', { class: 'muted small' }, 'Статистика матчей недоступна.'),
+    faceitEloBlock(r),
     st ? faceitRadars(r) : null,
+    faceitDetails(r),
     st && st.recent && st.recent.length ? h('div', { class: `row recent tone-${recentTone(st.recent)}` }, h('span', { class: 'muted small' }, 'Последние матчи'), h('b', { class: 'recent-sum' }, `${st.recent.filter((x) => x === '1').length} из ${st.recent.length}`), h('span', { class: 'form' }, st.recent.map((x) => h('i', { class: x === '1' ? 'w' : 'l', title: x === '1' ? 'W' : 'L' }, x === '1' ? 'W' : 'L')))) : null,
     r.maps && r.maps.length ? h('div', {}, h('h4', {}, 'Карты FACEIT'), h('table', {}, h('thead', {}, h('tr', {}, ['Карта', 'Матчей', 'Побед, %', 'K/D', 'HS, %'].map((x) => h('th', {}, x)))),
       h('tbody', {}, r.maps.map((m) => h('tr', {}, h('td', {}, m.map), h('td', {}, String(m.matches)), h('td', { class: `tone-${tone('winRate', m.winRate)}` }, String(m.winRate || '—')), h('td', { class: `tone-${tone('kd', m.kd)}` }, String(m.kd || '—')), h('td', { class: `tone-${tone('hs', m.hs)}` }, String(m.hs || '—'))))))) : null,

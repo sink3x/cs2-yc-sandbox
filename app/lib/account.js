@@ -87,6 +87,12 @@ async function faceitLookup(steamid, apiKey, get) {
         return { map: String(x.label || ''), matches: num(t.Matches), winRate: num(t['Win Rate %']), kd: num(t['Average K/D Ratio']), hs: num(t['Average Headshots %']), kr: num(t['Average K/R Ratio']) };
       }).filter((m) => m.map && m.matches > 0).sort((a, b) => b.matches - a.matches);
     } catch { /* без статистики */ }
+    try {
+      const mr = await get(`https://open.faceit.com/data/v4/players/${encodeURIComponent(p.player_id)}/games/cs2/stats?limit=50`, H);
+      const items = mr.status === 200 && mr.json && Array.isArray(mr.json.items) ? mr.json.items : [];
+      const calc = faceitCalc(items, out);
+      if (calc) { out.matches = calc.matches; out.calc = calc.summary; }
+    } catch { /* история матчей недоступна */ }
   }
   out.analysis = analyzeFaceit(out);
   return out;
@@ -95,6 +101,58 @@ async function faceitLookup(steamid, apiKey, get) {
 const num = (v) => { const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return Number.isFinite(n) ? n : 0; };
 // Границы ELO по уровням FACEIT (CS2): нижняя граница уровня.
 const LEVEL_MIN = [0, 100, 501, 751, 901, 1051, 1201, 1351, 1531, 1751, 2001];
+
+
+const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+const sd = (a) => { if (a.length < 2) return 0; const m = mean(a); return Math.sqrt(mean(a.map((x) => (x - m) ** 2))); };
+const r2 = (x) => Math.round(x * 100) / 100;
+/**
+ * Собственные расчёты по последним матчам (до 50): форма, стабильность, ADR/K/D/HS по периодам, рейтинг по формуле HLTV 1.0,
+ * мультикиллы, ожидаемое число матчей до следующего уровня. Поля API FACEIT читаем осторожно: каких-то может не быть.
+ */
+function faceitCalc(items, f) {
+  const ms = [];
+  for (const it of items || []) {
+    const s = (it && it.stats) || {}; const k = num(s.Kills); const d = num(s.Deaths);
+    if (!k && !d) continue;
+    const sc = String(s['Final Score'] || s.Score || '').match(/(\d+)\D+(\d+)/); const rounds = num(s.Rounds) || (sc ? Number(sc[1]) + Number(sc[2]) : 0);
+    const mk = { k2: num(s['Double Kills']), k3: num(s['Triple Kills']), k4: num(s['Quadro Kills']), k5: num(s['Penta Kills']) };
+    const kpr = rounds ? k / rounds : num(s['K/R Ratio']); const dpr = rounds ? d / rounds : 0;
+    let rating = null;
+    if (rounds) { const multi = (k - (mk.k2 * 2 + mk.k3 * 3 + mk.k4 * 4 + mk.k5 * 5)) + mk.k2 * 4 + mk.k3 * 9 + mk.k4 * 16 + mk.k5 * 25;
+      rating = r2(((kpr / 0.679) + 0.7 * (((rounds - d) / rounds) / 0.317) + (multi / rounds) / 1.277) / 2.7); }
+    ms.push({ map: String(s.Map || ''), win: String(s.Result) === '1', kills: k, deaths: d, assists: num(s.Assists), kd: d ? r2(k / d) : k, kr: r2(kpr), hs: num(s['Headshots %']), adr: num(s.ADR) || null,
+      mvps: num(s.MVPs), rounds, rating, multi: mk.k3 + mk.k4 * 2 + mk.k5 * 3, score: String(s['Final Score'] || s.Score || ''), date: it.stats && it.stats['Match Finished At'] ? Number(it.stats['Match Finished At']) : 0 });
+  }
+  if (!ms.length) return null;
+  const avg = (arr, key) => r2(mean(arr.map((m) => m[key]).filter((v) => v != null)));
+  const first = ms.slice(0, 10); const prev = ms.slice(10, 30);
+  const wr = (arr) => (arr.length ? Math.round((arr.filter((m) => m.win).length / arr.length) * 100) : null);
+  const rated = ms.filter((m) => m.rating != null);
+  const withAdr = ms.filter((m) => m.adr);
+  // стабильность: коэффициент вариации K/D (меньше — стабильнее)
+  const kds = ms.map((m) => m.kd); const cv = mean(kds) ? sd(kds) / mean(kds) : 0;
+  const bestK = ms.slice().sort((a, b) => b.kills - a.kills)[0]; const worstD = ms.slice().sort((a, b) => a.kd - b.kd)[0];
+  const perMap = {};
+  for (const m of ms) if (m.map) { const e = (perMap[m.map] ||= { map: m.map, n: 0, w: 0, k: 0, d: 0 }); e.n++; e.w += m.win ? 1 : 0; e.k += m.kills; e.d += m.deaths; }
+  const summary = {
+    n: ms.length, winRate: wr(ms), winRate10: wr(first), winRatePrev: wr(prev),
+    kd: avg(ms, 'kd'), kd10: avg(first, 'kd'), kdPrev: prev.length ? avg(prev, 'kd') : null,
+    kr: avg(ms, 'kr'), kills: avg(ms, 'kills'), deaths: avg(ms, 'deaths'), assists: avg(ms, 'assists'), mvps: avg(ms, 'mvps'),
+    hs: avg(ms, 'hs'), hs10: avg(first, 'hs'), hsPrev: prev.length ? avg(prev, 'hs') : null,
+    adr: withAdr.length ? avg(withAdr, 'adr') : null, adr10: withAdr.length ? r2(mean(withAdr.slice(0, 10).map((m) => m.adr))) : null,
+    rating: rated.length ? avg(rated, 'rating') : null, rating10: rated.length ? r2(mean(rated.slice(0, 10).map((m) => m.rating))) : null,
+    multiPerMatch: avg(ms, 'multi'), consistency: r2(cv), bestKills: bestK ? { kills: bestK.kills, map: bestK.map } : null, worstKd: worstD ? { kd: worstD.kd, map: worstD.map } : null,
+    maps: Object.values(perMap).map((e) => ({ map: e.map, n: e.n, winRate: Math.round((e.w / e.n) * 100), kd: e.d ? r2(e.k / e.d) : e.k })).sort((a, b) => b.n - a.n),
+  };
+  // ожидаемый прирост ELO за матч ≈ (2·WR−1)·25 (±25 за матч — типичное значение), оценка числа матчей до нового уровня
+  if (f && f.level && f.level < 10 && f.elo && summary.winRate != null) {
+    const need = LEVEL_MIN[f.level + 1] - f.elo; const perMatch = (2 * (summary.winRate / 100) - 1) * 25;
+    summary.eloPerMatch = r2(perMatch); summary.eloNeed = need; summary.matchesToNext = need > 0 && perMatch > 0.5 ? Math.ceil(need / perMatch) : null;
+  }
+  if (f && f.level > 1 && f.elo) summary.eloToDrop = f.elo - LEVEL_MIN[f.level];
+  return { summary, matches: ms.slice(0, 20).map((m) => ({ map: m.map, win: m.win, kills: m.kills, deaths: m.deaths, assists: m.assists, kd: m.kd, hs: m.hs, adr: m.adr, rating: m.rating, score: m.score, date: m.date })) };
+}
 
 /**
  * Разбор статистики FACEIT в список подсказок {kind: good|warn|info, code, p}. Тексты — на клиенте (4 языка).
@@ -123,6 +181,21 @@ function analyzeFaceit(f) {
     if (worst.map !== best.map && worst.winRate < 45) add('warn', 'worst_map', { map: worst.map, wr: worst.winRate, n: worst.matches });
     const weakKd = maps.filter((m) => m.kd && m.kd < 0.85 && m !== worst)[0]; if (weakKd) add('warn', 'map_kd_low', { map: weakKd.map, kd: weakKd.kd });
   }
+  const c = f.calc;
+  if (c && c.n >= 10) {
+    if (c.kdPrev != null && c.kd10 - c.kdPrev >= 0.15) add('good', 'trend_up', { a: c.kd10, b: c.kdPrev });
+    else if (c.kdPrev != null && c.kdPrev - c.kd10 >= 0.15) add('warn', 'trend_down', { a: c.kd10, b: c.kdPrev });
+    if (c.adr != null) { if (c.adr < 65) add('warn', 'adr_low', { adr: c.adr }); else if (c.adr >= 85) add('good', 'adr_high', { adr: c.adr }); }
+    if (c.rating != null) { if (c.rating < 0.95) add('warn', 'rating_low', { r: c.rating }); else if (c.rating >= 1.15) add('good', 'rating_high', { r: c.rating }); }
+    if (c.consistency >= 0.45) add('info', 'inconsistent', { cv: c.consistency });
+    else if (c.consistency <= 0.3) add('good', 'consistent', { cv: c.consistency });
+    if (c.deaths > c.kills && c.assists >= c.kills * 0.4) add('info', 'support_role', { a: c.assists });
+    if (c.hsPrev != null && c.hsPrev - c.hs10 >= 6) add('warn', 'hs_drop', { a: c.hs10, b: c.hsPrev });
+    if (c.matchesToNext) add('info', 'eta_level', { n: c.matchesToNext, per: c.eloPerMatch, level: f.level + 1 });
+    else if (c.eloPerMatch != null && c.eloPerMatch <= 0 && f.level < 10) add('warn', 'elo_stall', { per: c.eloPerMatch });
+    if (c.eloToDrop != null && c.eloToDrop <= 40 && f.level > 1) add('warn', 'drop_risk', { n: c.eloToDrop, level: f.level });
+    if (c.maps && c.maps.length >= 3) { const w = c.maps.filter((m) => m.n >= 4).sort((a, b) => a.kd - b.kd)[0]; if (w && w.kd < 0.85) add('warn', 'recent_map_weak', { map: w.map, kd: w.kd, n: w.n }); }
+  }
   const few = (f.maps || []).filter((m) => m.matches > 0 && m.matches < 5).map((m) => m.map); if (few.length) add('info', 'few_map_games', { maps: few.slice(0, 4).join(', ') });
   return tips;
 }
@@ -141,4 +214,4 @@ async function steamProfile(steamid, get) {
 }
 
 module.exports = {
-  parseSteamProfileXml, steamProfile, analyzeFaceit, steamAuthUrl, verifySteamAssertion, validateEmail, validateLinks, faceitLookup, STEAM_OP, IDENT_SELECT };
+  parseSteamProfileXml, steamProfile, analyzeFaceit, faceitCalc, steamAuthUrl, verifySteamAssertion, validateEmail, validateLinks, faceitLookup, STEAM_OP, IDENT_SELECT };

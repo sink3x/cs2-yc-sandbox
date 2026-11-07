@@ -264,6 +264,7 @@ test('faceit: key stored privately, lookup by SteamID64 returns ELO and stats', 
   const calls = [];
   const t = await setup({ deps: { httpGet: async (url, headers) => {
     calls.push([url, headers.Authorization]);
+    if (/games\/cs2\/stats/.test(url)) return { status: 200, json: { items: Array.from({ length: 14 }, (_x, i) => ({ stats: { Kills: String(14 + (i % 6)), Deaths: String(15 + (i % 4)), Assists: '3', 'Headshots %': '45', Result: i % 2 ? '1' : '0', Map: 'de_mirage', 'Final Score': '13 / 10', ADR: '72' } })) } };
     if (/players\?game=cs2/.test(url)) return { status: 200, json: { player_id: 'pid1', nickname: 'sink333', country: 'ru', faceit_url: 'https://www.faceit.com/{lang}/players/sink333', games: { cs2: { skill_level: 7, faceit_elo: 1400, region: 'EU' } } } };
     return { status: 200, json: { lifetime: { Matches: '120', 'Win Rate %': '55', 'Average K/D Ratio': '1.12', 'Average Headshots %': '48', 'Current Win Streak': '2', 'Longest Win Streak': '7', 'Recent Results': ['0', '0', '0', '1', '0'] },
       segments: [{ label: 'de_mirage', type: 'Map', mode: '5v5', stats: { Matches: '40', 'Win Rate %': '62', 'Average K/D Ratio': '1.3', 'Average Headshots %': '50' } }, { label: 'de_nuke', type: 'Map', mode: '5v5', stats: { Matches: '15', 'Win Rate %': '33', 'Average K/D Ratio': '0.8', 'Average Headshots %': '40' } }, { label: 'de_vertigo', type: 'Map', mode: '5v5', stats: { Matches: '2', 'Win Rate %': '50' } }] } };
@@ -282,7 +283,8 @@ test('faceit: key stored privately, lookup by SteamID64 returns ELO and stats', 
     const codes = r.json.analysis.map((x) => x.code);
     for (const c of ['next_level', 'slump', 'best_map', 'worst_map', 'few_map_games']) assert.ok(codes.includes(c), c);
     assert.equal(r.json.analysis.find((x) => x.code === 'worst_map').p.map, 'de_nuke');
-    await t.req('GET', '/api/faceit/76561198000000100', undefined, c); assert.equal(calls.length, 2); // кэш
+    await t.req('GET', '/api/faceit/76561198000000100', undefined, c); assert.equal(calls.length, 3); // кэш: профиль, статистика, история матчей
+    assert.equal(r.json.matches.length, 14); assert.equal(r.json.calc.n, 14); assert.ok(r.json.calc.rating > 0 && r.json.calc.adr === 72);
     assert.equal((await t.req('GET', '/api/faceit/abc', undefined, c)).status, 400);
   } finally { t.close(); }
 });
