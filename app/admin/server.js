@@ -66,7 +66,7 @@ function validateCustomSkins(input) {
   });
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
-const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
+const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'POST /api/vm/request-start', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
@@ -99,7 +99,7 @@ function createApp(deps = {}) {
   const catalogCache = deps.catalogCache || new CatalogCache({ file: path.join(VAR, 'skin-catalog.json') });
   const keysBlocked = (ip) => limiter.blocked(`ip:${ip}`);
   const loadUsers = () => (readJson(usersFile, { users: {} }).users) || {};
-  const loadSettings = () => ({ ...DEFAULT_SETTINGS, ...readJson(settingsFile, {}), playerLogin: readJson(settingsFile, {}).playerLogin !== false });
+  const loadSettings = () => ({ ...DEFAULT_SETTINGS, ...readJson(settingsFile, {}), playerLogin: readJson(settingsFile, {}).playerLogin !== false, playerStart: readJson(settingsFile, {}).playerStart === true });
   // ---- профиль: почта, Steam, Faceit ----------------------------------------------------------
   const brandFile = deps.brandFile || path.join(VAR, 'brand.json');
   const brandLogoFile = deps.brandLogoFile || path.join(VAR, 'brand-logo.bin');
@@ -326,6 +326,7 @@ function createApp(deps = {}) {
     return d;
   }
 
+  const playerStarts = new Map(); const PLAYER_STARTS_PER_DAY = 3; const PLAYER_STARTS_TOTAL = 8;
   async function startVm(user, ip) {
     const d = await vmDescribe();
     if (d.status === 'RUNNING' || d.status === 'STARTING') return { status: d.status };
@@ -446,7 +447,7 @@ function createApp(deps = {}) {
   const RAW_ROUTES = new Set(['POST /api/sound-files']);
   const routes = [
     ['GET', '/api/me', async ({ user }) => { const all = usersWithSlugs(); await backfillAvatars(all, [user]); const u = all[user] || {}; return { user, slug: u.slug || '', displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
-    ['GET', '/api/public-info', async () => { const o = await overview(); return { ...o.glance, map: o.glance.map.id, mapInfo: o.glance.map }; }],
+    ['GET', '/api/public-info', async () => { const o = await overview(); return { ...o.glance, map: o.glance.map.id, mapInfo: o.glance.map, playerStart: o.settings.playerStart === true }; }],
     ['GET', '/api/overview', async () => overview()],
     ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS, workshop: WORKSHOP_MAPS, workshopCats: WORKSHOP_CATS })],
     ['GET', '/api/user-presets', async () => ({ presets: readJson(userPresetsFile, {}) })],
@@ -494,6 +495,18 @@ function createApp(deps = {}) {
       const out = (await agent('POST', '/rcon', { command: cmd }, 15000)).output;
       online.checkOutput(String(body.action), out);
       return { ok: true, output: String(out || '').trim().slice(0, 300) };
+    }],
+    // Игрок запускает сервер сам (если админ разрешил): не чаще PLAYER_STARTS_PER_DAY раз в сутки на аккаунт и PLAYER_STARTS_TOTAL на всех — защита от лишних расходов; простой всё равно выключит ВМ.
+    ['POST', '/api/vm/request-start', async ({ user, ip }) => {
+      if (!loadSettings().playerStart) throw Object.assign(new Error('player start is disabled'), { status: 403 });
+      const day = 24 * 3600_000; const t = now();
+      for (const [k, v] of playerStarts) { const keep = v.filter((x) => t - x < day); if (keep.length) playerStarts.set(k, keep); else playerStarts.delete(k); }
+      const mine = playerStarts.get(user) || []; const total = [...playerStarts.values()].reduce((a, v) => a + v.length, 0);
+      const d = await vmDescribe();
+      if (d.status === 'RUNNING' || d.status === 'STARTING') return { status: d.status };
+      if (mine.length >= PLAYER_STARTS_PER_DAY || total >= PLAYER_STARTS_TOTAL) throw Object.assign(new Error('too many starts today: ask an admin'), { status: 429 });
+      const r = await startVm(user, ip); playerStarts.set(user, [...mine, t]); audit(user, ip, 'vm.start.player');
+      return r;
     }],
     ['POST', '/api/vm/start', async ({ user, ip }) => startVm(user, ip)],
     ['POST', '/api/vm/stop', async ({ user, ip }) => stopVm(user, ip)],
@@ -556,9 +569,10 @@ function createApp(deps = {}) {
         next[k] = n;
       }
       if (body.playerLogin !== undefined) next.playerLogin = !!body.playerLogin;
+      if (body.playerStart !== undefined) next.playerStart = !!body.playerStart;
       writeJsonAtomic(settingsFile, next);
       audit(user, ip, 'settings', next);
-      return { ...next, playerLogin: next.playerLogin !== false };
+      return { ...next, playerLogin: next.playerLogin !== false, playerStart: next.playerStart === true };
     }],
     ['PUT', '/api/brand', async ({ body, user, ip }) => {
       const b = readJson(brandFile, {});

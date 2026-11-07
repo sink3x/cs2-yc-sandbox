@@ -83,6 +83,7 @@ function island(name) {
 
 // Перевод типовых ошибок сервера на русский.
 const ERR_RU = [
+  [/^player start is disabled/i, 'Админ не разрешил игрокам запускать сервер'], [/^too many starts today/i, 'На сегодня запусков больше нет — попросите админа'],
   [/^wrong account or password/i, 'Неверный логин или пароль админ-аккаунта'], [/^only for a Steam player session/i, 'Только для игрока, вошедшего через Steam'], [/^this account is already linked to a Steam ID/i, 'Этот аккаунт уже привязан к другому Steam'],
   [/^only \.wav, \.mp3 and \.ogg files/i, 'Только файлы .wav, .mp3 и .ogg'], [/^content does not look like/i, 'Содержимое не похоже на звуковой файл этого типа'],
   [/^file too large/i, 'Файл больше 8 МБ'], [/^too many files/i, 'Слишком много файлов (максимум 100)'], [/^storage limit reached/i, 'Хранилище звуков заполнено (100 МБ)'],
@@ -167,7 +168,7 @@ async function loadOverview() {
   if (S.role === 'player') {
     try {
       const r = await api('GET', '/public-info'); const ip = r.connect ? r.connect.replace(/^connect\s+/, '').split(':')[0] : null;
-      S.ov = { vm: { status: r.status, publicIp: ip }, server: r.map ? { live: { map: r.map, humans: r.humans, maxPlayers: r.maxPlayers } } : null };
+      S.ov = { vm: { status: r.status, publicIp: ip }, server: r.map ? { live: { map: r.map, humans: r.humans, maxPlayers: r.maxPlayers } } : null, playerStart: r.playerStart === true };
     } catch (e) { if (e.message !== 'Нужен вход') S.ov = { error: e.message }; }
     renderBar(); if (S.page === 'overview' || S.page === 'info') renderPage(); return;
   }
@@ -191,7 +192,7 @@ function connectUrl() {
 function connectButton(big) {
   const o = S.ov || {}; const st = o.vm && o.vm.status; const cls = `connect${big ? ' big' : ''}`;
   if (!o.vm) return h('span', { class: `${cls} off` }, 'Подключиться');
-  if (st === 'STOPPED' && S.role === 'player') return h('span', { class: `${cls} off` }, 'Сервер выключен');
+  if (st === 'STOPPED' && S.role === 'player') return o.playerStart ? h('button', { class: cls, title: 'Запуск занимает 2–4 минуты; без игроков сервер выключится сам', onclick: act(async () => { await api('POST', '/vm/request-start'); await loadOverview(); }, 'Запускаю сервер. Когда он будет готов, здесь появится «Подключиться»') }, 'Запустить сервер') : h('span', { class: `${cls} off` }, 'Сервер выключен');
   if (st === 'STOPPED') return h('button', { class: cls, onclick: act(async () => { await api('POST', '/vm/start'); await loadOverview(); }, 'Запускаю сервер. Когда он будет готов, здесь появится «Подключиться»') }, 'Запустить сервер');
   if (!serverUp()) return h('span', { class: `${cls} off`, title: 'Дождитесь запуска CS2' }, st === 'STOPPING' || o.busy ? 'Выключается…' : 'Сервер запускается…');
   return h('a', { class: cls, href: connectUrl(), title: 'Откроет Steam и подключит к серверу', onclick: () => toast('Открываю Steam… Если ничего не произошло — скопируйте строку connect и вставьте в консоль CS2 (Steam должен быть запущен).') }, 'Подключиться');

@@ -434,3 +434,28 @@ test('vote: admin starts, players vote, winner is applied via agent /map once; p
     assert.equal(t.calls.filter((c) => c === 'POST /map').length, 1); // карта применена ровно один раз
   } finally { t.close(); }
 });
+
+test('player start: off by default; when allowed, limited per player per day; already running is a no-op', async () => {
+  let clock = 9_000_000;
+  const t = await setup({ vmStatus: 'STOPPED', deps: { now: () => clock } });
+  try {
+    const uf = path.join(t.dir, 'users.json'); const U = JSON.parse(fs.readFileSync(uf, 'utf8'));
+    U.users.tester = { hash: hashPassword('hunter2hunter2'), role: 'player' }; fs.writeFileSync(uf, JSON.stringify(U));
+    const admin = await t.login();
+    const ply = (await t.req('POST', '/api/login', { username: 'tester', password: 'hunter2hunter2' })).cookie;
+    assert.equal((await t.req('GET', '/api/public-info', undefined, ply)).json.playerStart, false);
+    assert.equal((await t.req('POST', '/api/vm/request-start', {}, ply, CSRF)).status, 403); // по умолчанию выключено
+    assert.equal((await t.req('POST', '/api/vm/start', {}, ply, CSRF)).status, 403); // прямой админский запуск игроку по-прежнему закрыт
+    assert.equal((await t.req('PUT', '/api/settings', { playerStart: true }, admin, CSRF)).json.playerStart, true);
+    assert.equal((await t.req('GET', '/api/public-info', undefined, ply)).json.playerStart, true);
+    const r = await t.req('POST', '/api/vm/request-start', {}, ply, CSRF);
+    assert.equal(r.status, 200); assert.equal(r.json.status, 'STARTING'); assert.equal(t.calls.filter((c) => c === 'yc.start').length, 1);
+    assert.equal((await t.req('POST', '/api/vm/request-start', {}, ply, CSRF)).json.status, 'STARTING'); // уже запускается: без нового запуска
+    assert.equal(t.calls.filter((c) => c === 'yc.start').length, 1);
+    for (let i = 0; i < 2; i += 1) { t.vm.status = 'STOPPED'; clock += 60_000; assert.equal((await t.req('POST', '/api/vm/request-start', {}, ply, CSRF)).status, 200); }
+    t.vm.status = 'STOPPED'; clock += 60_000;
+    assert.equal((await t.req('POST', '/api/vm/request-start', {}, ply, CSRF)).status, 429); // 4-й запуск за сутки
+    clock += 25 * 3600_000; t.vm.status = 'STOPPED';
+    assert.equal((await t.req('POST', '/api/vm/request-start', {}, ply, CSRF)).status, 200); // через сутки снова можно
+  } finally { t.close(); }
+});

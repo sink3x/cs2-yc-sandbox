@@ -195,9 +195,11 @@ function pageProfile() {
       cards.splice(1, 0, h('div', { class: 'card' }, h('h3', {}, 'Пароль'), h('div', { class: 'row' }, o, n, h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/password', { oldPassword: o.value, newPassword: n.value }); o.value = ''; n.value = ''; }, 'Пароль изменён') }, 'Сменить пароль')),
         h('div', { class: 'muted small' }, 'Остальные сессии этого пользователя будут закрыты.')));
       const pl = h('input', { type: 'checkbox', checked: !!(S.settings ? S.settings.playerLogin !== false : true) });
-      api('GET', '/settings').then((s) => { S.settings = s; pl.checked = s.playerLogin !== false; }).catch(() => {});
+      const ps = h('input', { type: 'checkbox', checked: !!(S.settings && S.settings.playerStart) });
+      api('GET', '/settings').then((s) => { S.settings = s; pl.checked = s.playerLogin !== false; ps.checked = s.playerStart === true; }).catch(() => {});
       cards.push(h('div', { class: 'card' }, h('h3', {}, 'Игроки'), h('label', { class: 'row' }, pl, 'Разрешить вход любому игроку через Steam (только свои скины и профиль)'),
-        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: act(async () => { S.settings = await api('PUT', '/settings', { playerLogin: pl.checked }); }, 'Сохранено') }, 'Сохранить')),
+        h('label', { class: 'row' }, ps, 'Разрешить игрокам запускать сервер (до 3 раз в сутки на игрока, до 8 всего; без игроков он выключится сам)'),
+        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: act(async () => { S.settings = await api('PUT', '/settings', { playerLogin: pl.checked, playerStart: ps.checked }); }, 'Сохранено') }, 'Сохранить')),
         h('div', { class: 'muted small' }, 'Игрок попадает в панель по кнопке «Войти через Steam»: ему доступны скины, профиль и информация о сервере — ничего больше. Лимит: 300 аккаунтов игроков.')));
     }
     if (S.role === 'player' && P.steamid) { // вошёл через Steam, а админ-аккаунт уже есть: объединяем по паролю
