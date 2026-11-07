@@ -99,6 +99,18 @@ const ACTIONS = {
     if (!out.length) throw err('нет флагов ботов');
     return out;
   },
+  // Зомби-осада: люди за CT, боты за T с ножами и бесконечным респавном. Порядок важен: сначала выходим из режима тренировки MatchZy
+  // (он при старте раунда возвращает свои cvar и убирает ботов), сбрасываем «заморозку» ботов, потом квота и рестарт.
+  zombies: (a) => {
+    const n = int(a.count ?? 10, 2, 24, 'count'); const lvl = int(a.difficulty ?? 2, 0, 3, 'difficulty');
+    if (a.stop) {
+      return ['mp_humanteam "any"', 'bot_join_team "any"', 'bot_quota "0"', 'bot_knives_only "0"', 'bot_difficulty "2"', 'mp_respawn_on_death_t "0"', 'mp_respawn_on_death_ct "0"', 'bot_kick', 'mp_restartgame 1'];
+    }
+    return ['matchzy_autostart_mode "0"', 'css_exitprac', 'bot_kick', 'bot_stop "0"', 'bot_zombie "0"', 'sv_cheats "0"',
+      'mp_ignore_round_win_conditions "0"', 'mp_warmup_end', 'mp_humanteam "CT"', 'bot_join_team "T"', 'mp_autoteambalance "0"', 'mp_limitteams "0"',
+      'mp_respawn_on_death_t "1"', 'mp_respawn_on_death_ct "0"', 'mp_buytime "0"', 'mp_freezetime "3"', 'mp_startmoney "16000"', 'mp_roundtime "5"', 'mp_free_armor "2"',
+      q('bot_difficulty', lvl), 'bot_knives_only "1"', 'bot_quota_mode "fill"', q('bot_quota', n), 'mp_restartgame 3'];
+  },
   restart: (a) => [`mp_restartgame ${int(a.delay ?? 1, 1, 10, 'delay')}`],
   'warmup-end': () => ['mp_warmup_end'],
   say: (a) => {

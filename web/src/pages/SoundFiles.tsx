@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { host, t } from '../host';
+import { Trimmer } from './Trimmer';
 
 interface SoundFile { name: string; size: number; mtime: number }
 type SyncState = 'synced' | 'pending' | 'outdated' | 'error';
@@ -36,6 +37,7 @@ export function SoundFiles() {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [playing, setPlaying] = useState<string | null>(null);
+  const [trimming, setTrimming] = useState<string | null>(null);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -98,6 +100,18 @@ export function SoundFiles() {
     a.play().catch(() => a.onerror?.(new Event('error')));
   };
 
+  /** Сохранение обрезанного файла: новое имя (если занято — заменяем по подтверждению) или замена исходного. */
+  const saveTrim = async (file: File, replace: boolean): Promise<void> => {
+    try { await upload(file, replace); } catch (e) {
+      if (e instanceof UploadError && e.status === 409 && /already exists/.test(e.raw)) {
+        if (!window.confirm(`${file.name}: ${t('файл с таким именем уже есть. Заменить?')}`)) throw new Error(t('Отменено'));
+        await upload(file, true);
+      } else throw e;
+    }
+    await load();
+    host().toast(`${t('Сохранено')}: ${file.name}`, 's');
+  };
+
   const saveRename = (f: SoundFile): void => {
     const ext = f.name.slice(f.name.lastIndexOf('.'));
     const base = draft.trim();
@@ -151,7 +165,8 @@ export function SoundFiles() {
       {data.files.length ? (
         <div class="snd-list">
           {data.files.map((f) => (
-            <div class="snd-row" key={f.name}>
+            <div class="snd-item" key={f.name}>
+            <div class="snd-row">
               {renaming === f.name ? (
                 <div class="snd-name"><div class="row">
                   <input
@@ -170,9 +185,12 @@ export function SoundFiles() {
                 </div>
               )}
               <button class="btn snd-pv" title={t('Прослушать')} aria-label={t('Прослушать')} onClick={() => preview(f.name)}>{playing === f.name ? '■' : '▶'}</button>
+              <button class="btn" title={t('Обрезать')} aria-label={t('Обрезать')} onClick={() => { audio.current?.pause(); setPlaying(null); setTrimming(trimming === f.name ? null : f.name); }}>✂ {t('Обрезать')}</button>
               <button class="btn" onClick={() => { setDraft(f.name.slice(0, f.name.lastIndexOf('.'))); setRenaming(f.name); }}>{t('Переименовать')}</button>
               <a class="btn" href={`/api/sound-files/${encodeURIComponent(f.name)}?dl=1`} download={f.name}>{t('Скачать')}</a>
               <button class="btn danger" disabled={busy} onClick={() => remove(f)}>{t('Удалить')}</button>
+            </div>
+            {trimming === f.name ? <Trimmer name={f.name} maxFile={data.limits.maxFile} onClose={() => setTrimming(null)} onSave={saveTrim} /> : null}
             </div>
           ))}
         </div>

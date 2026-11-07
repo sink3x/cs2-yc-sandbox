@@ -85,3 +85,14 @@ test('музыкальные наборы: двойники StatTrak™ с те�
   assert.deepEqual(cat.music.map((m) => m.id), [3, 4]);
   assert.ok(cat.music.every((m) => !/stattrak/i.test(m.name)));
 });
+
+test('зомби-осада: порядок команд и лимит батча агента (≤25)', () => {
+  const on = P.buildCommands('zombies', { count: 12, difficulty: 3 });
+  assert.ok(on.length <= 25, `команд: ${on.length}`);
+  assert.ok(on.indexOf('css_exitprac') < on.indexOf('bot_quota "12"'), 'сначала выход из практики');
+  assert.ok(on.includes('mp_humanteam "CT"') && on.includes('bot_knives_only "1"') && on.includes('bot_difficulty "3"'));
+  assert.equal(on[on.length - 1], 'mp_restartgame 3');
+  const off = P.buildCommands('zombies', { stop: true });
+  assert.ok(off.includes('bot_quota "0"') && off.includes('mp_humanteam "any"'));
+  assert.throws(() => P.buildCommands('zombies', { count: 99 }));
+});

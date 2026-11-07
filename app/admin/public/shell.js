@@ -19,15 +19,35 @@ const NAV_GROUPS = [
   ['Игроки', ['stats', 'users', 'admins']],
   ['Панель и аккаунт', ['profile', 'look', 'panel', 'backups', 'help']],
 ];
+// Мобильная нижняя панель: 4 основных пункта + «Ещё» (остальное — в листе меню, как в мобильных приложениях).
+const MOBILE_MAIN = { admin: ['overview', 'practice', 'maps', 'console'], player: ['info', 'skins', 'stats', 'profile'] };
+const mobileMain = () => MOBILE_MAIN[S.role === 'player' ? 'player' : 'admin'];
+function openMoreSheet() {
+  const vis = visiblePages(); const by = new Map(vis); const used = new Set(); const kids = [];
+  const item = (k, label, icon, fn, on) => h('button', { class: `sheet-i${on ? ' on' : ''}`, onclick: fn }, svgIcon(icon, 22), h('span', {}, label));
+  let m;
+  const goTo = (k) => { m.close(); if (S.page !== k) go(k); };
+  for (const [cap, keys] of NAV_GROUPS) {
+    const items = keys.filter((k) => by.has(k)); if (!items.length) continue;
+    items.forEach((k) => used.add(k));
+    kids.push(h('div', { class: 'sheet-cap' }, cap), h('div', { class: 'sheet-grid' }, items.map((k) => item(k, by.get(k)[0], k, () => goTo(k), S.page === k))));
+  }
+  const rest = vis.filter(([k]) => !used.has(k));
+  if (rest.length) kids.push(h('div', { class: 'sheet-grid' }, rest.map(([k, v]) => item(k, v[0], k, () => goTo(k), S.page === k))));
+  kids.push(h('div', { class: 'sheet-grid sheet-sys' },
+    item('search', 'Поиск', 'search', () => { m.close(); openPalette(); }),
+    item('logout', 'Выйти', 'logout', async () => { m.close(); await api('POST', '/logout'); showLogin(); })));
+  m = modal('Меню', h('div', { class: 'sheet' }, kids));
+}
 function navSections(vis) {
   const by = new Map(vis); const used = new Set(); const out = [];
   for (const [cap, keys] of NAV_GROUPS) {
     const items = keys.filter((k) => by.has(k)); if (!items.length) continue;
     items.forEach((k) => used.add(k));
     out.push(h('div', { class: 'nav-cap', role: 'presentation' }, h('span', { class: 'lbl' }, cap)));
-    items.forEach((k) => out.push(navBtn(k, by.get(k)[0], { class: S.page === k ? 'on' : '', onclick: () => go(k) })));
+    items.forEach((k) => out.push(navBtn(k, by.get(k)[0], { class: `${S.page === k ? 'on' : ''}${mobileMain().includes(k) ? '' : ' mob-hide'}`, onclick: () => go(k) })));
   }
-  for (const [k, v] of vis) if (!used.has(k)) out.push(navBtn(k, v[0], { class: S.page === k ? 'on' : '', onclick: () => go(k) }));
+  for (const [k, v] of vis) if (!used.has(k)) out.push(navBtn(k, v[0], { class: `${S.page === k ? 'on' : ''} mob-hide`, onclick: () => go(k) }));
   return out;
 }
 const needsState = new Set(['maps', 'settings', 'plugins', 'admins', 'sounds']);
@@ -54,6 +74,7 @@ const ICONS = {
   stats: '<line x1="5" y1="20" x2="5" y2="11"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="19" y1="20" x2="19" y2="14"/>',
   info: '<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><line x1="7" y1="7.5" x2="7.01" y2="7.5"/><line x1="7" y1="16.5" x2="7.01" y2="16.5"/>',
   panel: '<circle cx="8" cy="15" r="4.5"/><line x1="11.2" y1="11.8" x2="20" y2="3"/><line x1="16" y1="7" x2="19" y2="10"/>',
+  more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   search: '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
   sidebar: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><line x1="9" y1="4" x2="9" y2="20"/>',
@@ -122,8 +143,9 @@ async function renderPage() {
     h('h1', { onclick: () => { document.dispatchEvent(new Event('logo-click')); const home = homePage(); if (S.page !== home) go(home); }, role: 'link', tabindex: '0', style: 'cursor:pointer', 'data-tip': BRAND.name }, brandMark(22) || svgIcon('logo', 20), h('span', { class: 'lbl' }, BRAND.name)),
     ...navSections(visiblePages()),
     h('div', { class: 'sp' }),
-    navBtn('search', 'Поиск (Ctrl+K)', { onclick: openPalette }),
-    navBtn('logout', `Выйти (${S.display || S.user})`, { onclick: async () => { await api('POST', '/logout'); showLogin(); } }),
+    navBtn('more', 'Ещё', { class: `mob-more${mobileMain().includes(S.page) ? '' : ' on'}`, onclick: openMoreSheet }),
+    navBtn('search', 'Поиск (Ctrl+K)', { class: 'mob-hide', onclick: openPalette }),
+    navBtn('logout', `Выйти (${S.display || S.user})`, { class: 'mob-hide', onclick: async () => { await api('POST', '/logout'); showLogin(); } }),
     navBtn('sidebar', 'Свернуть меню', { class: 'collapse-btn', onclick: toggleNav }));
   applyNav(); renderNavLabels();
   const wantsState = S.role !== 'player' && (needsState.has(S.page) || S.page === 'skins');

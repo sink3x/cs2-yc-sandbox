@@ -84,6 +84,15 @@
     ['Неверный логин или пароль админ-аккаунта', 'Wrong admin account login or password', 'Falsches Login oder Passwort des Admin-Kontos', 'Identifiant ou mot de passe du compte administrateur incorrect'],
     ['Только для игрока, вошедшего через Steam', 'Only for a player signed in with Steam', 'Nur für Spieler, die mit Steam angemeldet sind', 'Uniquement pour un joueur connecté avec Steam'],
     ['Этот аккаунт уже привязан к другому Steam', 'This account is already linked to another Steam', 'Dieses Konto ist bereits mit einem anderen Steam verknüpft', 'Ce compte est déjà lié à un autre Steam'],
+    ['Ещё', 'More', 'Mehr', 'Plus'], ['Меню', 'Menu', 'Menü', 'Menu'], ['Поиск', 'Search', 'Suche', 'Recherche'], ['Выйти', 'Sign out', 'Abmelden', 'Se déconnecter'],
+    ['Обрезать', 'Trim', 'Zuschneiden', 'Couper'], ['Начало', 'Start', 'Anfang', 'Début'], ['Конец', 'End', 'Ende', 'Fin'], ['Длина', 'Length', 'Länge', 'Durée'], ['из', 'of', 'von', 'sur'], ['с', 's', 's', 's'],
+    ['Плавное начало и конец (без щелчков)', 'Fade in and out (no clicks)', 'Ein- und Ausblenden (ohne Knacksen)', 'Fondu en entrée et en sortie (sans clics)'],
+    ['Прослушать выделенное', 'Play selection', 'Auswahl abspielen', 'Écouter la sélection'], ['Стоп', 'Stop', 'Stopp', 'Arrêter'],
+    ['Сохранить как новый', 'Save as new', 'Als neu speichern', 'Enregistrer comme nouveau'], ['Заменить исходный', 'Replace original', 'Original ersetzen', 'Remplacer l’original'],
+    ['Закрыть', 'Close', 'Schließen', 'Fermer'], ['Сохранено', 'Saved', 'Gespeichert', 'Enregistré'], ['Отменено', 'Cancelled', 'Abgebrochen', 'Annulé'],
+    ['Результат сохраняется как WAV. Тяните маркеры по волне или введите время.', 'The result is saved as WAV. Drag the markers on the waveform or type the time.', 'Das Ergebnis wird als WAV gespeichert. Marker auf der Wellenform ziehen oder Zeit eingeben.', 'Le résultat est enregistré en WAV. Faites glisser les repères sur la forme d’onde ou saisissez le temps.'],
+    ['Фрагмент слишком длинный: файл будет больше 8 МБ', 'The fragment is too long: the file would exceed 8 MB', 'Das Fragment ist zu lang: die Datei wäre größer als 8 MB', 'Le fragment est trop long : le fichier dépasserait 8 Mo'],
+    ['Не удалось открыть файл для редактирования', 'Could not open the file for editing', 'Die Datei konnte nicht zum Bearbeiten geöffnet werden', 'Impossible d’ouvrir le fichier pour le modifier'],
   ];
   for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
 })();

@@ -66,10 +66,10 @@ function practiceView(redraw) {
   const zRange = h('input', { type: 'range', min: 4, max: 24, step: 1, value: zCount, disabled: !live }); zRange.addEventListener('input', () => { zCount = Number(zRange.value); zNum.textContent = zCount; });
   const zSeg = h('div', { class: 'seg' }, [['0', 'Слабые'], ['1', 'Обычные'], ['2', 'Быстрые'], ['3', 'Орда']].map(([v, t]) => h('button', { class: String(zDiff) === v ? 'on' : '', onclick: (e) => { zDiff = Number(v); [...e.currentTarget.parentNode.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); } }, t)));
   const zStart = act(async () => {
-    await prSend('cvars', { pairs: { mp_humanteam: 'CT', mp_autoteambalance: '0', mp_limitteams: '0', bot_quota_mode: 'fill', bot_quota: String(zCount), bot_knives_only: '1', bot_difficulty: String(zDiff), mp_respawn_on_death_t: '1', mp_respawn_on_death_ct: '0', mp_startmoney: '16000', mp_roundtime: '5', mp_ignore_round_win_conditions: '0', mp_free_armor: '2' } });
-    await prSend('restart', { delay: 3 }); await prSend('say', { text: 'ЗОМБИ-ОСАДА: люди за CT держатся, зомби (T) бегут с ножами!' }); toast('Зомби-осада запущена', 's'); await prRead(); redraw();
+    await prSend('zombies', { count: zCount, difficulty: zDiff });
+    await prSend('say', { text: 'ЗОМБИ-ОСАДА: люди за CT держатся, зомби (T) бегут с ножами!' }); toast('Зомби-осада запущена: через 3 с рестарт раунда', 's'); await prRead(); redraw();
   });
-  const zStop = act(async () => { await prSend('cvars', { pairs: { mp_humanteam: 'any', bot_quota: '0', bot_knives_only: '0', bot_difficulty: '2', mp_respawn_on_death_t: '0', mp_respawn_on_death_ct: '0' } }); await prSend('bot-kick', {}); await prSend('restart', { delay: 1 }); toast('Зомби-режим выключен', 's'); await prRead(); redraw(); });
+  const zStop = act(async () => { await prSend('zombies', { stop: true }); toast('Зомби-режим выключен', 's'); await prRead(); redraw(); });
 
   // ---- приколы
   const funs = S.catalog.fun.filter((f) => !f.secret || secretsOn());
