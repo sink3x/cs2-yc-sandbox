@@ -39,6 +39,17 @@
     ['Библиотека пуста. Добавьте первый звук ниже.', 'The library is empty. Add the first sound below.', 'Die Bibliothek ist leer. Füge unten den ersten Sound hinzu.', 'La bibliothèque est vide. Ajoutez un premier son ci-dessous.'],
     ['Одноразово, без сохранения в библиотеку:', 'One-off, without saving to the library:', 'Einmalig, ohne Speichern in der Bibliothek:', 'Ponctuellement, sans enregistrer dans la bibliothèque :'],
     ['Проиграть по пути', 'Play by path', 'Per Pfad abspielen', 'Jouer par chemin'],
+    ['Нажмите на схему, чтобы поставить метку своего места.', 'Click the map to place a marker for your own place.', 'Klicke auf die Karte, um eine Markierung für deinen Ort zu setzen.', 'Cliquez sur la carte pour placer le marqueur de votre lieu.'],
+    ['Нажмите на схему, куда перенести выбранную метку.', 'Click the map where to move the selected marker.', 'Klicke auf die Karte, wohin die gewählte Markierung verschoben werden soll.', 'Cliquez sur la carte où déplacer le marqueur sélectionné.'],
+    ['Нажмите на схему, чтобы поставить метку.', 'Click the map to place a marker.', 'Klicke auf die Karte, um eine Markierung zu setzen.', 'Cliquez sur la carte pour placer un marqueur.'],
+    ['Введите название места', 'Enter a place name', 'Ortsnamen eingeben', 'Saisissez le nom du lieu'], ['Положение сохранено', 'Position saved', 'Position gespeichert', 'Position enregistrée'],
+    ['Сохранено', 'Saved', 'Gespeichert', 'Enregistré'], ['Сброшено к исходному', 'Reset to the original', 'Auf Original zurückgesetzt', 'Rétabli à l’original'],
+    ['Место добавлено', 'Place added', 'Ort hinzugefügt', 'Lieu ajouté'], ['Место удалено', 'Place deleted', 'Ort gelöscht', 'Lieu supprimé'], ['Удалить это место?', 'Delete this place?', 'Diesen Ort löschen?', 'Supprimer ce lieu ?'],
+    ['Сохранить название', 'Save name', 'Namen speichern', 'Enregistrer le nom'], ['Сторона', 'Side', 'Seite', 'Côté'], ['Перенести метку', 'Move marker', 'Markierung verschieben', 'Déplacer le marqueur'],
+    ['Удалить место', 'Delete place', 'Ort löschen', 'Supprimer le lieu'], ['Сбросить к исходному', 'Reset to original', 'Auf Original zurücksetzen', 'Rétablir l’original'], ['Тип', 'Type', 'Typ', 'Type'],
+    ['Своё место', 'Own place', 'Eigener Ort', 'Lieu personnel'], ['Своё название', 'Your own name', 'Eigener Name', 'Votre propre nom'], ['Новое место', 'New place', 'Neuer Ort', 'Nouveau lieu'],
+    ['Название места', 'Place name', 'Ortsname', 'Nom du lieu'], ['Выбрать точку заново', 'Pick the point again', 'Punkt neu wählen', 'Choisir à nouveau le point'], ['Добавить своё место', 'Add your own place', 'Eigenen Ort hinzufügen', 'Ajouter votre lieu'],
+    ['Сохранить', 'Save', 'Speichern', 'Enregistrer'], ['Отмена', 'Cancel', 'Abbrechen', 'Annuler'],
   ];
   for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
 })();

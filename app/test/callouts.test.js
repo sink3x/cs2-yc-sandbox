@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { DATA, MAP_IDS, CalloutMaps, isWebp } = require('../lib/callouts');
+const { DATA, MAP_IDS, CalloutMaps, isWebp, validateCustom } = require('../lib/callouts');
 const { createApp } = require('../admin/server');
 const { hashPassword } = require('../lib/auth');
 
@@ -75,5 +75,46 @@ test('сервер: /api/callouts доступен игроку, картинк�
     assert.ok(isWebp(Buffer.from(await img.arrayBuffer())));
     assert.equal((await fetch(`${base}/callouts/de_nowhere.webp`)).status, 404);
     assert.equal((await fetch(`${base}/callouts/..%2F..%2Fetc%2Fpasswd`)).status, 404);
+  } finally { app.server.close(); }
+});
+
+test('правки callouts: переименование, перенос и свои места проверяются целиком', () => {
+  const ok = validateCustom({ rename: { 'de_mirage|Jungle': ' Моя зелёнка ', 'de_mirage|Shop': '' }, move: { 'de_mirage|Jungle': [100.04, 250] },
+    added: { de_mirage: [{ id: 'c1a', name: 'Мой смок', x: 500, y: 400.55, side: 'ct' }, { id: 'c2b', name: 'X', x: 1, y: 2, side: 'bad' }] } });
+  assert.ok(ok.ok, ok.errors.join());
+  assert.deepEqual(ok.custom.rename, { 'de_mirage|Jungle': 'Моя зелёнка' }); // пустое = сброс, пробелы обрезаны
+  assert.deepEqual(ok.custom.move['de_mirage|Jungle'], [100, 250]);
+  assert.deepEqual(ok.custom.added.de_mirage.map((a) => a.side), ['ct', 'm']);
+  for (const bad of [
+    { rename: { 'de_mirage|Nowhere': 'x' } }, { rename: { 'de_nope|Jungle': 'x' } }, { rename: { 'de_mirage|Jungle': 'a'.repeat(41) } }, { rename: { 'de_mirage|Jungle': '<b>' } },
+    { move: { 'de_mirage|Jungle': [1001, 5] } }, { move: { 'de_mirage|Jungle': ['1', 5] } }, { added: { de_mirage: [{ id: 'bad id', name: 'x', x: 1, y: 1 }] } },
+    { added: { de_mirage: [{ id: 'c1', name: 'x', x: 1, y: 1 }, { id: 'c1', name: 'y', x: 2, y: 2 }] } }, { added: { de_nope: [] } },
+    { added: { de_mirage: Array.from({ length: 61 }, (_x, i) => ({ id: `c${i}`, name: 'x', x: 1, y: 1 })) } },
+  ]) assert.ok(!validateCustom(bad).ok, JSON.stringify(bad).slice(0, 80));
+  assert.deepEqual(validateCustom(null).custom, { rename: {}, move: {}, added: {} });
+});
+
+test('сервер: правки callouts сохраняются админом, отдаются в /api/callouts, мусор отклоняется', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs2admin-'));
+  fs.writeFileSync(path.join(dir, 'users.json'), JSON.stringify({ users: { alice: { hash: hashPassword('hunter2hunter2'), role: 'admin' } } }));
+  const app = createApp({
+    config: { instanceId: 'i1', agentUrl: 'http://x', publicPort: 0 }, secrets: { AGENT_TOKEN: 't' }, compute: {}, agent: async () => ({}),
+    usersFile: path.join(dir, 'users.json'), settingsFile: path.join(dir, 'settings.json'), auditFile: path.join(dir, 'audit.log'), calloutsCustomFile: path.join(dir, 'co.json'),
+    faceitFile: path.join(dir, 'faceit.json'), statsCacheFile: path.join(dir, 'stats-cache.json'), brandFile: path.join(dir, 'brand.json'), brandLogoFile: path.join(dir, 'brand-logo.bin'),
+  });
+  await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${app.server.address().port}`;
+  const H = { 'Content-Type': 'application/json', 'X-Requested-With': 'cs2panel' };
+  try {
+    assert.equal((await fetch(`${base}/api/callouts/custom`, { method: 'PUT', headers: H, body: '{}' })).status, 401);
+    const login = await fetch(`${base}/api/login`, { method: 'POST', headers: H, body: JSON.stringify({ username: 'alice', password: 'hunter2hunter2' }) });
+    const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
+    const put = (b) => fetch(`${base}/api/callouts/custom`, { method: 'PUT', headers: { ...H, cookie }, body: JSON.stringify(b) });
+    assert.equal((await put({ rename: { 'de_mirage|Jungle': 'Зелёнка' }, added: { de_mirage: [{ id: 'c1', name: 'Мой смок', x: 10, y: 20, side: 't' }] } })).status, 200);
+    const got = await (await fetch(`${base}/api/callouts`, { headers: { cookie } })).json();
+    assert.equal(got.custom.rename['de_mirage|Jungle'], 'Зелёнка'); assert.equal(got.custom.added.de_mirage[0].name, 'Мой смок');
+    assert.equal(Object.keys(got.maps).length, 10);
+    assert.equal((await put({ rename: { 'de_mirage|Nowhere': 'x' } })).status, 400);
+    assert.equal((await (await fetch(`${base}/api/callouts`, { headers: { cookie } })).json()).custom.rename['de_mirage|Jungle'], 'Зелёнка'); // отклонённое не затёрло сохранённое
   } finally { app.server.close(); }
 });

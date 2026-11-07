@@ -10,7 +10,7 @@ const { readJson, writeJsonAtomic, loadEnvFile, makeLogger, sleep } = require('.
 const { PRESETS, MAPS, CATALOG, WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');
 const { YandexCompute } = require('../lib/yc');
 const { CatalogCache, StickerCache, queryStickers } = require('../lib/catalog');
-const { DATA: CALLOUTS, CalloutMaps } = require('../lib/callouts');
+const { DATA: CALLOUTS, CalloutMaps, validateCustom: validateCalloutCustom, EMPTY_CUSTOM: EMPTY_CALLOUT_CUSTOM } = require('../lib/callouts');
 const practice = require('../lib/practice');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
@@ -87,6 +87,8 @@ function createApp(deps = {}) {
   const userPresetsFile = deps.userPresetsFile || path.join(VAR, 'user-presets.json');
   const customSkinsFile = deps.customSkinsFile || path.join(VAR, 'custom-skins.json');
   const stickerCache = deps.stickerCache || new StickerCache({ file: path.join(VAR, 'sticker-catalog.json') });
+  const calloutsCustomFile = deps.calloutsCustomFile || path.join(VAR, 'callouts-custom.json');
+  const loadCalloutCustom = () => { const v = validateCalloutCustom(readJson(calloutsCustomFile, EMPTY_CALLOUT_CUSTOM())); return v.custom; };
   const calloutMaps = deps.calloutMaps || new CalloutMaps({ dir: path.join(VAR, 'callouts') });
   const catalogCache = deps.catalogCache || new CatalogCache({ file: path.join(VAR, 'skin-catalog.json') });
   const keysBlocked = (ip) => limiter.blocked(`ip:${ip}`);
@@ -370,7 +372,13 @@ function createApp(deps = {}) {
       const d = await stickerCache.get(); const r = queryStickers(d, query || {});
       return { ...r, imgBase: d.imgBase, facets: query && query.facets === '1' ? { types: d.types, effects: d.effects, events: d.events } : undefined };
     }],
-    ['GET', '/api/callouts', async () => CALLOUTS],
+    ['GET', '/api/callouts', async () => ({ ...CALLOUTS, custom: loadCalloutCustom() })],
+    ['PUT', '/api/callouts/custom', async ({ body, user, ip }) => { // правки названий и мест: только админы (в PLAYER_OK маршрута нет)
+      const v = validateCalloutCustom(body); if (!v.ok) throw Object.assign(new Error(v.errors.slice(0, 3).join('; ')), { status: 400 });
+      writeJsonAtomic(calloutsCustomFile, v.custom);
+      audit(user, ip, 'callouts.custom', { renamed: Object.keys(v.custom.rename).length, moved: Object.keys(v.custom.move).length, added: Object.values(v.custom.added).reduce((n, l) => n + l.length, 0) });
+      return { custom: v.custom };
+    }],
     ['GET', '/api/skins/catalog', async () => ({ ...(await catalogCache.get()), custom: readJson(customSkinsFile, []) })],
     ['GET', '/api/skins/players', async () => agent('GET', '/skins/players')],
     ['GET', '/api/skins/loadout/:steamid', async ({ params }) => agent('GET', `/skins/loadout/${encodeURIComponent(params.steamid)}`)],
