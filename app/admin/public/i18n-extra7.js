@@ -125,6 +125,14 @@
     ['Сообщение отправлено', 'Message sent', 'Nachricht gesendet', 'Message envoyé'],
     ['Отправить', 'Send', 'Senden', 'Envoyer'],
     ['Сообщение увидят все игроки в чате сервера. Без кавычек и «;».', 'All players see it in the server chat. No quotes or “;”.', 'Alle Spieler sehen es im Server-Chat. Ohne Anführungszeichen und „;“.', 'Tous les joueurs le voient dans le chat du serveur. Sans guillemets ni « ; ».'],
+    ['Расход: время работы ВМ', 'Cost: VM running time', 'Kosten: VM-Laufzeit', 'Coût : durée de fonctionnement de la VM'],
+    ['Сегодня', 'Today', 'Heute', 'Aujourd’hui'],
+    ['7 дней', '7 days', '7 Tage', '7 jours'],
+    ['Месяц', 'Month', 'Monat', 'Mois'],
+    ['ч', 'h', 'Std.', 'h'],
+    ['Часы работы ВМ за 14 дней', 'VM running hours over 14 days', 'VM-Laufzeit der letzten 14 Tage', 'Heures de fonctionnement de la VM sur 14 jours'],
+    ['Цена часа работы ВМ, ₽', 'VM price per hour, ₽', 'VM-Preis pro Stunde, ₽', 'Prix de la VM par heure, ₽'],
+    ['Считается по статусу ВМ «Работает» (дни по UTC). Диск, адрес и трафик не входят: цену часа возьмите из калькулятора Yandex Cloud.', 'Counted while the VM status is “Running” (days in UTC). Disk, address and traffic are not included: take the hourly price from the Yandex Cloud calculator.', 'Gezählt, solange die VM „Läuft“ (Tage in UTC). Datenträger, Adresse und Traffic sind nicht enthalten: Stundenpreis aus dem Yandex-Cloud-Rechner nehmen.', 'Compté tant que la VM est « En marche » (jours en UTC). Disque, adresse et trafic non inclus : prenez le prix horaire dans le calculateur Yandex Cloud.'],
   ];
   for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
 })();

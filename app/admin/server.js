@@ -15,6 +15,7 @@ const { DATA: CALLOUTS, CalloutMaps, validateCustom: validateCalloutCustom, EMPT
 const practice = require('../lib/practice');
 const online = require('../lib/online');
 const pwa = require('../lib/pwa');
+const { createUptime } = require('../lib/uptime');
 const { createVote } = require('../lib/vote');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
@@ -89,6 +90,7 @@ function createApp(deps = {}) {
   const limiter = deps.limiter || new FailureLimiter({ now });
 
   const stateCacheFile = deps.stateCacheFile || path.join(VAR, 'state-cache.json');
+  const uptimeFile = deps.uptimeFile || path.join(VAR, 'uptime.json');
   const userPresetsFile = deps.userPresetsFile || path.join(VAR, 'user-presets.json');
   const customSkinsFile = deps.customSkinsFile || path.join(VAR, 'custom-skins.json');
   const stickerCache = deps.stickerCache || new StickerCache({ file: path.join(VAR, 'sticker-catalog.json') });
@@ -323,11 +325,13 @@ function createApp(deps = {}) {
   }
 
   // ---- VM control with a background "busy" flag -------------------------------------------------
+  const uptime = createUptime({ file: uptimeFile, readJson, writeJsonAtomic, now });
   const vmState = { lastStatus: null, lastStatusAt: 0, busy: null, busySince: null, lastError: null, runningSince: null, idleSince: null, lastAutoStop: null };
 
   async function vmDescribe() {
     const d = await compute.describe();
     vmState.lastStatus = d.status; vmState.lastStatusAt = now();
+    uptime.observe(d.status);
     if (d.status === 'RUNNING') { if (!vmState.runningSince) vmState.runningSince = now(); } else { vmState.runningSince = null; vmState.idleSince = null; }
     return d;
   }
@@ -565,6 +569,7 @@ function createApp(deps = {}) {
     ['GET', '/api/logs', async ({ query }) => agent('GET', `/logs?unit=${encodeURIComponent(query.unit || 'cs2')}&n=${encodeURIComponent(query.n || '200')}`, null, 20000)],
     ['GET', '/api/jobs/:id', async ({ params }) => agent('GET', `/jobs/${encodeURIComponent(params.id)}`)],
     ['GET', '/api/settings', async () => loadSettings()],
+    ['GET', '/api/uptime', async () => ({ ...uptime.summary(), price: Number(loadSettings().vmHourPrice) || 0 })],
     ['PUT', '/api/settings', async ({ body, user, ip }) => {
       const cur = loadSettings();
       const next = { ...cur };
@@ -576,6 +581,11 @@ function createApp(deps = {}) {
       }
       if (body.playerLogin !== undefined) next.playerLogin = !!body.playerLogin;
       if (body.playerStart !== undefined) next.playerStart = !!body.playerStart;
+      if (body.vmHourPrice !== undefined) {
+        const p = Number(body.vmHourPrice);
+        if (!Number.isFinite(p) || p < 0 || p > 10000) throw Object.assign(new Error('vmHourPrice: 0-10000'), { status: 400 });
+        next.vmHourPrice = Math.round(p * 100) / 100;
+      }
       writeJsonAtomic(settingsFile, next);
       audit(user, ip, 'settings', next);
       return { ...next, playerLogin: next.playerLogin !== false, playerStart: next.playerStart === true };
@@ -911,7 +921,7 @@ function createApp(deps = {}) {
     server, sessions, limiter, vmState, idleTick, stateSyncTick, soundSyncTick, syncSounds, soundStore, getState, putState, overview, startVm, stopVm,
     listen(port = Number(config.publicPort || 8080), host = '127.0.0.1') {
       return new Promise((resolve) => server.listen(port, host, () => {
-        timer = setInterval(() => { idleTick().catch((e) => log('idle tick:', e.message)); soundSyncTick().catch((e) => log('sound sync:', e.message)); stateSyncTick().catch((e) => log('state sync:', e.message)); sessions.sweep(); }, 60_000);
+        timer = setInterval(() => { vmDescribe().catch(() => {}); idleTick().catch((e) => log('idle tick:', e.message)); soundSyncTick().catch((e) => log('sound sync:', e.message)); stateSyncTick().catch((e) => log('state sync:', e.message)); sessions.sweep(); }, 60_000);
         timer.unref();
         voteTimer = setInterval(() => { voteTick().catch((e) => log('vote tick:', e.message)); }, 5000); voteTimer.unref();
         resolve();

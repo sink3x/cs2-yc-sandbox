@@ -162,7 +162,26 @@ function pagePlugins() {
     h('div', { class: 'card' }, h('h3', {}, 'Экономия: автовыключение ВМ'),
       h('div', { class: 'row' }, 'Выключать ВМ, если игроков нет', idleMin, 'мин (0 = никогда)'),
       h('div', { class: 'row' }, 'Не выключать первые', graceMin, 'мин после запуска ВМ'),
-      h('button', { class: 'btn', onclick: act(async () => { S.settings = await api('PUT', '/settings', { autoStopIdleMinutes: Number(idleMin.value), startupGraceMinutes: Number(graceMin.value) }); }, 'Сохранено') }, 'Сохранить')));
+      h('button', { class: 'btn', onclick: act(async () => { S.settings = await api('PUT', '/settings', { autoStopIdleMinutes: Number(idleMin.value), startupGraceMinutes: Number(graceMin.value) }); }, 'Сохранено') }, 'Сохранить')),
+    uptimeCard());
+}
+
+/** Сколько часов работала игровая ВМ; со своей ценой часа — оценка расхода. Только учёт панели, не счёт облака. */
+function uptimeCard() {
+  const u = S.uptime;
+  if (!u) return null;
+  const price = h('input', { type: 'number', min: 0, max: 10000, step: '0.01', value: u.price || '', placeholder: '0', style: 'width:100px', 'aria-label': tr('Цена часа работы ВМ, ₽') });
+  const fmt = (x) => `${x.toFixed(1)} ${tr('ч')}`;
+  const money = (x) => (u.price ? ` · ≈ ${(x * u.price).toFixed(2)} ₽` : '');
+  const max = Math.max(0.1, ...u.series.map((d) => d.hours));
+  return h('div', { class: 'card' }, h('h3', {}, 'Расход: время работы ВМ'),
+    h('div', { class: 'row' }, h('span', {}, `${tr('Сегодня')}: ${fmt(u.today)}${money(u.today)}`)),
+    h('div', { class: 'row' }, h('span', {}, `${tr('7 дней')}: ${fmt(u.last7)}${money(u.last7)}`)),
+    h('div', { class: 'row' }, h('span', {}, `${tr('Месяц')}: ${fmt(u.month)}${money(u.month)}`)),
+    h('div', { class: 'upt-bars', role: 'img', 'aria-label': tr('Часы работы ВМ за 14 дней') }, u.series.map((d) => h('div', { class: 'upt-col', title: `${d.day}: ${d.hours.toFixed(1)} ${tr('ч')}` }, h('div', { class: 'upt-bar', style: `height:${Math.round((d.hours / max) * 100)}%` })))),
+    h('div', { class: 'row', style: 'margin-top:10px' }, 'Цена часа работы ВМ, ₽', price,
+      h('button', { class: 'btn', onclick: act(async () => { await api('PUT', '/settings', { vmHourPrice: Number(price.value || 0) }); S.uptime = await api('GET', '/uptime'); go('plugins'); }, 'Сохранено') }, 'Сохранить')),
+    h('div', { class: 'muted small' }, 'Считается по статусу ВМ «Работает» (дни по UTC). Диск, адрес и трафик не входят: цену часа возьмите из калькулятора Yandex Cloud.'));
 }
 
 function pageAdmins() {

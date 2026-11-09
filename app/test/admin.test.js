@@ -25,7 +25,7 @@ async function setup({ vmStatus = 'RUNNING', agentImpl, deps = {} } = {}) {
   });
   const app = createApp({
     config: { instanceId: 'i1', agentUrl: 'http://x', publicPort: 0 }, secrets: { AGENT_TOKEN: 't' }, compute, agent,
-    usersFile: path.join(dir, 'users.json'), settingsFile: path.join(dir, 'settings.json'), auditFile: path.join(dir, 'audit.log'),
+    usersFile: path.join(dir, 'users.json'), settingsFile: path.join(dir, 'settings.json'), uptimeFile: path.join(dir, 'uptime.json'), auditFile: path.join(dir, 'audit.log'),
     faceitFile: path.join(dir, 'faceit.json'), statsCacheFile: path.join(dir, 'stats-cache.json'), brandFile: path.join(dir, 'brand.json'), brandLogoFile: path.join(dir, 'brand-logo.bin'), ...deps, userPresetsFile: path.join(dir, 'user-presets.json'), stateCacheFile: path.join(dir, 'state-cache.json'), customSkinsFile: path.join(dir, 'custom-skins.json'), catalogCache: { get: async () => ({}) },
   });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
@@ -491,4 +491,20 @@ test('PWA manifest: название «sandbox cs2», язык из ?lang=, им
     await t.req('PUT', '/api/brand', { name: 'Моя ферма' }, c, CSRF);
     ({ j } = await get('?lang=en')); assert.equal(j.name, 'Моя ферма · control panel'); assert.equal(j.short_name, 'Моя ферма');
   } finally { t.close(); }
+});
+
+test('uptime: аптайм ВМ и цена часа — только для админа, цена проверяется', async () => {
+  const t = await setup();
+  try {
+    const cookie = await t.login();
+    const r = await t.req('GET', '/api/uptime', undefined, cookie);
+    assert.equal(r.status, 200);
+    assert.equal(r.json.series.length, 14);
+    assert.equal(r.json.price, 0);
+    assert.equal((await t.req('PUT', '/api/settings', { vmHourPrice: -1 }, cookie, CSRF)).status, 400);
+    assert.equal((await t.req('PUT', '/api/settings', { vmHourPrice: 'abc' }, cookie, CSRF)).status, 400);
+    assert.equal((await t.req('PUT', '/api/settings', { vmHourPrice: 12.345 }, cookie, CSRF)).json.vmHourPrice, 12.35);
+    assert.equal((await t.req('GET', '/api/uptime', undefined, cookie)).json.price, 12.35);
+    assert.equal((await t.req('GET', '/api/uptime')).status, 401);
+  } finally { await t.close(); }
 });

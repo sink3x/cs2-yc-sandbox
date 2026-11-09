@@ -161,6 +161,7 @@ async function renderPage() {
     }
   }
   if (S.page === 'plugins' && !S.settings) S.settings = await api('GET', '/settings').catch(() => ({ autoStopIdleMinutes: 30, startupGraceMinutes: 20 }));
+  if (S.page === 'plugins') S.uptime = await api('GET', '/uptime').catch(() => null);
   const page = PAGES[S.page][1]();
   const banner = wantsState ? offlineBanner() : null;
   mainEl.replaceChildren(...(banner ? [banner, page] : [page]));
