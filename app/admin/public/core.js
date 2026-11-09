@@ -123,13 +123,16 @@ const act = (fn, okMsg) => async (ev) => {
   try { const r = await fn(); if (okMsg) toast(okMsg, 's'); return r; } catch (e) { toast(e.message, 'e'); } finally { if (btn) btn.disabled = false; }
 };
 
-const BRAND = { name: 'sandbox-cs-1', tagline: '', logo: '' };
+const BRAND = { name: 'sandbox cs2', tagline: '', logo: '' };
 async function loadBrand() {
   try { Object.assign(BRAND, await (await fetch('/api/brand')).json()); } catch { /* по умолчанию */ }
   applyBrand();
 }
 function applyBrand() {
   document.title = `${BRAND.name} · ${tr('панель управления')}`;
+  // PWA: название и манифест — на языке интерфейса (манифест забирается без cookie, поэтому язык — в адресе)
+  const man = document.querySelector('link[rel=manifest]'); if (man) man.href = `/manifest.webmanifest?lang=${encodeURIComponent(LANG)}`;
+  for (const [n, v] of [['apple-mobile-web-app-title', BRAND.name], ['application-name', BRAND.name]]) { let m = document.querySelector(`meta[name="${n}"]`); if (!m) { m = document.createElement('meta'); m.name = n; document.head.append(m); } m.content = v; }
   if (BRAND.logo) for (const l of document.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]')) { l.href = BRAND.logo; l.removeAttribute('sizes'); l.type = ''; }
 }
 const brandMark = (size = 20) => (BRAND.logo ? h('img', { class: 'brand-img', src: BRAND.logo, alt: '', width: size, height: size }) : null);

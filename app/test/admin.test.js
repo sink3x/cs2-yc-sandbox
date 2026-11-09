@@ -198,12 +198,14 @@ test('settings stay visible while the game VM is off: cached copy, queued edits,
   } finally { t.close(); }
 });
 
-test('state without any cached copy and no agent gives a clear error', async () => {
+test('state without any cached copy and no agent: defaults for reading, editing is refused', async () => {
   const t = await setup({ agentImpl: async () => { throw new Error('fetch failed'); } });
   try {
     const c = await t.login();
     const r = await t.req('GET', '/api/state', undefined, c);
-    assert.equal(r.status, 503); assert.match(r.json.error, /state cache empty/);
+    assert.equal(r.status, 200); assert.equal(r.json.unsynced, true); assert.equal(r.json.offline, true);
+    const w = await t.req('PUT', '/api/state', { state: r.json.state }, c, CSRF);
+    assert.equal(w.status, 503); assert.match(w.json.error, /state cache empty/);
   } finally { t.close(); }
 });
 
@@ -345,7 +347,7 @@ test('brand: public name/logo, admin-only changes, strict logo validation', asyn
   const t = await setup();
   try {
     const pub = await t.req('GET', '/api/brand');
-    assert.equal(pub.status, 200); assert.equal(pub.json.name, 'sandbox-cs-1'); assert.equal(pub.json.logo, '');
+    assert.equal(pub.status, 200); assert.equal(pub.json.name, 'sandbox cs2'); assert.equal(pub.json.logo, '');
     assert.equal((await t.req('PUT', '/api/brand', { name: 'X' })).status, 401);
     const c = await t.login();
     assert.equal((await t.req('PUT', '/api/brand', { name: '<b>' }, c, CSRF)).status, 400);
@@ -457,5 +459,36 @@ test('player start: off by default; when allowed, limited per player per day; al
     assert.equal((await t.req('POST', '/api/vm/request-start', {}, ply, CSRF)).status, 429); // 4-й запуск за сутки
     clock += 25 * 3600_000; t.vm.status = 'STOPPED';
     assert.equal((await t.req('POST', '/api/vm/request-start', {}, ply, CSRF)).status, 200); // через сутки снова можно
+  } finally { t.close(); }
+});
+
+test('VM off: настройки открываются сразу (без ожидания таймаута агента), без копии — дефолты только для чтения', async () => {
+  const t = await setup({ vmStatus: 'STOPPED', deps: { agent: undefined, config: { instanceId: 'i1', agentUrl: 'http://10.255.255.1:9', publicPort: 0 } } });
+  try {
+    const c = await t.login();
+    assert.equal((await t.req('GET', '/api/overview', undefined, c)).status, 200); // описывает ВМ: STOPPED
+    const t0 = Date.now();
+    const r = await t.req('GET', '/api/state', undefined, c);
+    assert.ok(Date.now() - t0 < 2000, `должно отвечать сразу, а не ждать таймаут агента (${Date.now() - t0} мс)`);
+    assert.equal(r.status, 200); assert.equal(r.json.offline, true); assert.equal(r.json.unsynced, true);
+    assert.ok(Array.isArray(r.json.plugins) && r.json.plugins.length > 3 && r.json.state.admins);
+    assert.equal((await t.req('PUT', '/api/state', { state: r.json.state }, c, CSRF)).status, 503); // менять без копии нельзя
+  } finally { t.close(); }
+});
+
+test('PWA manifest: название «sandbox cs2», язык из ?lang=, имя из «Оформления»', async () => {
+  const t = await setup();
+  try {
+    const get = async (q) => { const r = await fetch(`${t.base || `http://127.0.0.1:${t.app.server.address().port}`}/manifest.webmanifest${q}`); return { r, j: await r.json() }; };
+    let { r, j } = await get('');
+    assert.match(r.headers.get('content-type'), /application\/manifest\+json/);
+    assert.equal(j.short_name, 'sandbox cs2'); assert.equal(j.name, 'sandbox cs2 · панель управления'); assert.equal(j.lang, 'ru'); assert.ok(j.icons.length >= 3 && j.start_url === '/');
+    ({ j } = await get('?lang=en')); assert.equal(j.name, 'sandbox cs2 · control panel'); assert.equal(j.lang, 'en'); assert.equal(j.shortcuts[1].name, 'Overview');
+    ({ j } = await get('?lang=de')); assert.equal(j.name, 'sandbox cs2 · Steuerungspanel');
+    ({ j } = await get('?lang=fr')); assert.equal(j.name, 'sandbox cs2 · panneau de contrôle');
+    ({ j } = await get('?lang=xx')); assert.equal(j.lang, 'ru'); // неизвестный язык → русский
+    const c = await t.login();
+    await t.req('PUT', '/api/brand', { name: 'Моя ферма' }, c, CSRF);
+    ({ j } = await get('?lang=en')); assert.equal(j.name, 'Моя ферма · control panel'); assert.equal(j.short_name, 'Моя ферма');
   } finally { t.close(); }
 });

@@ -61,9 +61,9 @@ async function loadLoadout() {
   try { K.loadout = await api('GET', `/skins/loadout/${K.steamid}`); } catch (e) { K.err = e.message; }
 }
 async function applyOps(ops, msg) {
-  await api('POST', `/skins/apply/${K.steamid}`, { ops });
+  const r = await api('POST', `/skins/apply/${K.steamid}`, { ops });
   await loadLoadout();
-  toast(`${msg || 'Сохранено'}. Игроку: напишите !wp в чате (или перезайдите).`, 's');
+  toast(r && r.refreshed ? `${msg || 'Сохранено'}. Применено игроку сразу.` : `${msg || 'Сохранено'}. Игроку: напишите !wp в чате (или перезайдите).`, 's');
 }
 
 function pageSkins() {

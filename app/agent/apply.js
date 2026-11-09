@@ -52,7 +52,7 @@ function readJsonc(file, fallback = null) {
 function patchWeaponPaints(secrets, gp = E.gamePaths) {
   const cfg = readJsonc(gp.wpConfig, null);
   if (!cfg) return 'missing';
-  const want = { DatabaseHost: '127.0.0.1', DatabasePort: 3306, DatabaseUser: 'weaponpaints', DatabasePassword: secrets.DB_PASSWORD || '', DatabaseName: 'weaponpaints' };
+  const want = { DatabaseHost: '127.0.0.1', DatabasePort: 3306, DatabaseUser: 'weaponpaints', DatabasePassword: secrets.DB_PASSWORD || '', DatabaseName: 'weaponpaints', CmdRefreshCooldownSeconds: 3 };
   let changed = false;
   for (const [k, v] of Object.entries(want)) if (cfg[k] !== v) { cfg[k] = v; changed = true; }
   if (changed) writeJsonAtomic(gp.wpConfig, cfg);

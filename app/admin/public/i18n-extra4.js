@@ -71,6 +71,7 @@
     // --- скины
     [/^Предмет (\d+)$/, ['Item $1', 'Item $1', 'Objet $1']],
     [/^(.+)\. Игроку: напишите !wp в чате \(или перезайдите\)\.$/, ['$T1. Player: type !wp in chat (or reconnect).', '$T1. Spieler: !wp im Chat schreiben (oder neu verbinden).', '$T1. Joueur : tapez !wp dans le chat (ou reconnectez-vous).']],
+    [/^(.+)\. Применено игроку сразу\.$/, ['$T1. Applied to the player right away.', '$T1. Dem Spieler sofort zugewiesen.', '$T1. Appliqué au joueur immédiatement.']],
     [/^Набор №(\d+)$/, ['Kit #$1', 'Kit Nr. $1', 'Kit n° $1']],
     [/^Команда: (CT|T) · модель (.+)$/, ['Team: $1 · model $2', 'Team: $1 · Modell $2', 'Équipe : $1 · modèle $2']],
     [/^Снять \((CT|T)\)$/, ['Remove ($1)', 'Ablegen ($1)', 'Retirer ($1)']],

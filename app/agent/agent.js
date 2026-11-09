@@ -33,6 +33,16 @@ const exec = (cmd, args, opts = {}) => new Promise((resolve) => {
 const loadState = () => readJson(E.files.state, null) || S.defaultState();
 function saveState(state) { writeJsonAtomic(E.files.state, state); }
 
+/** Ask CS2Panel (>= 0.3.0) to press !wp for the player so new skins show up without a reconnect.
+ *  The plugin answers to the server console, which RCON does not capture, so success = the player is online and the command is known. Never throws. */
+async function refreshSkins(steamid) {
+  try {
+    const [players, out] = await rconRun(['css_players', `css_refreshskins ${steamid}`], 5000);
+    if (!parseOnlinePlayers(players).some((p) => p.steamid === steamid)) return false;
+    return !/unknown command|unknown/i.test(String(out || ''));
+  } catch { return false; }
+}
+
 async function rconRun(commands, timeoutMs) {
   return rcon({ port: 27015, password: secrets.RCON_PASSWORD, commands, timeoutMs });
 }
@@ -192,7 +202,8 @@ const routes = [
   ['GET', '/skins/loadout/:steamid', async ({ params }) => skins.loadout(params.steamid)],
   ['POST', '/skins/apply/:steamid', async ({ params, body }) => {
     if (!isSteamId(params.steamid)) throw Object.assign(new Error('bad steamid'), { status: 400 });
-    return skins.apply(params.steamid, body.ops);
+    const r = await skins.apply(params.steamid, body.ops);
+    return { ...r, refreshed: await refreshSkins(params.steamid) };
   }],
   ['POST', '/skins/reload', async () => ({ output: (await rconRun(['css_plugins reload WeaponPaints'], 10000))[0] })],
   ['POST', '/service/:action', async ({ params }) => systemctl(params.action)],

@@ -14,6 +14,7 @@ const { CatalogCache, StickerCache, queryStickers } = require('../lib/catalog');
 const { DATA: CALLOUTS, CalloutMaps, validateCustom: validateCalloutCustom, EMPTY_CUSTOM: EMPTY_CALLOUT_CUSTOM } = require('../lib/callouts');
 const practice = require('../lib/practice');
 const online = require('../lib/online');
+const pwa = require('../lib/pwa');
 const { createVote } = require('../lib/vote');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
@@ -103,7 +104,8 @@ function createApp(deps = {}) {
   // ---- профиль: почта, Steam, Faceit ----------------------------------------------------------
   const brandFile = deps.brandFile || path.join(VAR, 'brand.json');
   const brandLogoFile = deps.brandLogoFile || path.join(VAR, 'brand-logo.bin');
-  const loadBrand = () => { const b = readJson(brandFile, {}); return { name: String(b.name || 'sandbox-cs-1').slice(0, 40), tagline: String(b.tagline || '').slice(0, 80), logoType: b.logoType || '', v: b.v || 0 }; };
+  // 'sandbox-cs-1' — прежнее имя по умолчанию: считаем его «не задано» и показываем новое
+  const loadBrand = () => { const b = readJson(brandFile, {}); return { name: String(!b.name || b.name === 'sandbox-cs-1' ? pwa.DEFAULT_NAME : b.name).slice(0, 40), tagline: String(b.tagline || '').slice(0, 80), logoType: b.logoType || '', v: b.v || 0 }; };
   const statsCacheFile = deps.statsCacheFile || path.join(VAR, 'stats-cache.json');
   const faceitFile = deps.faceitFile || path.join(VAR, 'faceit.json');
   const httpGet = deps.httpGet || (async (url, headers) => { const r = await fetch(url, { headers, signal: AbortSignal.timeout(12000) }); const text = await r.text().catch(() => ''); let json = null; try { json = JSON.parse(text); } catch { /* не JSON */ } return { status: r.status, json, text }; });
@@ -198,6 +200,8 @@ function createApp(deps = {}) {
 
   // ---- agent client ---------------------------------------------------------------------------
   const agent = deps.agent || (async (method, apiPath, body, timeoutMs = 20000) => {
+    // ВМ только что описана как не RUNNING → не ждём 20 с таймаута у закрытого порта, сразу «агент недоступен» (без status: так её считает выключенной вся остальная логика)
+    if (vmState.lastStatus && vmState.lastStatus !== 'RUNNING' && now() - vmState.lastStatusAt < 20_000) throw new Error(`fetch failed: VM is ${vmState.lastStatus}`);
     const bin = Buffer.isBuffer(body); // файл целиком, без JSON
     const res = await fetch(`${config.agentUrl}${apiPath}`, {
       method, headers: { Authorization: `Bearer ${secrets.AGENT_TOKEN}`, 'Content-Type': bin ? 'application/octet-stream' : 'application/json' },
@@ -239,7 +243,8 @@ function createApp(deps = {}) {
     } catch (e) {
       if (!isOffline(e)) throw e;
       const c = readStateCache();
-      if (!c) throw Object.assign(new Error('state cache empty'), { status: 503 });
+      // копии ещё нет (ВМ ни разу не была запущена с этой панелью): показываем настройки по умолчанию, но менять их нельзя — иначе при старте затёрли бы реальные
+      if (!c) return { state: stateLib.defaultState(), plugins: stateLib.registry, admin_flags: stateLib.ADMIN_FLAGS, protectedAdmins: [], offline: true, unsynced: true, savedAt: null, pending: 0 };
       return { state: c.state, plugins: c.plugins, admin_flags: c.admin_flags, protectedAdmins: c.protectedAdmins || [], offline: true, savedAt: c.savedAt, pending: (c.pending || []).length };
     }
   }
@@ -318,10 +323,11 @@ function createApp(deps = {}) {
   }
 
   // ---- VM control with a background "busy" flag -------------------------------------------------
-  const vmState = { busy: null, busySince: null, lastError: null, runningSince: null, idleSince: null, lastAutoStop: null };
+  const vmState = { lastStatus: null, lastStatusAt: 0, busy: null, busySince: null, lastError: null, runningSince: null, idleSince: null, lastAutoStop: null };
 
   async function vmDescribe() {
     const d = await compute.describe();
+    vmState.lastStatus = d.status; vmState.lastStatusAt = now();
     if (d.status === 'RUNNING') { if (!vmState.runningSince) vmState.runningSince = now(); } else { vmState.runningSince = null; vmState.idleSince = null; }
     return d;
   }
@@ -790,6 +796,10 @@ function createApp(deps = {}) {
     const url = new URL(req.url, 'http://x');
     const secure = String(req.headers['x-forwarded-proto'] || '') === 'https';
     try {
+      if (url.pathname === '/manifest.webmanifest' && req.method === 'GET') { // манифест на языке интерфейса, с названием из «Оформления»
+        const base = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'manifest.webmanifest'), 'utf8'));
+        return send(res, 200, JSON.stringify(pwa.buildManifest(base, loadBrand().name, url.searchParams.get('lang'))), { ...SEC_HEADERS, 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache' });
+      }
       if (url.pathname === '/brand-logo' && req.method === 'GET') {
         const b = loadBrand(); if (!b.logoType || !fs.existsSync(brandLogoFile)) return send(res, 404, 'not found', SEC_HEADERS);
         return send(res, 200, fs.readFileSync(brandLogoFile), { ...SEC_HEADERS, 'Content-Type': b.logoType, 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox", 'Cache-Control': 'public, max-age=3600' });

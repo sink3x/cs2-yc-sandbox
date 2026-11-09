@@ -55,6 +55,7 @@ test('patchWeaponPaints waits for the plugin config, then fills DB credentials o
   const cfg = JSON.parse(fs.readFileSync(gp.wpConfig, 'utf8'));
   assert.equal(cfg.DatabasePassword, 'pw');
   assert.equal(cfg.Website, 'x');
+  assert.equal(cfg.CmdRefreshCooldownSeconds, 3, 'short !wp cooldown so the panel can refresh skins right after saving');
   assert.equal(patchWeaponPaints({ DB_PASSWORD: 'pw' }), 'unchanged');
 });
 

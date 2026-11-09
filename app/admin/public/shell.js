@@ -110,6 +110,7 @@ document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.
 
 function offlineBanner() {
   const st = S.state; if (!st || !st.offline) return null;
+  if (st.unsynced) return h('div', { class: 'banner' }, tr('Сервер CS2 выключен, а копии его настроек в панели ещё нет: показаны значения по умолчанию, менять их нельзя. Запустите сервер один раз — настройки сохранятся в панели.'));
   const when = st.savedAt ? ` (${tr('копия от')} ${new Date(st.savedAt).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })})` : '';
   return h('div', { class: 'banner' }, `${tr('Сервер CS2 выключен: показаны настройки, сохранённые в панели')}${when}. ${tr('Менять их можно уже сейчас — изменения применятся автоматически после запуска сервера.')}${st.pending ? ` ${tr('В очереди:')} ${st.pending}.` : ''}`);
 }

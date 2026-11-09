@@ -1,6 +1,6 @@
 {
-  "name": "sandbox-cs-1 · панель CS2",
-  "short_name": "CS2 панель",
+  "name": "sandbox cs2 · панель управления",
+  "short_name": "sandbox cs2",
   "description": "Управление сервером CS2: скины, карты, настройки, профиль",
   "start_url": "/",
   "scope": "/",
@@ -9,12 +9,33 @@
   "background_color": "#0b0b0c",
   "theme_color": "#0b0b0c",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "shortcuts": [
-    { "name": "Скины", "url": "/#skins" },
-    { "name": "Обзор", "url": "/#overview" }
+    {
+      "name": "Скины",
+      "url": "/#skins"
+    },
+    {
+      "name": "Обзор",
+      "url": "/#overview"
+    }
   ]
 }
