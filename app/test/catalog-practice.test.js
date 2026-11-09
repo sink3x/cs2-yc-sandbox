@@ -96,3 +96,18 @@ test('зомби-осада: порядок команд и лимит батч�
   assert.ok(off.includes('bot_quota "0"') && off.includes('mp_humanteam "any"'));
   assert.throws(() => P.buildCommands('zombies', { count: 99 }));
 });
+
+test('plugins registry: каждый плагин ставится с GitHub или из бандла; bundled-архив существует и содержит dirs плагина', async () => {
+  const fs = require('node:fs'); const path = require('node:path'); const { execFileSync } = require('node:child_process');
+  const reg = require('../lib/plugins.json'); const { bundledRelease } = require('../agent/install');
+  for (const p of reg) assert.ok(p.bundled || (p.repo && p.asset), `${p.id}: нужен repo+asset или bundled`);
+  const mine = reg.filter((p) => p.bundled);
+  assert.ok(mine.some((p) => p.id === 'cs2panel'), 'CS2Panel ставится из бандла (репозиторий приватный)');
+  for (const p of mine) {
+    const b = bundledRelease(p); assert.match(b.rel.tag_name, /^bundled-[0-9a-f]{12}$/);
+    const list = execFileSync('unzip', ['-Z1', b.file]).toString().split('\n').filter(Boolean);
+    for (const d of p.dirs) assert.ok(list.some((x) => x.startsWith(`${d}/`)), `${p.id}: в архиве нет папки ${d}/`);
+    assert.ok(list.some((x) => x.endsWith('.dll')), `${p.id}: в архиве нет .dll`);
+    assert.ok(fs.statSync(path.join(__dirname, '..', 'plugins-bundled', p.bundled)).size < 200_000);
+  }
+});

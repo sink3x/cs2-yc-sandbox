@@ -86,12 +86,13 @@
   {
     "id": "cs2panel",
     "title": "CS2Panel (звуки из панели)",
-    "desc": "Команда css_playsound и библиотека звуков из админ-панели. Свои файлы звука игрокам нужен Workshop-аддон; встроенные звуки игры играют сразу",
+    "desc": "Команды css_playsound (звуки из панели) и css_spawnanimal / css_killanimals (животные). Ставится из бандла панели — репозиторий плагина приватный. Свои файлы звука игрокам нужен Workshop-аддон; встроенные звуки игры играют сразу",
     "repo": "sink3x/cs2-panel-plugin",
     "asset": "^CS2Panel\\.zip$",
     "dirs": [
       "CS2Panel"
     ],
-    "default": true
+    "default": true,
+    "bundled": "CS2Panel.zip"
   }
 ]

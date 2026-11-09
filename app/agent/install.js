@@ -132,18 +132,31 @@ async function installCss() {
 
 const lsDirs = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((x) => x.isDirectory()).map((x) => x.name); } catch { return []; } };
 
+const BUNDLED_DIR = path.join(__dirname, '..', 'plugins-bundled');
+
+/** Свой плагин из бандла панели (репозиторий приватный — с GitHub агент его не скачает). Тег = хэш файла: новый zip → переустановка. */
+function bundledRelease(p) {
+  const file = path.join(BUNDLED_DIR, p.bundled);
+  if (path.basename(p.bundled) !== p.bundled || !fs.existsSync(file)) throw new Error(`${p.id}: bundled file ${p.bundled} is missing`);
+  const tag = `bundled-${require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 12)}`;
+  return { file, rel: { tag_name: tag }, asset: { name: p.bundled } };
+}
+
 async function installPlugin(p) {
-  const rel = await ghLatest(p.repo);
-  const re = new RegExp(p.asset, 'i');
-  const asset = rel.assets.find((a) => re.test(a.name)) || rel.assets.find((a) => /\.zip$/i.test(a.name) && !/windows|win64|source/i.test(a.name));
-  if (!asset) throw new Error(`${p.id} ${rel.tag_name}: no matching asset (${rel.assets.map((a) => a.name).join(', ')})`);
+  let rel; let asset; let bundledFile = null;
+  if (p.bundled) { const b = bundledRelease(p); rel = b.rel; asset = b.asset; bundledFile = b.file; } else {
+    rel = await ghLatest(p.repo);
+    const re = new RegExp(p.asset, 'i');
+    asset = rel.assets.find((a) => re.test(a.name)) || rel.assets.find((a) => /\.zip$/i.test(a.name) && !/windows|win64|source/i.test(a.name));
+    if (!asset) throw new Error(`${p.id} ${rel.tag_name}: no matching asset (${rel.assets.map((a) => a.name).join(', ')})`);
+  }
   const db = installedDb();
   const gp = E.gamePaths;
   const known = db[p.id];
   const stillThere = known && (known.dirs || []).every((d) => fs.existsSync(path.join(gp.cssPlugins, d)) || fs.existsSync(path.join(gp.cssPluginsDisabled, d)));
   if (known && known.tag === rel.tag_name && stillThere) return;
   log('installing plugin', p.id, rel.tag_name, asset.name);
-  const zip = await download(asset.browser_download_url, path.join(E.dirs.cache, `${p.id}-${asset.name}`));
+  const zip = bundledFile || await download(asset.browser_download_url, path.join(E.dirs.cache, `${p.id}-${asset.name}`));
   const entries = (await capture('unzip', ['-Z1', zip])).split('\n').map((x) => x.trim()).filter(Boolean);
   const before = new Set([...lsDirs(gp.cssPlugins), ...lsDirs(gp.cssPluginsDisabled)]);
   let dest;
@@ -173,4 +186,4 @@ async function installPlugins(state, setPhase) {
   return errors;
 }
 
-module.exports = { run, updateGame, gameInstalled, installPlugins, installMetamod, installCss, patchGameInfo, ensureSteamcmd };
+module.exports = { bundledRelease, run, updateGame, gameInstalled, installPlugins, installMetamod, installCss, patchGameInfo, ensureSteamcmd };
