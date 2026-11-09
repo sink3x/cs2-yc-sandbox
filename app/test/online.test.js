@@ -20,3 +20,9 @@ test('online: «unknown command» превращается в ошибку', () 
   assert.doesNotThrow(() => checkOutput('slay', ''));
   assert.throws(() => checkOutput('ban', 'Unknown command: css_ban'), /admin command not available/);
 });
+
+test('online: say — только короткий текст без кавычек и «;»', () => {
+  assert.equal(playerCommand('say', undefined, { text: '  Рестарт через минуту  ' }), 'say Рестарт через минуту');
+  for (const bad of ['', '   ', 'a'.repeat(121), 'x"y', "x'y", 'a; quit', 'a\\b', 'a\nb']) assert.throws(() => playerCommand('say', undefined, { text: bad }), /say/);
+  assert.throws(() => playerCommand('say', undefined, {}), /say/);
+});

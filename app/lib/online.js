@@ -7,8 +7,17 @@ const TEAMS = { ct: 'ct', t: 't', spec: 'spec' };
 const BAN_MINUTES = [0, 60, 1440, 10080]; // 0 = навсегда
 const REASON = 'panel';
 
+/** Сообщение всем в чат: 1–120 символов, без кавычек, «;», «\\» и управляющих символов (консоль иначе разобьёт команду). */
+function sayCommand(text) {
+  const t = String(text == null ? '' : text).trim();
+  if (!t || t.length > 120) throw err('say: 1–120 символов');
+  if (/["';\\\u0000-\u001f\u007f]/.test(t)) throw err('say: без кавычек, «;» и «\\»');
+  return `say ${t}`;
+}
+
 /** → строка консольной команды для игрока с userid `id`. */
 function playerCommand(action, id, arg = {}) {
+  if (action === 'say') return sayCommand(arg.text);
   if (!/^\d{1,4}$/.test(String(id == null ? '' : id))) throw err('bad player id'); // пусто/мусор не превращаем в 0
   const n = Number(id);
   if (n > 4095) throw err('bad player id');

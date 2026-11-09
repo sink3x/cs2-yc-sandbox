@@ -497,7 +497,7 @@ function createApp(deps = {}) {
     ['POST', '/api/vote/stop', async ({ user, ip }) => { vote.stop(); audit(user, ip, 'vote.stop'); await voteTick(); return voteView(user); }],
     ['POST', '/api/online/act', async ({ body, user, ip }) => {
       const cmd = online.playerCommand(String(body.action || ''), body.id, body);
-      audit(user, ip, 'online.act', { action: body.action, id: Number(body.id) });
+      audit(user, ip, 'online.act', body.action === 'say' ? { action: 'say', len: String(body.text || '').length } : { action: body.action, id: Number(body.id) });
       const out = (await agent('POST', '/rcon', { command: cmd }, 15000)).output;
       online.checkOutput(String(body.action), out);
       return { ok: true, output: String(out || '').trim().slice(0, 300) };

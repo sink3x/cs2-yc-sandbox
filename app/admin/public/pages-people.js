@@ -262,5 +262,10 @@ function pageOnline() {
       all.length ? h('div', { class: 'adm-list' }, [...humans, ...bots].map(row)) : h('div', { class: 'muted', style: 'margin-top:8px' }, tr('На сервере пока никого нет.'))));
   };
   S.onOverview = draw; draw();
-  return h('div', {}, h('h2', {}, 'Игроки онлайн'), box);
+  const msg = h('input', { type: 'text', maxlength: '120', placeholder: tr('Сообщение всем в чат (до 120 символов)'), 'aria-label': tr('Сообщение всем в чат (до 120 символов)'), style: 'flex:1;min-width:180px' });
+  const sendMsg = act(async () => { await api('POST', '/online/act', { action: 'say', text: msg.value }); msg.value = ''; }, 'Сообщение отправлено');
+  msg.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMsg(); });
+  return h('div', {}, h('h2', {}, 'Игроки онлайн'),
+    h('div', { class: 'card' }, h('div', { class: 'row' }, msg, h('button', { class: 'btn primary', onclick: sendMsg }, 'Отправить')), h('div', { class: 'muted small', style: 'margin-top:6px' }, 'Сообщение увидят все игроки в чате сервера. Без кавычек и «;».')),
+    box);
 }
