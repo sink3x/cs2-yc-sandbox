@@ -115,3 +115,39 @@ test('restore: an archive with links, absolute or .. paths is refused before ext
   execFileSync('tar', ['czf', path.join(dir, 'abs.tgz'), '--transform', 's,^,../,', '-C', dir, 'f']);
   await assert.rejects(assertSafeArchive(path.join(dir, 'abs.tgz')), /unsafe path/);
 });
+
+test('audit log: country by IP (cached, private addresses never leave), filters and search', async () => {
+  const t = await setup();
+  try {
+    const cookie = await t.login();
+    const lookups = [];
+    // реальный сервис в тесте не вызываем: подменяем поиск страны через прямой вызов библиотеки
+    const { createGeo, isPublic, normalize } = require('../lib/ipgeo');
+    assert.equal(isPublic('10.0.0.1'), false); assert.equal(isPublic('127.0.0.1'), false); assert.equal(isPublic('192.168.1.5'), false);
+    assert.equal(isPublic('169.254.169.254'), false); assert.equal(isPublic('::1'), false); assert.equal(isPublic('fd00::1'), false);
+    assert.equal(isPublic('8.8.8.8'), true); assert.equal(isPublic('2a00:1450::1'), true); assert.equal(normalize('::ffff:1.2.3.4'), '1.2.3.4'); assert.equal(normalize('-'), '');
+    const g = createGeo({ lookup: async (ip) => { lookups.push(ip); if (ip === '5.5.5.5') throw new Error('down'); return ip === '1.1.1.1' ? 'au' : 'de'; } });
+    const r1 = await g.resolve(['1.1.1.1', '10.1.1.1', '::ffff:2.2.2.2', '5.5.5.5', '-', '1.1.1.1']);
+    assert.deepEqual(r1.map, { '1.1.1.1': 'AU', '10.1.1.1': '', '::ffff:2.2.2.2': 'DE', '5.5.5.5': '' });
+    await g.resolve(['1.1.1.1', '5.5.5.5']); // из кэша / из «недавних сбоев»
+    assert.deepEqual(lookups.sort(), ['1.1.1.1', '2.2.2.2', '5.5.5.5']);
+    // API: свои записи с разных адресов
+    fs.writeFileSync(path.join(t.dir, 'audit.log'), [
+      { ts: '2026-11-01T10:00:00.000Z', user: 'alice', ip: '10.0.0.5', action: 'map', detail: 'de_mirage' },
+      { ts: '2026-11-02T10:00:00.000Z', user: 'friend', ip: '10.0.0.6', action: 'rcon', detail: 'status' },
+      { ts: '2026-11-03T10:00:00.000Z', user: 'alice', ip: '-', action: 'vote.result', detail: { winner: 'de_dust2' } },
+    ].map((e) => JSON.stringify(e)).join('\n') + '\n');
+    const all = (await t.req('GET', '/api/audit', undefined, cookie)).json;
+    assert.equal(all.total, 3); assert.equal(all.entries[0].action, 'vote.result');
+    assert.deepEqual(all.facets.users, ['alice', 'friend']);
+    const q = (s) => t.req('GET', `/api/audit?${s}`, undefined, cookie).then((r) => r.json);
+    assert.equal((await q('user=friend')).total, 1);
+    assert.equal((await q('q=MIRAGE')).total, 1);
+    assert.equal((await q('q=dust2')).total, 1);
+    assert.equal((await q('ip=10.0.0.6')).entries[0].user, 'friend');
+    assert.equal((await q('action=vote')).total, 1);
+    assert.equal((await q('from=2026-11-02&to=2026-11-02')).total, 1);
+    assert.equal((await q('country=-')).total, 3);
+    assert.equal((await q('country=DE')).total, 0);
+  } finally { t.close(); }
+});

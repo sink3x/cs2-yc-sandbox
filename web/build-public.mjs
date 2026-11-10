@@ -18,7 +18,7 @@ const LAZY = { // страницы: подгружаются при первом
   main: ['pages-main.js'], play: ['pages-play.js'], skins: ['skin-links.js', 'pages-skins.js'], practice: ['pages-practice.js'], account: ['pages-account.js'],
   stats: ['pages-stats.js'], callouts: ['pages-callouts.js'], sounds: ['pages-sounds.js'], people: ['pages-people.js'],
 };
-const I18N = ['i18n.js', 'i18n-extra.js', 'i18n-extra2.js', 'i18n-extra3.js', 'i18n-extra4.js', 'i18n-extra5.js', 'i18n-extra6.js', 'i18n-extra7.js'];
+const I18N = ['i18n.js', 'i18n-extra.js', 'i18n-extra2.js', 'i18n-extra3.js', 'i18n-extra4.js', 'i18n-extra5.js', 'i18n-extra6.js', 'i18n-extra7.js', 'i18n-extra8.js'];
 const LANG_LIST = ['en', 'de', 'fr']; // порядок как в массивах словаря
 const PROCESSED = new Set([...EAGER, ...Object.values(LAZY).flat(), ...I18N, 'style.css', 'index.html', 'sw.js']);
 

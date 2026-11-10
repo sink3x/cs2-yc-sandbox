@@ -571,3 +571,8 @@ nav button.mob-more { display: none; }
 .upt-bars{display:flex;gap:3px;align-items:flex-end;height:64px;margin:10px 0 0}
 .upt-col{flex:1;height:100%;display:flex;align-items:flex-end;background:color-mix(in srgb,var(--border,#888) 18%,transparent);border-radius:3px}
 .upt-bar{width:100%;min-height:2px;background:var(--accent,#4c8dff);border-radius:3px}
+span.clickable { cursor: pointer; border-bottom: 1px dotted var(--muted, #888); }
+span.clickable:hover { color: var(--accent, inherit); }
+.audit-filters { flex-wrap: wrap; gap: 6px; }
+.audit-filters input, .audit-filters select { max-width: 100%; }
+td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }

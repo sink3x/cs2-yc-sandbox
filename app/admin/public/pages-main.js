@@ -251,11 +251,45 @@ function pageBackups() {
 
 function pagePanel() {
   const o = h('input', { type: 'password', placeholder: 'Текущий пароль', autocomplete: 'current-password' }); const n = h('input', { type: 'password', placeholder: 'Новый пароль (≥10 символов)', autocomplete: 'new-password' });
-  const auditBox = h('div');
-  setTimeout(async () => { try { const r = await api('GET', '/audit?n=80'); auditBox.replaceChildren(h('table', {}, h('thead', {}, h('tr', {}, ['Время', 'Кто', 'Действие', 'Детали'].map((x) => h('th', {}, x)))), h('tbody', {}, r.entries.map((e) => h('tr', {}, h('td', { class: 'small' }, e.ts.replace('T', ' ').slice(0, 19)), h('td', {}, e.user), h('td', {}, e.action), h('td', { class: 'small muted' }, e.detail == null ? '' : JSON.stringify(e.detail).slice(0, 80))))))); } catch (e) { auditBox.textContent = e.message; } }, 0);
   return h('div', {}, h('h2', {}, 'Панель'),
     h('div', { class: 'card' }, h('h3', {}, `Пользователь: ${S.user}`), h('div', { class: 'row' }, o, n, h('button', { class: 'btn', onclick: act(async () => { await api('POST', '/password', { oldPassword: o.value, newPassword: n.value }); o.value = ''; n.value = ''; }, 'Пароль изменён') }, 'Сменить пароль'))),
-    h('div', { class: 'card' }, h('h3', {}, 'Журнал действий'), auditBox));
+    auditCard());
+}
+
+/** Журнал действий: время, кто, откуда (IP и страна), что сделал. Поиск и фильтры считает сервер по последним записям журнала. */
+function auditCard() {
+  const F = { q: '', user: '', action: '', country: '', ip: '', from: '', to: '' };
+  const box = h('div'); const info = h('div', { class: 'muted small' }); let timer = 0; let seq = 0; let retries = 0;
+  const sel = (key, ph) => { const el = h('select', { 'aria-label': tr(ph), onchange: () => { F[key] = el.value; run(); } }); return el; };
+  const fill = (el, ph, list, extra) => { const cur = el.value; el.replaceChildren(h('option', { value: '' }, tr(ph)), extra || null, ...list.map((v) => h('option', { value: v }, el === country ? `${flagOf(v)} ${v} · ${geoName('region', v)}` : v))); el.value = cur; };
+  const user = sel('user', 'Все пользователи'); const action = sel('action', 'Все действия'); const country = sel('country', 'Все страны');
+  const text = (key, ph, w) => { const el = h('input', { type: key === 'from' || key === 'to' ? 'date' : 'search', placeholder: key === 'q' || key === 'ip' ? tr(ph) : '', title: tr(ph), 'aria-label': tr(ph), style: `width:${w}px`, oninput: () => { F[key] = el.value.trim(); clearTimeout(timer); timer = setTimeout(run, 250); } }); return el; };
+  const q = text('q', 'Поиск по журналу…', 220); const ip = text('ip', 'IP (начало)', 130); const from = text('from', 'С даты', 140); const to = text('to', 'По дату', 140);
+  const set = (key, el, v) => { F[key] = v; if (el) el.value = v; run(); };
+  const pick = (key, el, v, label) => h('span', { class: 'clickable', title: tr('Нажмите на пользователя, IP, страну или действие, чтобы отфильтровать по нему.'), onclick: () => set(key, el, v) }, label == null ? v : label);
+  const reset = () => { for (const k of Object.keys(F)) F[k] = ''; for (const el of [q, ip, from, to, user, action, country]) el.value = ''; run(); };
+  const when = (ts) => ts.replace('T', ' ').slice(0, 19);
+  async function run() {
+    const my = ++seq;
+    const qs = Object.entries(F).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).concat('n=200').join('&');
+    try {
+      const r = await api('GET', `/audit?${qs}`);
+      if (my !== seq) return;
+      fill(user, 'Все пользователи', r.facets.users); fill(action, 'Все действия', r.facets.actions); fill(country, 'Все страны', r.facets.countries, h('option', { value: '-' }, tr('Страна неизвестна')));
+      info.textContent = `${tr('Показано')} ${r.entries.length} ${tr('из')} ${r.total}${r.pending ? ` · ${tr('Определяю страны…')}` : ''}`;
+      box.replaceChildren(r.entries.length ? h('table', {}, h('thead', {}, h('tr', {}, ['Время', 'Кто', 'IP', 'Страна', 'Действие', 'Детали'].map((x) => h('th', {}, tr(x))))), h('tbody', {}, r.entries.map((e) => {
+        const d = e.detail == null ? '' : (typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail));
+        return h('tr', {}, h('td', { class: 'small' }, when(e.ts)), h('td', {}, pick('user', user, e.user)), h('td', { class: 'small mono' }, e.ip && e.ip !== '-' ? pick('ip', ip, e.ip) : '—'),
+          h('td', { class: 'small' }, e.country ? pick('country', country, e.country, h('span', { title: geoName('region', e.country) }, h('span', { class: 'geo-f', 'aria-hidden': 'true' }, flagOf(e.country)), ' ', e.country)) : '—'),
+          h('td', {}, pick('action', action, e.action)), h('td', { class: 'small muted', title: d }, d.slice(0, 80)));
+      }))) : h('div', { class: 'muted' }, tr('Ничего не найдено')));
+      if (r.pending && retries++ < 4) { clearTimeout(timer); timer = setTimeout(run, 2500); } else if (!r.pending) retries = 0;
+    } catch (e) { if (my === seq) box.textContent = e.message; }
+  }
+  setTimeout(run, 0);
+  return h('div', { class: 'card' }, h('h3', {}, 'Журнал действий'),
+    h('div', { class: 'row audit-filters' }, q, user, action, country, ip, from, to, h('button', { class: 'btn', onclick: reset }, 'Сбросить фильтры')),
+    info, box, h('div', { class: 'muted small' }, 'Страна определяется по IP внешним сервисом ipwho.is (отправляется только публичный адрес, ответ кэшируется на 30 дней); для внутренних адресов страны нет.'));
 }
 
 /** Очистка кэшей и мусора на игровой ВМ (против лагов). */

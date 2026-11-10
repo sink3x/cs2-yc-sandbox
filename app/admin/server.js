@@ -17,6 +17,7 @@ const online = require('../lib/online');
 const pwa = require('../lib/pwa');
 const { createUptime } = require('../lib/uptime');
 const { createVote } = require('../lib/vote');
+const { createGeo } = require('../lib/ipgeo');
 const stateLib = require('../lib/state');
 const account = require('../lib/account');
 const people = require('../lib/people');
@@ -68,6 +69,7 @@ function validateCustomSkins(input) {
   });
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
+const AUDIT_SCAN = 20000; // сколько последних записей журнала просматриваем при поиске
 const PLAYER_OK = new Set(['GET /api/skin-wears', 'POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'POST /api/vm/request-start', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'POST /api/skins/refresh/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
@@ -197,6 +199,10 @@ function createApp(deps = {}) {
   }
   const originOf = (req, secure) => (config.publicUrl ? String(config.publicUrl).replace(/\/+$/, '') : `${secure ? 'https' : 'http'}://${req.headers.host}`);
 
+  const geo = createGeo({
+    file: deps.ipGeoFile || path.join(VAR, 'ipgeo.json'), now,
+    lookup: deps.geoLookup || (async (addr) => { const r = await httpGet(`https://ipwho.is/${encodeURIComponent(addr)}?fields=success,country_code`, {}); if (!r.json) throw new Error('geo: нет ответа'); return r.json.success === false ? '' : r.json.country_code; }),
+  });
   const audit = (user, ip, action, detail) => {
     try {
       fs.mkdirSync(path.dirname(auditFile), { recursive: true });
@@ -865,8 +871,20 @@ function createApp(deps = {}) {
     ['GET', '/api/audit', async ({ query }) => {
       let lines = [];
       try { lines = fs.readFileSync(auditFile, 'utf8').trim().split('\n').filter(Boolean); } catch { /* none yet */ }
-      const n = Math.min(parseInt(query.n || '100', 10) || 100, 500);
-      return { entries: lines.slice(-n).reverse().map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) };
+      const all = lines.slice(-AUDIT_SCAN).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean).reverse(); // свежие сверху
+      const { map, pending } = await geo.resolve(all.map((e) => e.ip));
+      for (const e of all) e.country = map[e.ip] || '';
+      const uniq = (f) => [...new Set(all.map(f).filter(Boolean))].sort();
+      const q = String(query.q || '').trim().toLowerCase();
+      const user = String(query.user || ''); const action = String(query.action || ''); const country = String(query.country || '').toUpperCase(); const ip = String(query.ip || '').trim();
+      const day = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : '');
+      const from = day(query.from); const to = day(query.to);
+      const match = (e) => (!user || e.user === user) && (!action || e.action === action || e.action.startsWith(`${action}.`)) && (!country || (country === '-' ? !e.country : e.country === country))
+        && (!ip || String(e.ip).startsWith(ip)) && (!from || e.ts.slice(0, 10) >= from) && (!to || e.ts.slice(0, 10) <= to)
+        && (!q || `${e.user} ${e.ip} ${e.country} ${e.action} ${e.detail == null ? '' : JSON.stringify(e.detail)} ${e.ts}`.toLowerCase().includes(q));
+      const hit = all.filter(match);
+      const n = Math.min(parseInt(query.n || '200', 10) || 200, 1000);
+      return { entries: hit.slice(0, n), total: hit.length, scanned: all.length, pending, facets: { users: uniq((e) => e.user), actions: uniq((e) => e.action), countries: uniq((e) => e.country) } };
     }],
   ];
 

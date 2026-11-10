@@ -10,7 +10,7 @@ const PUB = path.join(__dirname, '..', 'admin', 'public');
 function load(lang) {
   const ctx = { document: { documentElement: {} }, localStorage: { getItem: () => JSON.stringify(lang), setItem() {} }, navigator: { language: lang }, location: {} };
   ctx.window = ctx; vm.createContext(ctx);
-  const files = ['i18n.js', 'i18n-extra.js', 'i18n-extra2.js', 'i18n-extra3.js', 'i18n-extra4.js', 'i18n-extra5.js', 'i18n-extra6.js', 'i18n-extra7.js'];
+  const files = ['i18n.js', 'i18n-extra.js', 'i18n-extra2.js', 'i18n-extra3.js', 'i18n-extra4.js', 'i18n-extra5.js', 'i18n-extra6.js', 'i18n-extra7.js', 'i18n-extra8.js'];
   vm.runInContext(files.map((f) => fs.readFileSync(path.join(PUB, f), 'utf8').replace(/^'use strict';/, '')).join('\n') + '\n;this.__D=D;this.__P=P;this.__TIPS=TIPS;this.__tr=tr;', ctx);
   return ctx;
 }
