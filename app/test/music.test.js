@@ -42,7 +42,7 @@ function fakeTool(dir, log) {
     if (cmd === 'unzip') { const d = args[args.indexOf('-d') + 1]; fs.writeFileSync(path.join(d, 'Source2Viewer-CLI'), '#!'); return { ok: true, stdout: '', stderr: '' }; }
     const out = args[args.indexOf('--output') + 1]; const filter = args[args.indexOf('--vpk_filepath') + 1];
     if (args.includes('--vpk_list')) return { ok: true, stdout: 'sounds/music/danielsadowski_01/wonround.vsnd_c\nsounds/music/danielsadowski_01/mainmenu.vsnd_c\n', stderr: '' };
-    if (filter === 'scripts/items/items_game.txt') { fs.mkdirSync(path.join(out, 'scripts/items'), { recursive: true }); fs.writeFileSync(path.join(out, 'scripts/items/items_game.txt'), ITEMS); return { ok: true, stdout: '', stderr: '' }; }
+    if (filter === 'scripts/items/items_game.txt') { fs.writeFileSync(out, ITEMS); return { ok: true, stdout: 'Dump written', stderr: '' }; } // как настоящая утилита: один файл пишется прямо по пути --output
     if (filter === 'sounds/music/danielsadowski_01/') { const d = path.join(out, 'sounds/music/danielsadowski_01'); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'wonround.mp3'), 'ID3won'); fs.writeFileSync(path.join(d, 'mainmenu.mp3'), 'ID3menu'); return { ok: true, stdout: '', stderr: '' }; }
     return { ok: false, stdout: '', stderr: 'boom', code: 1 };
   };

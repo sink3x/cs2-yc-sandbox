@@ -117,7 +117,8 @@ function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log 
     for (const extra of [[], ['--vpk_decompile']]) {
       fs.rmSync(tmp, { recursive: true, force: true });
       const r = await exec(bin, ['--input', pak, '--vpk_filepath', 'scripts/items/items_game.txt', '--output', tmp, ...extra], { env, timeout: 180000, maxBuffer: 64 << 20 });
-      const ig = findFile(tmp, 'items_game.txt');
+      // один файл утилита пишет прямо по пути --output (без подкаталогов), несколько — в каталог
+      let ig = null; try { ig = fs.statSync(tmp).isFile() ? tmp : findFile(tmp, 'items_game.txt'); } catch { /* ничего не выгружено */ }
       if (ig) { const text = fs.readFileSync(ig, 'utf8'); const defs = parseMusicDefs(text); fs.rmSync(tmp, { recursive: true, force: true }); if (Object.keys(defs).length) return { defs, why: '' }; why.push(`файл ${text.length} б, секций ${text.split('"music_definitions"').length - 1}, начало: ${text.slice(0, 80).replace(/\s+/g, ' ')}`); } else why.push(`файл не выгружен${extra.length ? ' (-d)' : ''}: ${tail(r)}`);
     }
     fs.rmSync(tmp, { recursive: true, force: true });
