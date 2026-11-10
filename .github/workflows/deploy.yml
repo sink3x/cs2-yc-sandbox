@@ -89,9 +89,19 @@ jobs:
             sleep 10
             code="$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$PANEL_URL/api/brand" || true)"
             echo "попытка $i: HTTP $code"
-            [ "$code" = "200" ] && exit 0
+            [ "$code" = "200" ] && break
           done
-          echo "::warning::Панель не ответила за 200 с после перезапуска"
+          [ "$code" = "200" ] || { echo "::warning::Панель не ответила за 200 с после перезапуска"; }
+          # панель должна отдавать именно собранный сейчас фронтенд: иначе ВМ не подхватила новый код
+          want="$(grep -o 'loader\.[0-9a-f]*\.js' build/public/index.html | head -1)"
+          for i in $(seq 1 6); do
+            got="$(curl -s -m 8 "$PANEL_URL/" | grep -o 'loader\.[0-9a-f]*\.js' | head -1 || true)"
+            echo "фронтенд: ждём $want, отдаётся $got"
+            [ -n "$want" ] && [ "$want" = "$got" ] && exit 0
+            sleep 10
+          done
+          echo "::error::Панель работает на старом коде: загрузка нового не прошла. Конец вывода консоли ВМ:"
+          yc compute instance get-serial-port-output --id "$PANEL_INSTANCE_ID" --folder-id "$FOLDER_ID" 2>/dev/null | grep -aiE "bootstrap|install-admin|cs2-admin|FAILED|No space|error" | tail -40 | cut -c1-300 || true
           exit 1
 
       - name: Убрать ключи с раннера
