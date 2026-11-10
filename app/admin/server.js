@@ -73,6 +73,8 @@ const PLAYER_OK = new Set(['GET /api/skin-wears', 'POST /api/link-account', 'GET
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'POST /api/skins/refresh/:steamid', 'GET /api/faceit/:steamid']);
 const MAX_PLAYER_ACCOUNTS = 300;
+/** В журнал аудита попадает команда RCON, но не секреты в ней (пароли, ключи, токены): остаётся только имя команды. */
+const redactCmd = (c) => { const t = String(c || '').trim(); return /pass|secret|token|key|auth/i.test(t) ? `${t.split(/\s+/)[0].slice(0, 40)} [скрыто]` : t.slice(0, 120); };
 const DEFAULT_SETTINGS = { autoStopIdleMinutes: 30, startupGraceMinutes: 20 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/png', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
@@ -101,7 +103,8 @@ function createApp(deps = {}) {
   const calloutMaps = deps.calloutMaps || new CalloutMaps({ dir: path.join(PUBLIC_DIR, 'callouts') });
   const catalogCache = deps.catalogCache || new CatalogCache({ file: path.join(VAR, 'skin-catalog.json') });
   const keysBlocked = (ip) => limiter.blocked(`ip:${ip}`);
-  const loadUsers = () => (readJson(usersFile, { users: {} }).users) || {};
+  // Без прототипа: имя пользователя из запроса («__proto__», «constructor») не должно находить Object.prototype
+  const loadUsers = () => Object.assign(Object.create(null), readJson(usersFile, { users: {} }).users || {});
   const loadSettings = () => ({ ...DEFAULT_SETTINGS, ...readJson(settingsFile, {}), playerLogin: readJson(settingsFile, {}).playerLogin !== false, playerStart: readJson(settingsFile, {}).playerStart === true });
   // ---- профиль: почта, Steam, Faceit ----------------------------------------------------------
   const brandFile = deps.brandFile || path.join(VAR, 'brand.json');
@@ -169,8 +172,9 @@ function createApp(deps = {}) {
     const c = readStateCache(); const adm = ((c && c.state && c.state.admins) || []).find((a) => String(a.steamid) === String(steamid));
     if (!adm) return null;
     const free = Object.keys(users).filter((n) => users[n].role !== 'player' && !users[n].steamid);
-    const byName = (v) => (v ? free.find((n) => n.toLowerCase() === String(v).toLowerCase()) : null);
-    return byName(adm.name) || byName(persona) || (free.length === 1 ? free[0] : null);
+    // Только имя из списка админов сервера (его ведёт владелец). Ник Steam меняет сам игрок, а «единственный свободный аккаунт» давал
+    // любому игровому админу права панели, поэтому ни то ни другое для автопривязки не годится: остальное — вручную («Игроки сервера»).
+    return adm.name ? (free.find((n) => n.toLowerCase() === String(adm.name).toLowerCase()) || null) : null;
   }
   /** Steam-игрок (аккаунт p<steamid>, без пароля) вливается в панельный аккаунт: сетапы и профиль переходят, аккаунт игрока удаляется. */
   function absorbPlayer(users, from, into) {
@@ -604,7 +608,7 @@ function createApp(deps = {}) {
       const r = await agent('POST', '/rcon', { command: `css_playsound ${sound} ${target}` });
       return { ok: true, output: r && r.output };
     }],
-    ['POST', '/api/rcon', async ({ body, user, ip }) => { audit(user, ip, 'rcon', String(body.command || '').slice(0, 120)); return agent('POST', '/rcon', body); }],
+    ['POST', '/api/rcon', async ({ body, user, ip }) => { audit(user, ip, 'rcon', redactCmd(body.command)); return agent('POST', '/rcon', body); }],
     ['POST', '/api/apply-live', async ({ user, ip }) => { audit(user, ip, 'apply-live'); return agent('POST', '/apply-live', {}, 40000); }],
     ['POST', '/api/service/:action', async ({ params, user, ip }) => { audit(user, ip, `service.${params.action}`); return agent('POST', `/service/${encodeURIComponent(params.action)}`, {}, 320000); }],
     ['POST', '/api/cleanup', async ({ body, user, ip }) => { audit(user, ip, 'cleanup', body.actions); return agent('POST', '/cleanup', { actions: body.actions }, 60000); }],
@@ -870,15 +874,16 @@ function createApp(deps = {}) {
   function staticFile(name) {
     if (staticCache.has(name)) return staticCache.get(name);
     const file = path.join(PUBLIC_DIR, name);
+    if (!file.startsWith(PUBLIC_DIR + path.sep) || name.includes('\0')) return null;
     let v = null;
-    if (file.startsWith(PUBLIC_DIR) && fs.existsSync(file) && fs.statSync(file).isFile()) v = { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
-    staticCache.set(name, v);
+    if (fs.existsSync(file) && fs.statSync(file).isFile()) v = { body: fs.readFileSync(file), type: MIME[path.extname(file)] || 'application/octet-stream' };
+    if (v) staticCache.set(name, v); // кэшируем только существующие файлы: иначе неавторизованные запросы к случайным путям растят память без предела
     return v;
   }
 
   const SEC_HEADERS = {
     'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://avatars.fastly.steamstatic.com https://avatars.cloudflare.steamstatic.com https://raw.githubusercontent.com; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://avatars.fastly.steamstatic.com https://avatars.cloudflare.steamstatic.com https://raw.githubusercontent.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
   };
 
   function clientIp(req) {

@@ -80,6 +80,8 @@ if [ -s "$STAMP/panel-users" ]; then
     printf '%s' "$pw" | CS2ADMIN_VAR="$VARDIR" node "$APP/app/admin/adduser.js" "$name"
   done < "$STAMP/panel-users"
   chown -R cs2admin:cs2admin "$VARDIR"
+  # начальные пароли больше не нужны на диске (аккаунты созданы, дальше их меняют в панели); bootstrap принесёт файл заново только если он есть в метаданных
+  shred -u "$STAMP/panel-users" 2>/dev/null || rm -f "$STAMP/panel-users"
 fi
 
 # ---- reverse proxy with automatic HTTPS (Let's Encrypt) -------------------------------------------

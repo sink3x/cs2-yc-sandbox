@@ -1,0 +1,12 @@
+[Unit]
+Description=Block the metadata service for the CS2 game user (secrets must not be readable by plugins)
+After=network-pre.target
+Before=cs2.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/cs2-block-metadata.sh
+
+[Install]
+WantedBy=multi-user.target

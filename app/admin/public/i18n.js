@@ -5,9 +5,9 @@
 const LANGS = { ru: 'Русский', en: 'English', de: 'Deutsch', fr: 'Français' };
 const LANG_IDX = { en: 0, de: 1, fr: 2 };
 function detectLang() {
-  try { const v = localStorage.getItem('cs2ui.lang'); if (v && LANGS[JSON.parse(v)]) return JSON.parse(v); } catch { /* нет хранилища */ }
+  try { const v = localStorage.getItem('cs2ui.lang'); if (v && Object.prototype.hasOwnProperty.call(LANGS, JSON.parse(v))) return JSON.parse(v); } catch { /* нет хранилища */ }
   const n = String((navigator.languages && navigator.languages[0]) || navigator.language || 'ru').slice(0, 2).toLowerCase();
-  return LANGS[n] ? n : (n === 'ru' || n === 'uk' || n === 'be' ? 'ru' : 'en');
+  return Object.prototype.hasOwnProperty.call(LANGS, n) ? n : (n === 'ru' || n === 'uk' || n === 'be' ? 'ru' : 'en');
 }
 let LANG = detectLang();
 document.documentElement.lang = LANG;

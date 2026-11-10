@@ -236,7 +236,7 @@ test('profile: e-mail, links, password policy and Steam link/login via OpenID', 
     // Steam не привязан → вход через Steam отказывает
     const cbq = (extra = '', id = STEAM, n = 'n1') => `/api/auth/steam/callback${extra}`;
     const assertion = (returnTo, id = STEAM, nonce = 'n1') => new URLSearchParams({ 'openid.ns': 'http://specs.openid.net/auth/2.0', 'openid.mode': 'id_res', 'openid.op_endpoint': 'https://steamcommunity.com/openid/login',
-      'openid.claimed_id': `https://steamcommunity.com/openid/id/${id}`, 'openid.identity': `https://steamcommunity.com/openid/id/${id}`, 'openid.return_to': returnTo, 'openid.response_nonce': nonce, 'openid.assoc_handle': 'x', 'openid.signed': 'a', 'openid.sig': 'b' });
+      'openid.claimed_id': `https://steamcommunity.com/openid/id/${id}`, 'openid.identity': `https://steamcommunity.com/openid/id/${id}`, 'openid.return_to': returnTo, 'openid.response_nonce': nonce, 'openid.assoc_handle': 'x', 'openid.signed': 'signed,op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle', 'openid.sig': 'b' });
     const host = `http://127.0.0.1:${t.app.server.address().port}`;
     const raw = async (p, cookie) => { const r = await fetch(host + p, { redirect: 'manual', headers: cookie ? { cookie } : {} }); return { status: r.status, loc: r.headers.get('location') || '', cookie: (r.headers.get('set-cookie') || '').split(';')[0] }; };
     assert.equal((await t.req('PUT', '/api/settings', { playerLogin: false }, c, CSRF)).json.playerLogin, false);
@@ -314,7 +314,7 @@ test('roles: a Steam player gets only own skins/profile; admin-only routes are c
     const host = `http://127.0.0.1:${t.app.server.address().port}`;
     const rt = `${host}/api/auth/steam/callback`;
     const q = (id, n) => new URLSearchParams({ 'openid.ns': 'http://specs.openid.net/auth/2.0', 'openid.mode': 'id_res', 'openid.op_endpoint': 'https://steamcommunity.com/openid/login', 'openid.claimed_id': `https://steamcommunity.com/openid/id/${id}`,
-      'openid.identity': `https://steamcommunity.com/openid/id/${id}`, 'openid.return_to': rt, 'openid.response_nonce': n, 'openid.signed': 'a', 'openid.sig': 'b' });
+      'openid.identity': `https://steamcommunity.com/openid/id/${id}`, 'openid.return_to': rt, 'openid.response_nonce': n, 'openid.signed': 'signed,op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle', 'openid.sig': 'b' });
     const raw = async (p) => { const r = await fetch(host + p, { redirect: 'manual' }); return { loc: r.headers.get('location'), cookie: (r.headers.get('set-cookie') || '').split(';')[0] }; };
     const admin = await t.login();
     const reg = await raw('/api/auth/steam/callback?' + q(ME, 'p1'));
@@ -387,7 +387,7 @@ test('Steam login: автопривязка по списку админов с�
   try {
     const host = `http://127.0.0.1:${t.app.server.address().port}`;
     const raw = async (p) => { const r = await fetch(host + p, { redirect: 'manual' }); return { loc: r.headers.get('location') || '', cookie: (r.headers.get('set-cookie') || '').split(';')[0] }; };
-    const cb = (n) => `/api/auth/steam/callback?` + new URLSearchParams({ 'openid.ns': 'http://specs.openid.net/auth/2.0', 'openid.mode': 'id_res', 'openid.op_endpoint': 'https://steamcommunity.com/openid/login', 'openid.claimed_id': `https://steamcommunity.com/openid/id/${STEAM}`, 'openid.identity': `https://steamcommunity.com/openid/id/${STEAM}`, 'openid.return_to': `${host}/api/auth/steam/callback`, 'openid.response_nonce': n, 'openid.assoc_handle': 'x', 'openid.signed': 'a', 'openid.sig': 'b' });
+    const cb = (n) => `/api/auth/steam/callback?` + new URLSearchParams({ 'openid.ns': 'http://specs.openid.net/auth/2.0', 'openid.mode': 'id_res', 'openid.op_endpoint': 'https://steamcommunity.com/openid/login', 'openid.claimed_id': `https://steamcommunity.com/openid/id/${STEAM}`, 'openid.identity': `https://steamcommunity.com/openid/id/${STEAM}`, 'openid.return_to': `${host}/api/auth/steam/callback`, 'openid.response_nonce': n, 'openid.assoc_handle': 'x', 'openid.signed': 'signed,op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle', 'openid.sig': 'b' });
     const c = await t.login();
     await t.req('PUT', '/api/settings', { playerLogin: false }, c, CSRF);
     // админа нет в списке сервера → не привязываем

@@ -28,6 +28,10 @@ async function verifySteamAssertion(query, expectedReturnTo, post, nonces = new 
   if (q['openid.return_to'] !== expectedReturnTo) throw bad('steam: return_to mismatch');
   const m = CLAIMED_RE.exec(String(q['openid.claimed_id'] || ''));
   if (!m || q['openid.identity'] !== q['openid.claimed_id']) throw bad('steam: bad identity');
+  if (q['openid.ns'] !== OPENID_NS) throw bad('steam: bad namespace');
+  // Подпись должна покрывать именно те поля, из которых мы берём личность: иначе их можно подменить, не ломая подпись
+  const signed = String(q['openid.signed'] || '').split(',');
+  for (const f of ['op_endpoint', 'claimed_id', 'identity', 'return_to', 'response_nonce']) if (!signed.includes(f)) throw bad(`steam: field not signed: ${f}`);
   const nonce = String(q['openid.response_nonce'] || '');
   if (!nonce) throw bad('steam: no nonce');
   for (const [k, t] of nonces) if (now - t > 10 * 60_000) nonces.delete(k);

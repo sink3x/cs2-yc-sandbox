@@ -5,7 +5,7 @@ set -euo pipefail
 APP=/opt/cs2-app
 STAMP=/var/lib/cs2-bootstrap
 DATA_DEV=/dev/disk/by-id/virtio-cs2data
-PKG_VER=2
+PKG_VER=3
 export DEBIAN_FRONTEND=noninteractive
 
 log() { echo "[install-cs2] $*"; }
@@ -15,7 +15,7 @@ mkdir -p "$STAMP"
 if [ "$(cat "$STAMP/packages" 2>/dev/null || true)" != "$PKG_VER" ]; then
   log "installing packages"
   apt-get update -qq
-  apt-get install -y -qq ca-certificates curl unzip jq tar rsync lib32gcc-s1 lib32stdc++6 mariadb-server nodejs
+  apt-get install -y -qq ca-certificates curl unzip jq tar rsync lib32gcc-s1 lib32stdc++6 mariadb-server nodejs iptables
   echo "$PKG_VER" > "$STAMP/packages"
 fi
 NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
@@ -78,13 +78,19 @@ CNF_CHANGED=0
 cmp -s "$CNF_NEW" /etc/mysql/mariadb.conf.d/99-cs2.cnf || { install -m 0644 "$CNF_NEW" /etc/mysql/mariadb.conf.d/99-cs2.cnf; CNF_CHANGED=1; }
 rm -f "$CNF_NEW"
 
+# ---- 4b. the game process (user steam, third-party plugins) must not reach the metadata service ----------------
+# 169.254.169.254 hands out AGENT_TOKEN, the S3 keys and the service-account token to ANY local user. A compromised plugin could
+# otherwise use them to read/overwrite backups and call the agent. Root (agent, backups, bootstrap) is unaffected.
+install -m 0755 "$APP"/vm-cs2/block-metadata.sh /usr/local/sbin/cs2-block-metadata.sh
+
 # ---- 5. systemd units ----------------------------------------------------------------------------
 install -m 0644 "$APP"/vm-cs2/systemd/*.service "$APP"/vm-cs2/systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable cs2-bootstrap.service cs2-agent.service cs2.service cs2-backup-shutdown.service cs2-backup-nightly.timer >/dev/null 2>&1 || true
+systemctl enable cs2-bootstrap.service cs2-agent.service cs2.service cs2-backup-shutdown.service cs2-backup-nightly.timer cs2-block-metadata.service >/dev/null 2>&1 || true
 # NOTE: this script runs inside cs2-bootstrap.service, which is ordered Before= the units below,
 # so they must be started with --no-block (a blocking start would wait for us: deadlock).
 if [ "$CNF_CHANGED" = 1 ]; then systemctl restart mariadb; else systemctl start mariadb; fi
+systemctl --no-block restart cs2-block-metadata.service
 systemctl --no-block restart cs2-agent.service
 systemctl --no-block start cs2-backup-shutdown.service cs2-backup-nightly.timer
 # Game server: never restarted here (a running match must survive a re-bootstrap); started if not yet running.

@@ -1,7 +1,7 @@
 [Unit]
 Description=Counter-Strike 2 dedicated server
-After=network-online.target mariadb.service cs2-bootstrap.service
-Wants=network-online.target
+After=network-online.target mariadb.service cs2-bootstrap.service cs2-block-metadata.service
+Wants=network-online.target cs2-block-metadata.service
 Requires=mariadb.service
 RequiresMountsFor=/srv/cs2
 StartLimitIntervalSec=0

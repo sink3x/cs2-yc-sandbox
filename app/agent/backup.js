@@ -61,6 +61,20 @@ async function listBackups(s3 = s3Client()) {
   return (await s3.list(PREFIX)).sort((a, b) => b.key.localeCompare(a.key));
 }
 
+/**
+ * Восстановление идёт от root, а архив лежит в бакете: прежде чем распаковывать, смотрим оглавление. Только обычные файлы и каталоги,
+ * внутри корня сервера (без абсолютных путей и «..», без ссылок и устройств, которыми можно выйти за его пределы).
+ */
+async function assertSafeArchive(file) {
+  const out = await exec('tar', ['tzvf', file], { maxBuffer: 64 << 20 });
+  for (const line of out.split('\n').filter(Boolean)) {
+    const type = line[0];
+    const name = line.replace(/^\S+\s+\S+\s+\d+\s+\S+\s+\S+\s+/, '');
+    if (type !== '-' && type !== 'd') throw new Error(`restore: unsafe entry in the archive (${type}): ${name.slice(0, 80)}`);
+    if (name.startsWith('/') || name.split('/').includes('..')) throw new Error(`restore: unsafe path in the archive: ${name.slice(0, 80)}`);
+  }
+}
+
 async function restoreBackup({ key = 'latest', s3 = s3Client() } = {}) {
   if (!s3) throw new Error('restore: object storage is not configured');
   let k = key;
@@ -73,7 +87,8 @@ async function restoreBackup({ key = 'latest', s3 = s3Client() } = {}) {
   const tmp = path.join(E.dirs.cache, 'restore.tgz');
   fs.mkdirSync(E.dirs.cache, { recursive: true });
   fs.writeFileSync(tmp, await s3.get(k));
-  await exec('tar', ['xzf', tmp, '-C', E.dirs.root]);
+  await assertSafeArchive(tmp);
+  await exec('tar', ['xzf', tmp, '-C', E.dirs.root, '--no-same-owner']);
   fs.rmSync(tmp, { force: true });
   const dumpPath = path.join(E.dirs.data, 'db-dump.sql.gz');
   if (fs.existsSync(dumpPath)) {
@@ -87,7 +102,7 @@ async function restoreBackup({ key = 'latest', s3 = s3Client() } = {}) {
   return { key: k };
 }
 
-module.exports = { createBackup, listBackups, restoreBackup, s3Client };
+module.exports = { createBackup, listBackups, restoreBackup, s3Client, assertSafeArchive };
 
 if (require.main === module) {
   const cmd = process.argv[2];
