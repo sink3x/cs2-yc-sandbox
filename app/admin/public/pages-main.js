@@ -273,9 +273,9 @@ function pageTeams() {
       const list = TEAM_LOGOS.codes.filter((c) => !w || c.includes(w) || (PRO_TEAMS[c] && PRO_TEAMS[c][0].toLowerCase().includes(w)));
       list.sort((a, b) => (PRO_TEAMS[a] ? 0 : 1) - (PRO_TEAMS[b] ? 0 : 1) || a.localeCompare(b));
       put(grid, h('button', { class: 'btn tm-cell', onclick: () => { D.teams[side].logo = ''; m.close(); draw(); } }, logoImg('', 44), h('span', {}, 'Без логотипа')),
-        list.slice(0, 120).map((c) => h('button', { class: `btn tm-cell${D.teams[side].logo === c ? ' on' : ''}`, onclick: () => { const t = D.teams[side]; t.logo = c; if (PRO_TEAMS[c]) { if (!t.name || Object.values(PRO_TEAMS).some((x) => x[0] === t.name)) t.name = PRO_TEAMS[c][0]; if (PRO_TEAMS[c][1].length === 2 && PRO_TEAMS[c][1] !== 'EU') t.flag = PRO_TEAMS[c][1]; } m.close(); draw(); } },
+        list.slice(0, 60).map((c) => h('button', { class: `btn tm-cell${D.teams[side].logo === c ? ' on' : ''}`, onclick: () => { const t = D.teams[side]; t.logo = c; if (PRO_TEAMS[c]) { if (!t.name || Object.values(PRO_TEAMS).some((x) => x[0] === t.name)) t.name = PRO_TEAMS[c][0]; if (PRO_TEAMS[c][1].length === 2 && PRO_TEAMS[c][1] !== 'EU') t.flag = PRO_TEAMS[c][1]; } m.close(); draw(); } },
           logoImg(c, 44), h('span', {}, document.createTextNode(PRO_TEAMS[c] ? PRO_TEAMS[c][0] : c)))),
-        list.length > 120 ? h('div', { class: 'muted small' }, `… ${tr('и ещё')} ${list.length - 120}: ${tr('уточните поиск')}`) : null, !list.length ? h('div', { class: 'muted' }, 'Ничего не найдено') : null);
+        list.length > 60 ? h('div', { class: 'muted small' }, `… ${tr('и ещё')} ${list.length - 60}: ${tr('уточните поиск')}`) : null, !list.length ? h('div', { class: 'muted' }, 'Ничего не найдено') : null);
     };
     q.addEventListener('input', fill);
     m = modal('Логотип команды', h('div', {}, q, h('p', { class: 'muted small' }, 'Это логотипы из файлов самой игры: клиент показывает только их. Свою картинку сервер игрокам показать не может.'), grid), [{ text: 'Закрыть', run: () => true }]);

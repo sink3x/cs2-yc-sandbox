@@ -286,31 +286,32 @@ function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log 
     }
     return logoBusy;
   };
-  const logoOne = new Map();
+  // Все логотипы извлекаются одним запуском утилиты (их ~150, по одному — это сотни запусков подряд).
+  let logoAll = null;
+  const extractLogos = () => {
+    if (!logoAll) {
+      logoAll = (async () => {
+        const tmp = path.join(cacheDir, '.logos-tmp');
+        fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(logoDir, { recursive: true });
+        log('extracting team logos');
+        const r = await exec(bin, ['--input', pak, '--vpk_filepath', LOGO_DIR, '--vpk_extensions', 'vsvg_c', '--vpk_decompile', '--output', tmp], { env, timeout: 240000, maxBuffer: 32 << 20 });
+        let n = 0;
+        const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) { walk(f); continue; } const c = e.name.toLowerCase().replace(/\.[a-z0-9_]+$/, ''); if (!LOGO_RE.test(c) || fs.statSync(f).size > 600000) continue; const text = fs.readFileSync(f, 'utf8'); if (/<svg[\s>]/i.test(text)) { fs.writeFileSync(path.join(logoDir, `${c}.svg`), text); n += 1; } } };
+        try { walk(tmp); } catch { /* ничего не выгружено */ }
+        fs.rmSync(tmp, { recursive: true, force: true });
+        if (!n) throw fail(`Source2Viewer-CLI не выдал логотипы: ${tail(r) || 'пусто'}`);
+        fs.writeFileSync(path.join(logoDir, '.done'), '');
+      })().finally(() => { logoAll = null; });
+    }
+    return logoAll;
+  };
   async function teamLogo(code) {
     const c = String(code || '').toLowerCase();
     if (!LOGO_RE.test(c)) throw fail('bad logo code', 400);
     if (!(await teamLogos()).includes(c)) throw fail('такого логотипа в игре нет', 404);
     const file = path.join(logoDir, `${c}.svg`);
-    if (!fs.existsSync(file)) {
-      if (!logoOne.has(c)) {
-        logoOne.set(c, (async () => {
-          fs.mkdirSync(logoDir, { recursive: true });
-          const tmpName = `.tmp-${c}`; const tmp = path.join(logoDir, tmpName);
-          const clean = () => { for (const e of fs.readdirSync(logoDir)) if (e.startsWith(tmpName)) fs.rmSync(path.join(logoDir, e), { recursive: true, force: true }); };
-          clean();
-          const r = await exec(bin, ['--input', pak, '--vpk_filepath', `${LOGO_DIR}${c}.vsvg_c`, '--vpk_decompile', '--output', tmp], { env, timeout: 120000, maxBuffer: 16 << 20 });
-          const found = [];
-          const walk = (f) => { if (fs.statSync(f).isDirectory()) { for (const e of fs.readdirSync(f)) walk(path.join(f, e)); } else found.push(f); };
-          for (const e of fs.readdirSync(logoDir)) if (e.startsWith(tmpName)) walk(path.join(logoDir, e));
-          let done = false;
-          for (const f of found) { const st = fs.statSync(f); if (st.size > 600000) continue; const text = fs.readFileSync(f, 'utf8'); if (/<svg[\s>]/i.test(text)) { fs.writeFileSync(file, text); done = true; break; } }
-          clean();
-          if (!done) throw fail(`Source2Viewer-CLI не выдал SVG для ${c}: ${tail(r) || 'пусто'}`);
-        })().finally(() => logoOne.delete(c)));
-      }
-      await logoOne.get(c);
-    }
+    if (!fs.existsSync(file) && !fs.existsSync(path.join(logoDir, '.done'))) await extractLogos();
+    if (!fs.existsSync(file)) throw fail('логотип не извлёкся из файлов игры', 404);
     return { code: c, svg: fs.readFileSync(file, 'utf8') };
   }
 

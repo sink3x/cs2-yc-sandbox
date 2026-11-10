@@ -51,7 +51,7 @@ function navSections(vis) {
   for (const [k, v] of vis) if (!used.has(k)) out.push(navBtn(k, v[0], { class: `${S.page === k ? 'on' : ''} mob-hide`, onclick: () => go(k) }));
   return out;
 }
-const needsState = new Set(['maps', 'settings', 'plugins', 'admins', 'sounds']);
+const needsState = new Set(['maps', 'settings', 'plugins', 'admins', 'sounds', 'teams']);
 const mainEl = h('main');
 const navEl = h('nav');
 // ---------------------------------------------------------------- иконки (SVG, 24x24, штрих)
