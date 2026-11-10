@@ -68,7 +68,7 @@ function validateCustomSkins(input) {
   });
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
-const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'POST /api/vm/request-start', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
+const PLAYER_OK = new Set(['GET /api/skin-wears', 'POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'POST /api/vm/request-start', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'POST /api/skins/refresh/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'POST /api/skins/refresh/:steamid', 'GET /api/faceit/:steamid']);
@@ -404,6 +404,41 @@ function createApp(deps = {}) {
     seenSyncAt = now();
     await statsGet('/stats');
   }
+  // Реальные картинки скина по износам: Steam Market рисует каждый износ отдельно (FN…BS). Берём их из поиска Steam на сервере панели
+  // (из браузера нельзя — CORS), складываем в кэш на диске. Запросы идут по одному с паузой, чтобы не упереться в лимит Steam.
+  const wearImgFile = deps.wearImagesFile || path.join(VAR, 'wear-images.json');
+  const WEAR_NAMES = ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle-Scarred'];
+  const WEAR_NAME_RE = /^[\p{L}\p{N} .'’|★™&-]{3,80}$/u;
+  const wearJobs = new Map();
+  async function wearImagesFor(name) {
+    const hit = readJson(wearImgFile, {})[name];
+    const ttl = hit && Object.values(hit.imgs || {}).every(Boolean) ? 30 * 24 * 3600_000 : 3 * 24 * 3600_000; // пустые ответы Steam иногда ложные — перепроверяем раньше
+    if (hit && hit.complete && now() - hit.at < ttl) return hit.imgs;
+    if (wearJobs.has(name)) return wearJobs.get(name);
+    const job = (async () => {
+      const imgs = {}; let complete = true;
+      for (const w of WEAR_NAMES) {
+        const full = `${name} (${w})`;
+        try {
+          const r = await httpGet(`https://steamcommunity.com/market/search/render/?query=${encodeURIComponent(full)}&appid=730&norender=1&count=10`, {});
+          if (!r || r.status !== 200 || !r.json) { complete = false; if (r && r.status === 429) break; }
+          else {
+            const row = (r.json.results || []).find((x) => x.hash_name === full);
+            const icon = row && row.asset_description && row.asset_description.icon_url;
+            imgs[w] = icon && /^[\w-]{20,}$/.test(icon) ? `https://community.akamai.steamstatic.com/economy/image/${icon}/512fx384f` : null; // null — такого износа у скина нет
+          }
+        } catch { complete = false; }
+        await new Promise((res) => setTimeout(res, deps.wearDelayMs ?? 700));
+      }
+      try {
+        const all = readJson(wearImgFile, {}); const keys = Object.keys(all);
+        if (keys.length > 1500) for (const k of keys.slice(0, keys.length - 1400)) delete all[k];
+        all[name] = { at: now(), complete, imgs }; fs.mkdirSync(path.dirname(wearImgFile), { recursive: true }); writeJsonAtomic(wearImgFile, all, 0o600);
+      } catch (e) { log('wear images cache:', e.message); }
+      return imgs;
+    })().finally(() => wearJobs.delete(name));
+    wearJobs.set(name, job); return job;
+  }
   async function overview() {
     const out = { vm: null, server: null, busy: vmState.busy, lastError: vmState.lastError, settings: loadSettings(), idleSince: vmState.idleSince ? new Date(vmState.idleSince).toISOString() : null, lastAutoStop: vmState.lastAutoStop };
     try { out.vm = await vmDescribe(); } catch (e) { out.vmError = e.message; return out; }
@@ -654,6 +689,11 @@ function createApp(deps = {}) {
       if (roleOf(user) !== 'admin') throw Object.assign(new Error('forbidden'), { status: 403 });
       const us = usersWithSlugs(); const ig = inGameAdminIds(); backfillAvatars(us, Object.keys(us));
       return people.listUsers(Object.entries(us).map(([n, u]) => people.publicUser(n, u, { inGameAdmin: ig.has(String(u.steamid)) })), query);
+    }],
+    ['GET', '/api/skin-wears', async ({ query }) => {
+      const name = String(query.name || '').trim();
+      if (!WEAR_NAME_RE.test(name)) throw Object.assign(new Error('skin-wears: bad name'), { status: 400 });
+      return { name, wears: await wearImagesFor(name) };
     }],
     ['GET', '/api/steam-profiles', async ({ query }) => {
       const ids = [...new Set(String(query.ids || '').split(',').filter((x) => /^\d{17}$/.test(x)))].slice(0, 30);

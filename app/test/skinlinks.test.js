@@ -46,3 +46,13 @@ test('market name и ссылки', () => {
 test('wearLook монотонен', () => {
   assert.ok(L.wearLook(0.6).scratch > L.wearLook(0.1).scratch);
 });
+
+test('wearBlend: кроссфейд между соседними износами', () => {
+  const A = [0.035, 0.11, 0.265, 0.415, 0.65];
+  assert.deepEqual(L.wearBlend(A, 0), [1, 0, 0, 0, 0]);
+  assert.deepEqual(L.wearBlend(A, 0.9), [0, 0, 0, 0, 1]);
+  const m = L.wearBlend(A, 0.1875); // ровно посередине между MW и FT
+  assert.equal(m[1], 1); assert.ok(Math.abs(m[2] - 0.5) < 1e-9); assert.equal(m[0] + m[3] + m[4], 0);
+  let prev = -1; for (let w = 0.11; w <= 0.265; w += 0.01) { const o = L.wearBlend(A, w)[2]; assert.ok(o >= prev); prev = o; } // монотонно
+  assert.deepEqual(L.wearBlend([], 0.3), []);
+});

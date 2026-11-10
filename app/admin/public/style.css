@@ -280,7 +280,9 @@ tr.clickable { cursor: pointer; } tr.clickable:hover td { background: var(--hove
 .preview .big { position: relative; overflow: hidden; }
 .wear-scratch { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: overlay; transition: opacity .15s;
   background: repeating-linear-gradient(115deg, transparent 0 7px, rgba(0,0,0,.45) 7px 8px, transparent 8px 19px), repeating-linear-gradient(60deg, transparent 0 11px, rgba(255,255,255,.35) 11px 12px, transparent 12px 29px); }
-.preview .big img { transition: filter .15s; }
+.preview .big img { transition: filter .15s, opacity .18s ease; }
+.wear-stack { position: absolute; inset: 0; pointer-events: none; }
+.preview .big .wear-stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity .12s linear; }
 .skin-links { margin: 10px 0; } .skin-links summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
 
 img.avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; }

@@ -75,6 +75,16 @@
   /** Параметры вида износа: CSS-фильтр картинки и сила «царапин» (0..1). Приблизительно: в каталоге одна картинка на скин. */
   function wearLook(w) { const x = Math.min(1, Math.max(0, w)); return { filter: `saturate(${(1 - 0.45 * x).toFixed(2)}) contrast(${(1 + 0.12 * x).toFixed(2)}) brightness(${(1 - 0.22 * x).toFixed(2)})`, scratch: Math.min(0.9, x * 1.6) }; }
 
-  const api = { crc32, encodeProto, inspectHex, inspectUrl, previewData, wearCat, marketName, marketLinks, wearLook, rarityNum, VIEWERS };
+  /** Плавный переход между настоящими картинками износа. anchors — float-центры доступных износов по возрастанию;
+   *  → непрозрачности слоёв (картинки лежат друг на друге): нижний соседний слой 1, верхний — доля t, остальные 0. */
+  function wearBlend(anchors, w) {
+    const n = anchors.length; const out = new Array(n).fill(0); if (!n) return out;
+    const x = Math.min(1, Math.max(0, Number(w) || 0));
+    if (x <= anchors[0]) { out[0] = 1; return out; }
+    if (x >= anchors[n - 1]) { out[n - 1] = 1; return out; }
+    let i = 0; while (anchors[i + 1] <= x) i++;
+    out[i] = 1; out[i + 1] = (x - anchors[i]) / (anchors[i + 1] - anchors[i]); return out;
+  }
+  const api = { wearBlend, crc32, encodeProto, inspectHex, inspectUrl, previewData, wearCat, marketName, marketLinks, wearLook, rarityNum, VIEWERS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SkinLinks = api;
 })(typeof window !== 'undefined' ? window : globalThis);

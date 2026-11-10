@@ -23,6 +23,7 @@ const MUSIC_EVENTS = [
 ];
 const extLink = (href, text) => h('a', { class: 'btn', href, target: '_blank', rel: 'noopener noreferrer' }, text);
 const WEAR_PRESETS = [['FN', 0.03], ['MW', 0.1], ['FT', 0.25], ['WW', 0.41], ['BS', 0.6]];
+const WEAR_ANCHORS = [['Factory New', 0.035], ['Minimal Wear', 0.11], ['Field-Tested', 0.265], ['Well-Worn', 0.415], ['Battle-Scarred', 0.65]]; // центры диапазонов float
 const wearName = (w) => (w < 0.07 ? 'Прямо с завода' : w < 0.15 ? 'Немного поношенное' : w < 0.38 ? 'После полевых' : w < 0.45 ? 'Поношенное' : 'Закалённое в боях');
 
 const imgUrl = (u) => (!u ? '' : /^https?:/.test(u) ? u : K.cat.imgBase + u);
@@ -303,13 +304,35 @@ function previewPanel(redraw, L) {
   const tagIn = h('input', { type: 'text', value: E.nametag, maxlength: 20, placeholder: 'Бирка с именем (до 20 символов)' });
   const stIn = h('input', { type: 'checkbox', checked: E.stattrak }); const cntIn = h('input', { type: 'number', min: 0, value: E.count, style: 'width:90px' });
   const scratch = h('div', { class: 'wear-scratch' });
-  const bigImg = h('div', { class: 'big', style: `--rar:${s.rar.c}` }, skinImg(s.img, s.name), s.paint === 0 ? null : scratch);
+  const stack = h('div', { class: 'wear-stack' });
+  const bigImg = h('div', { class: 'big', style: `--rar:${s.rar.c}` }, skinImg(s.img, s.name), s.paint === 0 ? null : stack, s.paint === 0 ? null : scratch);
+  const wearNote = h('div', { class: 'hint' }, 'Вид износа на картинке приблизительный: в каталоге одна картинка на скин. Точный вид покажет осмотр в игре.');
+  let wearLayers = null; // { imgs: [<img>], anchors: [float] } — настоящие рендеры износа из Steam Market, когда загрузились
   const meta = h('div', { class: 'muted small' });
   const upd = () => {
     E.wear = Number(wearNum.value); E.seed = Number(seedIn.value); E.nametag = tagIn.value; E.stattrak = stIn.checked; E.count = Number(cntIn.value);
-    if (s.paint !== 0) { const lk = SkinLinks.wearLook(E.wear); const im = bigImg.querySelector('img'); if (im) im.style.filter = lk.filter; scratch.style.opacity = lk.scratch; }
+    if (s.paint !== 0 && wearLayers) { SkinLinks.wearBlend(wearLayers.anchors, E.wear).forEach((o, i) => { wearLayers.imgs[i].style.opacity = o.toFixed(3); }); }
+    else if (s.paint !== 0) { const lk = SkinLinks.wearLook(E.wear); const im = bigImg.querySelector('img'); if (im) im.style.filter = lk.filter; scratch.style.opacity = lk.scratch; }
     meta.textContent = tr(`${wearName(E.wear)} · float ${E.wear.toFixed(3)} · паттерн ${E.seed}${E.nametag ? ` · «${E.nametag}»` : ''}${E.stattrak ? ` · StatTrak™ ${E.count}` : ''}`);
   };
+  // Настоящие картинки износа (FN…BS) с сервера панели: между ними плавный кроссфейд по положению ползунка. Пока не загрузились — запасной вариант (фильтр).
+  if (s.paint !== 0) {
+    const hashName = `${kind === 'weapon' ? '' : '★ '}${s.weapon.name.replace(/^★\s*/, '')} | ${s.name}`;
+    K.wearCache = K.wearCache || new Map();
+    const got = K.wearCache.get(hashName) ? Promise.resolve(K.wearCache.get(hashName)) : api('GET', `/skin-wears?name=${encodeURIComponent(hashName)}`).then((r) => { if (Object.values(r.wears).some(Boolean)) K.wearCache.set(hashName, r.wears); return r.wears; });
+    got.then((wears) => {
+      const avail = WEAR_ANCHORS.filter(([n]) => wears[n]);
+      if (avail.length < 2) return; // одной картинки мало: оставляем приблизительный вид
+      return Promise.all(avail.map(([n]) => new Promise((ok, no) => { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.onload = () => ok(im); im.onerror = no; im.src = wears[n]; }))).then((imgs) => {
+        if (!bigImg.isConnected) return;
+        imgs.forEach((im) => { im.alt = ''; im.style.opacity = '0'; });
+        stack.replaceChildren(...imgs); wearLayers = { imgs, anchors: avail.map(([, a]) => a) };
+        const base = bigImg.querySelector('img:not(.wear-stack img)'); if (base) { base.style.filter = ''; base.style.opacity = '0'; }
+        scratch.style.opacity = 0; wearNote.textContent = tr('Показаны настоящие картинки износа из Steam Market, между ними — плавный переход. Точный вид покажет осмотр в игре.');
+        requestAnimationFrame(upd);
+      });
+    }).catch(() => {});
+  }
   wearIn.addEventListener('input', () => { wearNum.value = wearIn.value; upd(); }); wearNum.addEventListener('input', () => { wearIn.value = wearNum.value; upd(); });
   for (const el of [seedIn, tagIn, stIn, cntIn]) el.addEventListener('input', upd);
   upd();
@@ -326,7 +349,7 @@ function previewPanel(redraw, L) {
       h('div', { class: 'row' }, 'Износ', wearIn, wearNum), h('div', { class: 'chips' }, WEAR_PRESETS.map(([t, w]) => h('span', { class: 'chip', onclick: () => { const v = Math.min(Math.max(w, s.min), s.max); wearIn.value = v; wearNum.value = v.toFixed(3); upd(); } }, t))),
       h('div', { class: 'row' }, 'Паттерн', seedIn, h('button', { class: 'btn', title: 'Случайный', onclick: () => { seedIn.value = Math.floor(Math.random() * 1001); upd(); } }, 'Случайный')),
       kind === 'weapon' ? h('div', {}, h('div', { class: 'row' }, tagIn), s.st ? h('div', { class: 'row' }, h('label', { class: 'switch' }, stIn, 'StatTrak™'), cntIn, 'убийств') : null) : null),
-    s.paint === 0 ? null : h('div', { class: 'hint' }, 'Вид износа на картинке приблизительный: в каталоге одна картинка на скин. Точный вид покажет осмотр в игре.'),
+    s.paint === 0 ? null : wearNote,
     kind === 'weapon' ? stickerEditor() : null,
     meta, h('div', { class: 'row' }, teamSel),
     s.paint === 0 ? null : skinLinksBlock(s),

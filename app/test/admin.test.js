@@ -26,7 +26,7 @@ async function setup({ vmStatus = 'RUNNING', agentImpl, deps = {} } = {}) {
   const app = createApp({
     config: { instanceId: 'i1', agentUrl: 'http://x', publicPort: 0 }, secrets: { AGENT_TOKEN: 't' }, compute, agent,
     usersFile: path.join(dir, 'users.json'), settingsFile: path.join(dir, 'settings.json'), uptimeFile: path.join(dir, 'uptime.json'), auditFile: path.join(dir, 'audit.log'),
-    faceitFile: path.join(dir, 'faceit.json'), statsCacheFile: path.join(dir, 'stats-cache.json'), brandFile: path.join(dir, 'brand.json'), brandLogoFile: path.join(dir, 'brand-logo.bin'), ...deps, userPresetsFile: path.join(dir, 'user-presets.json'), stateCacheFile: path.join(dir, 'state-cache.json'), customSkinsFile: path.join(dir, 'custom-skins.json'), catalogCache: { get: async () => ({}) },
+    faceitFile: path.join(dir, 'faceit.json'), wearImagesFile: path.join(dir, 'wear-images.json'), statsCacheFile: path.join(dir, 'stats-cache.json'), brandFile: path.join(dir, 'brand.json'), brandLogoFile: path.join(dir, 'brand-logo.bin'), ...deps, userPresetsFile: path.join(dir, 'user-presets.json'), stateCacheFile: path.join(dir, 'state-cache.json'), customSkinsFile: path.join(dir, 'custom-skins.json'), catalogCache: { get: async () => ({}) },
   });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${app.server.address().port}`;
@@ -532,5 +532,24 @@ test('seen: игроки из статистики сопоставляются 
     assert.equal(r.players[0].account.name, 'friend'); assert.equal(r.players[0].account.via, 'password'); assert.equal(r.players[0].suggest, null);
     // чужой Steam уже занят этим аккаунтом
     assert.equal((await t.req('POST', `/api/seen/76561198000000043/link`, { user: 'friend' }, c, CSRF)).status, 409);
+  } finally { t.close(); }
+});
+
+test('skin-wears: картинки износов из поиска Steam, кэш и валидация имени', async () => {
+  const asked = [];
+  const t = await setup({ deps: { wearDelayMs: 0, httpGet: async (url) => {
+    const q = decodeURIComponent(/query=([^&]+)/.exec(url)[1]); asked.push(q);
+    const icon = (s) => 'A'.repeat(30) + s;
+    const has = !/Factory New/.test(q) && /Redline/.test(q); // у Redline нет FN
+    return { status: 200, json: { results: has ? [{ hash_name: q, asset_description: { icon_url: icon(q.length) } }, { hash_name: `StatTrak™ ${q}`, asset_description: { icon_url: 'x' } }] : [] } };
+  } } });
+  try {
+    const c = await t.login();
+    assert.equal((await t.req('GET', '/api/skin-wears?name=' + encodeURIComponent('AK-47 | Redline; rm'), undefined, c)).status, 400);
+    const r = (await t.req('GET', '/api/skin-wears?name=' + encodeURIComponent('AK-47 | Redline'), undefined, c)).json;
+    assert.equal(r.wears['Factory New'], null);
+    assert.match(r.wears['Field-Tested'], /^https:\/\/community\.akamai\.steamstatic\.com\/economy\/image\/A{30}\d+\/512fx384f$/);
+    assert.equal(Object.keys(r.wears).length, 5); assert.equal(asked.length, 5);
+    await t.req('GET', '/api/skin-wears?name=' + encodeURIComponent('AK-47 | Redline'), undefined, c); assert.equal(asked.length, 5, 'второй запрос — из кэша');
   } finally { t.close(); }
 });
