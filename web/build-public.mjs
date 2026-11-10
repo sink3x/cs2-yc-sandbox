@@ -13,7 +13,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(here, '../app/admin/public');
 const OUT = path.resolve(here, '../build/public');
 
-const EAGER = ['core.js', 'data.js', 'fx.js', 'shell.js']; // нужны сразу после загрузки
+const EAGER = ['core.js', 'data.js', 'tooltip.js', 'fx.js', 'shell.js']; // нужны сразу после загрузки
 const LAZY = { // страницы: подгружаются при первом переходе
   main: ['pages-main.js'], play: ['pages-play.js'], skins: ['skin-links.js', 'pages-skins.js'], practice: ['pages-practice.js'], account: ['pages-account.js'],
   stats: ['pages-stats.js'], callouts: ['pages-callouts.js'], sounds: ['pages-sounds.js'], people: ['pages-people.js'],

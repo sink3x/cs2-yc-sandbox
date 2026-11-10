@@ -22,7 +22,7 @@ function diffTable(rows) {
   if (!rows.length) return h('div', { class: 'muted' }, 'Различий нет — настройки уже совпадают.');
   const L = { add: ['добавится', 'diff-add'], chg: ['изменится', 'diff-chg'], del: ['будет убрано', 'diff-del'] };
   return h('table', {}, h('thead', {}, h('tr', {}, ['cvar', 'Сейчас', 'Станет', ''].map((x) => h('th', {}, x)))),
-    h('tbody', {}, rows.map((r) => h('tr', {}, h('td', { class: 'small', style: 'font-family:ui-monospace,monospace' }, r.k), h('td', { class: 'muted' }, r.from ?? '—'), h('td', {}, r.to ?? '—'), h('td', { class: `small ${L[r.kind][1]}` }, L[r.kind][0])))));
+    h('tbody', {}, rows.map((r) => h('tr', {}, h('td', { class: 'small', style: 'font-family:ui-monospace,monospace', 'data-cmd': r.k }, r.k), h('td', { class: 'muted' }, r.from ?? '—'), h('td', {}, r.to ?? '—'), h('td', { class: `small ${L[r.kind][1]}` }, L[r.kind][0])))));
 }
 
 // ---------------------------------------------------------------- консоль
@@ -224,7 +224,7 @@ function pageSettings() {
     else el = h('input', { type: 'text', value: cur ?? '', placeholder: 'по умолчанию' });
     el.addEventListener('input', refresh); el.addEventListener('change', refresh);
     inputs[it.name] = el;
-    return h('div', { class: 'cvrow', 'data-name': it.name, style: 'display:contents' }, h('label', {}, it.name, h('small', {}, it.hint)), el);
+    return h('div', { class: 'cvrow', 'data-name': it.name, style: 'display:contents' }, h('label', { 'data-cmd': it.name }, it.name, h('small', {}, it.hint)), el);
   };
   const catalogNames = new Set(S.catalog.catalog.flatMap((g) => g.items.map((i) => i.name)));
   const extra = Object.entries(st.cvars).filter(([k]) => !catalogNames.has(k));

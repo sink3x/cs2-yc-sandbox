@@ -160,7 +160,7 @@ function lookView(redraw) {
 
 // ---------------------------------------------------------------- справка
 function pageHelp() {
-  const copyChip = (t) => h('span', { class: 'chip', title: 'Скопировать', onclick: copy(t) }, t);
+  const copyChip = (t) => h('span', { class: 'chip', 'data-cmd': t, title: cmdTipModel(t) ? null : 'Скопировать', tabindex: '0', onclick: copy(t) }, t);
   const o = S.ov || {}; const ip = o.vm && o.vm.publicIp;
   const faq = [
     ['Как зайти на сервер?', ip ? `Включите ВМ на «Обзоре», дождитесь статуса CS2 «Работает», в консоли CS2 введите: connect ${ip}:27015` : 'Включите ВМ на «Обзоре», затем в консоли CS2: connect <IP>:27015 (IP виден в верхней панели).'],

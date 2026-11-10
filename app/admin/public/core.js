@@ -256,10 +256,11 @@ function autocomplete(input, getOptions, { onPick, limit = 8, replace = (opt) =>
   input.style.width = '100%';
   let items = []; let sel = 0;
   const hide = () => { box.hidden = true; items = []; };
-  const draw = () => {
-    box.replaceChildren(...items.map((o, i) => h('div', { class: `ac-i ${i === sel ? 'on' : ''}`, onmousedown: (e) => { e.preventDefault(); pick(i); } },
+  const draw = (byKey) => {
+    box.replaceChildren(...items.map((o, i) => h('div', { class: `ac-i ${i === sel ? 'on' : ''}`, 'data-cmd': o.cmd || null, onmousedown: (e) => { e.preventDefault(); pick(i); } },
       h('span', { class: 'ac-v' }, o.label || o.value), o.desc ? h('span', { class: 'ac-d' }, o.desc) : null)));
     box.hidden = !items.length;
+    if (byKey === true && typeof cmdTipNow === 'function') cmdTipNow(box.querySelector('.ac-i.on')); // выбор стрелками: сразу показать пояснение
   };
   const pick = (i) => { const o = items[i]; if (!o) return; input.value = replace(o, input.value); hide(); if (onPick) onPick(o); input.focus(); };
   const refresh = () => { items = (getOptions(input.value, input) || []).slice(0, limit); sel = 0; draw(); };
@@ -268,8 +269,8 @@ function autocomplete(input, getOptions, { onPick, limit = 8, replace = (opt) =>
   input.addEventListener('blur', () => setTimeout(hide, 120));
   input.addEventListener('keydown', (e) => {
     if (box.hidden) return;
-    if (e.key === 'ArrowDown') { sel = (sel + 1) % items.length; draw(); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { sel = (sel - 1 + items.length) % items.length; draw(); e.preventDefault(); }
+    if (e.key === 'ArrowDown') { sel = (sel + 1) % items.length; draw(true); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { sel = (sel - 1 + items.length) % items.length; draw(true); e.preventDefault(); }
     else if (e.key === 'Tab' || (e.key === 'Enter' && items[sel] && input.value.trim() !== (items[sel].value))) { if (e.key === 'Enter' && !items.length) return; pick(sel); e.preventDefault(); e.stopImmediatePropagation(); }
     else if (e.key === 'Escape') hide();
   }, true);

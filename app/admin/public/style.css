@@ -576,3 +576,9 @@ span.clickable:hover { color: var(--accent, inherit); }
 .audit-filters { flex-wrap: wrap; gap: 6px; }
 .audit-filters input, .audit-filters select { max-width: 100%; }
 td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cmdtip { position: fixed; z-index: 1000; max-width: min(360px, calc(100vw - 16px)); background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; box-shadow: var(--shadow); font-size: 12.5px; line-height: 1.45; pointer-events: none; }
+.cmdtip-h { font: 600 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word; }
+.cmdtip-d { margin-top: 3px; }
+.cmdtip-a { margin: 7px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; padding-top: 7px; border-top: 1px solid var(--line); }
+.cmdtip-a dt { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); } .cmdtip-a dd { margin: 0; }
+.cmdtip-f { margin-top: 7px; color: var(--muted); font-size: 11.5px; }

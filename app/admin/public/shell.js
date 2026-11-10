@@ -180,9 +180,9 @@ function openPalette() {
     ...(S.catalog ? S.catalog.fun : []).filter((f) => !f.secret || secretsOn()).map((f) => ({ key: `прикол ${f.title} ${f.id}`, label: `Прикол: ${f.title}`, desc: f.note, run: async () => { await api('POST', '/practice', { action: 'fun', id: f.id }); toast(`${f.title} включён`, 's'); } })),
     ...Object.entries(THEMES).map(([k, t]) => ({ key: `тема ${t}`, label: `Тема: ${t}`, run: () => saveLook({ theme: k }) })),
     ...Object.entries(LANGS).map(([k, t]) => ({ key: `язык language ${t} ${k}`, label: `Язык: ${t}`, run: () => setLang(k) })),
-    ...COMMANDS.map(([c, d, a]) => ({ key: `${c} ${d}`, label: `Консоль: ${c}${a ? ' ' + a : ''}`, desc: d, run: async () => { if (a) { sessionStorage.setItem('rconPrefill', `${c} `); go('console'); } else { const r = await api('POST', '/rcon', { command: c }); toast((r.output || '(пусто)').trim().slice(0, 200), 's'); } } })),
+    ...COMMANDS.map(([c, d, a]) => ({ cmd: c, key: `${c} ${d}`, label: `Консоль: ${c}${a ? ' ' + a : ''}`, desc: d, run: async () => { if (a) { sessionStorage.setItem('rconPrefill', `${c} `); go('console'); } else { const r = await api('POST', '/rcon', { command: c }); toast((r.output || '(пусто)').trim().slice(0, 200), 's'); } } })),
   ];
-  const draw = () => list.replaceChildren(...items.map((it, i) => h('div', { class: `ac-i ${i === sel ? 'on' : ''}`, onmousedown: (e) => { e.preventDefault(); choose(i); } }, h('span', {}, it.label), it.desc ? h('span', { class: 'ac-d' }, it.desc) : null)));
+  const draw = () => list.replaceChildren(...items.map((it, i) => h('div', { class: `ac-i ${i === sel ? 'on' : ''}`, 'data-cmd': it.cmd || null, onmousedown: (e) => { e.preventDefault(); choose(i); } }, h('span', {}, it.label), it.desc ? h('span', { class: 'ac-d' }, it.desc) : null)));
   const refresh = () => { items = rank(all(), input.value, (x) => x.key).slice(0, 12); sel = 0; draw(); };
   const m = modal('Быстрый поиск', h('div', {}, input, list));
   const choose = async (i) => { const it = items[i]; if (!it) return; m.close(); try { await it.run(); } catch (e) { toast(e.message, 'e'); } };
