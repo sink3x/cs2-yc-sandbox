@@ -9,13 +9,20 @@ mkdir -p build
 if [ -f web/package.json ]; then
   ( cd web && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent )
   [ -f app/admin/public/ui/main.js ] || { echo "web build produced no app/admin/public/ui/main.js" >&2; exit 1; }
+  # Публичный фронт (классические скрипты + CSS + острова) минифицируется, делится на чанки и теряет комментарии:
+  # исходники остаются в app/admin/public/, на ВМ едет только build/public/.
+  rm -rf build/public
+  ( cd web && npm run build:public --silent )
+  [ -f build/public/index.html ] || { echo "public build produced no build/public/index.html" >&2; exit 1; }
+else
+  echo "web/package.json missing: the minified frontend cannot be built" >&2; exit 1
 fi
 python3 - <<'PY'
 import gzip, io, os, tarfile
 
 SKIP_DIRS = {"node_modules"}
 SKIP_PREFIX = ("app/test",)
-PUBLIC = "app/admin/public"  # shipped separately (admin VM only): its own metadata value keeps both under the 256 KB limit
+PUBLIC = "build/public"  # minified frontend (build-public.mjs), shipped separately (admin VM only): its own metadata value keeps both under the 256 KB limit
 
 def keep(path):
     if path.startswith(SKIP_PREFIX) or path.endswith(".log") or path.endswith(".DS_Store"):
@@ -57,8 +64,10 @@ def write(paths, out_path, strip=""):
         with gzip.GzipFile(filename="", mode="wb", fileobj=out, compresslevel=9, mtime=0) as gz:
             gz.write(buf.getvalue())
 
+SRC_PUBLIC = "app/admin/public"  # sources stay out of the VM bundle (the VM serves the built copy)
+insrc = lambda p: p == SRC_PUBLIC or p.startswith(SRC_PUBLIC + "/")
 inpub = lambda p: p == PUBLIC or p.startswith(PUBLIC + "/")
-write(collect(["app", "common", "vm-cs2", "vm-admin"], lambda p: not inpub(p)), "build/bundle.tgz")
+write(collect(["app", "common", "vm-cs2", "vm-admin"], lambda p: not insrc(p)), "build/bundle.tgz")
 write(collect([PUBLIC], inpub), "build/public.tgz", strip=PUBLIC + "/")
 PY
 check() {

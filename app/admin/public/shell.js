@@ -1,10 +1,11 @@
 'use strict';
 // Каркас: навигация, быстрый поиск (Ctrl+K), загрузка данных и запуск панели.
 
+// Страницы подгружаются по требованию (в сборке — отдельные файлы, см. web/build-public.mjs), поэтому функции вызываются через стрелки.
 const PAGES = {
-  overview: ['Сервер', pageOverview], skins: ['Скины', pageSkins], practice: ['Тренировка', pagePractice], callouts: ['Callouts', pageCallouts], sounds: ['Звуки', pageSounds], maps: ['Карты и режимы', pageMaps],
-  console: ['Консоль', pageConsole], settings: ['Настройки', pageSettings], plugins: ['Плагины и флаги', pagePlugins], admins: ['Админы', pageAdmins],
-  users: ['Пользователи', pageUsers], online: ['Игроки онлайн', pageOnline], setups: ['Сетапы', pageSetups], look: ['Оформление', pageLook], stats: ['Статистика', pageStats], profile: ['Профиль', pageProfile], info: ['Сервер', pageInfo], backups: ['Бэкапы и логи', pageBackups], help: ['Справка', pageHelp], panel: ['Панель', pagePanel],
+  overview: ['Сервер', (...a) => pageOverview(...a)], skins: ['Скины', (...a) => pageSkins(...a)], practice: ['Тренировка', (...a) => pagePractice(...a)], callouts: ['Callouts', (...a) => pageCallouts(...a)], sounds: ['Звуки', (...a) => pageSounds(...a)], maps: ['Карты и режимы', (...a) => pageMaps(...a)],
+  console: ['Консоль', (...a) => pageConsole(...a)], settings: ['Настройки', (...a) => pageSettings(...a)], plugins: ['Плагины и флаги', (...a) => pagePlugins(...a)], admins: ['Админы', (...a) => pageAdmins(...a)],
+  users: ['Пользователи', (...a) => pageUsers(...a)], online: ['Игроки онлайн', (...a) => pageOnline(...a)], setups: ['Сетапы', (...a) => pageSetups(...a)], look: ['Оформление', (...a) => pageLook(...a)], stats: ['Статистика', (...a) => pageStats(...a)], profile: ['Профиль', (...a) => pageProfile(...a)], info: ['Сервер', (...a) => pageInfo(...a)], backups: ['Бэкапы и логи', (...a) => pageBackups(...a)], help: ['Справка', (...a) => pageHelp(...a)], panel: ['Панель', (...a) => pagePanel(...a)],
 };
 // Главная страница — «Сервер»: у админа это обзор сервера, у игрока — информация о сервере. Логотип и вход ведут только сюда.
 const homePage = () => (S.role === 'player' ? 'info' : 'overview');
@@ -163,6 +164,7 @@ async function renderPage() {
   }
   if (S.page === 'plugins' && !S.settings) S.settings = await api('GET', '/settings').catch(() => ({ autoStopIdleMinutes: 30, startupGraceMinutes: 20 }));
   if (S.page === 'plugins') S.uptime = await api('GET', '/uptime').catch(() => null);
+  try { if (self.__loadPage) await self.__loadPage(S.page); } catch { mainEl.replaceChildren(h('h2', {}, PAGES[S.page][0]), h('div', { class: 'banner' }, tr('Не удалось загрузить страницу: проверьте соединение и обновите.'))); return; }
   const page = PAGES[S.page][1]();
   const banner = wantsState ? offlineBanner() : null;
   mainEl.replaceChildren(...(banner ? [banner, page] : [page]));

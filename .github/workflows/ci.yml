@@ -54,6 +54,9 @@ jobs:
       - name: Сборка
         working-directory: web
         run: npm run build
+      - name: Публичный фронт (минификация, чанки, без комментариев)
+        working-directory: web
+        run: npm run build:public
 
   terraform:
     name: OpenTofu validate

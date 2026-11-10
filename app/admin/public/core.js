@@ -146,6 +146,10 @@ function loginNote() {
   history.replaceState(null, '', location.pathname);
   return h('div', { class: k === 'linked' ? 'banner ok' : 'banner' }, STEAM_MSG[k]);
 }
+// Переключатель языка нужен уже на экране входа, поэтому живёт в ядре.
+function langSwitch() {
+  return h('div', { class: 'seg lang-seg', role: 'group', 'aria-label': 'Language' }, Object.entries(LANGS).map(([k, t]) => h('button', { class: k === LANG ? 'on' : '', title: t, onclick: () => setLang(k) }, k.toUpperCase())));
+}
 function showLogin() {
   clearInterval(S.pollTimer);
   const u = h('input', { type: 'text', placeholder: 'Логин', autocomplete: 'username' });

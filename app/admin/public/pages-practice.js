@@ -47,7 +47,7 @@ function animalsCard(live, redraw) {
 const CLEAN_DEFS = [
   ['grenades', '💨 Гранаты и дымы'], ['fire', '🔥 Огонь молотовов'], ['weapons', '🔫 Оружие с пола'], ['decals', '🕳 Следы пуль и спреи'],
 ];
-function cleanupCard(live, redraw) {
+function mapCleanupCard(live, redraw) {
   const run = (what, title) => act(async () => {
     const r = await prSend('cleanup', { what });
     if (/unknown command/i.test(JSON.stringify(r.outputs || r || ''))) throw new Error('На сервере нет плагина CS2Panel ≥ 0.5.0: обновите его (страница «Плагины») и перезапустите ВМ, когда на ней нет игроков');
@@ -116,7 +116,7 @@ function practiceView(redraw) {
       h('div', { class: 'muted small' }, 'Люди за CT, зомби — боты T с ножами, быстрый респавн. Это имитация на штатных cvar без плагина; настоящий зомби-мод (заражение, классы) требует отдельного плагина — пока не ставлю, чтобы не ломать совместимость.'),
       h('div', { class: 'row' }, 'Зомби:', zRange, zNum), h('div', { class: 'row' }, zSeg),
       h('div', { class: 'row' }, h('button', { class: 'btn primary', disabled: !live, onclick: zStart }, '▶ Начать осаду'), h('button', { class: 'btn', disabled: !live, onclick: zStop }, '■ Закончить'))),
-    cleanupCard(live, redraw),
+    mapCleanupCard(live, redraw),
     animalsCard(live, redraw),
     h('div', { class: 'card' }, h('h3', {}, 'Приколы'), h('div', { class: 'grid' }, funs.map(funCard)),
       h('div', { class: 'row' }, h('button', { class: 'btn danger', disabled: !live, onclick: act(async () => { await prSend('fun', { id: 'reset' }); toast('Всё вернул к стандарту (для 100% сброса смените карту)', 's'); await prRead(); redraw(); }) }, 'Сбросить все приколы')),

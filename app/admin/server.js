@@ -912,7 +912,7 @@ function createApp(deps = {}) {
         const name = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
         const f = staticFile(name);
         if (!f) return send(res, 404, 'not found', SEC_HEADERS);
-        return send(res, 200, f.body, { ...SEC_HEADERS, 'Content-Type': f.type, ...(/^image\//.test(f.type) ? { 'Cache-Control': 'public, max-age=86400' } : {}) });
+        return send(res, 200, f.body, { ...SEC_HEADERS, 'Content-Type': f.type, ...(/\.[0-9a-f]{10}\.(js|css)$/.test(name) ? { 'Cache-Control': 'public, max-age=31536000, immutable' } : /^image\//.test(f.type) ? { 'Cache-Control': 'public, max-age=86400' } : {}) });
       }
       if (url.pathname === '/api/login' && req.method === 'POST') {
         const body = await readJsonBody(req);

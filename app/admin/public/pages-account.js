@@ -231,6 +231,3 @@ function pageInfo() {
 }
 
 /** Переключатель языка (RU / EN / DE / FR). */
-function langSwitch() {
-  return h('div', { class: 'seg lang-seg', role: 'group', 'aria-label': 'Language' }, Object.entries(LANGS).map(([k, t]) => h('button', { class: k === LANG ? 'on' : '', title: t, onclick: () => setLang(k) }, k.toUpperCase())));
-}
