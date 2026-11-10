@@ -7,6 +7,8 @@ export interface Host {
   /** Перевод серверной ошибки на русский (как делает api()). */
   ruErr(text: string): string;
   toast(message: string, kind?: 's' | 'e'): void;
+  /** Окно подтверждения вместо window.confirm: true — подтвердили, false — отмена (Esc, «×», клик по фону). */
+  confirm(message: string, opts?: ConfirmOptions): Promise<boolean>;
   /** Язык интерфейса для дат. */
   locale: string;
   /** Код языка интерфейса: ru | en | de | fr. */
@@ -24,6 +26,9 @@ export interface Host {
   /** Запросить обзор прямо сейчас. */
   refreshOverview(): void;
 }
+
+/** Тексты окна подтверждения пишем по-русски: перевод делает старая часть. danger — красная кнопка, фокус на «Отмена». */
+export interface ConfirmOptions { title?: string; ok?: string; cancel?: string; danger?: boolean }
 
 export interface LivePlayer { id: number | string; name: string | null; bot: boolean; ping?: number | string; time?: string }
 export interface Overview {

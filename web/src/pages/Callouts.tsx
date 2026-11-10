@@ -228,12 +228,14 @@ function Detail({ p, map, mapId, canEdit, busy, mode, setMode, edit, clear, labe
   const setSide = (s: Side): void => { void edit((n) => { if (p.custom) n.added[mapId] = (n.added[mapId] ?? []).map((a) => (a.id === p.id ? { ...a, side: s } : a)); else n.side[p.key] = s; }); };
   const reset = (): void => { void edit((n) => { delete n.rename[p.key]; delete n.move[p.key]; delete n.side[p.key]; }, 'Сброшено к исходному'); };
   const remove = (): void => {
-    if (!window.confirm(t(p.custom ? 'Удалить это место?' : 'Скрыть это место? Его можно вернуть в списке скрытых мест.'))) return;
-    clear();
-    void edit((n) => {
-      if (p.custom) { n.added[mapId] = (n.added[mapId] ?? []).filter((a) => a.id !== p.id); if (!n.added[mapId]!.length) delete n.added[mapId]; }
-      else { n.deleted = [...new Set([...n.deleted, p.key])]; delete n.rename[p.key]; delete n.move[p.key]; delete n.side[p.key]; } // официальное место только скрываем
-    }, p.custom ? 'Место удалено' : 'Место скрыто');
+    void host().confirm(t(p.custom ? 'Удалить это место?' : 'Скрыть это место? Его можно вернуть в списке скрытых мест.'), { ok: p.custom ? 'Удалить' : 'Скрыть', danger: Boolean(p.custom) }).then((yes) => {
+      if (!yes) return;
+      clear();
+      void edit((n) => {
+        if (p.custom) { n.added[mapId] = (n.added[mapId] ?? []).filter((a) => a.id !== p.id); if (!n.added[mapId]!.length) delete n.added[mapId]; }
+        else { n.deleted = [...new Set([...n.deleted, p.key])]; delete n.rename[p.key]; delete n.move[p.key]; delete n.side[p.key]; } // официальное место только скрываем
+      }, p.custom ? 'Место удалено' : 'Место скрыто');
+    });
   };
   return (
     <div>

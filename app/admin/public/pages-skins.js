@@ -390,7 +390,7 @@ function loadoutPanel(redraw, L) {
   return h('div', { class: 'card' }, h('h3', {}, 'Сейчас надето'), cells.length ? h('div', { class: 'load' }, cells) : h('div', { class: 'muted small' }, 'Пока ничего — у игрока стандартные предметы.'),
     h('div', { class: 'row' },
       h('button', { class: 'btn', onclick: act(async () => { const r = await api('POST', '/skins/reload'); toast('Плагин скинов перезагружен' + (r.output ? '' : ''), 's'); }) }, 'Перезагрузить плагин'),
-      h('button', { class: 'btn danger', onclick: act(async () => { if (!confirm('Снять ВСЕ скины, нож, перчатки, агентов и музыку у этого игрока?')) return; await applyOps([{ op: 'reset' }], 'Всё сброшено'); redraw(); }) }, 'Сбросить всё')));
+      h('button', { class: 'btn danger', onclick: act(async () => { if (!await askConfirm('Снять ВСЕ скины, нож, перчатки, агентов и музыку у этого игрока?', { ok: 'Снять всё', danger: true })) return; await applyOps([{ op: 'reset' }], 'Всё сброшено'); redraw(); }) }, 'Сбросить всё')));
 }
 
 // ---------------------------------------------------------------- свои скины

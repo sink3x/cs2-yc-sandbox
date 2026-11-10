@@ -66,7 +66,7 @@ export function Online() {
             <div class="adm-act onl-act">
               <button class="btn" disabled={busy} onClick={() => void send({ action: 'slay', id: p.id }, 'Убит')}>{t('Убить')}</button>
               {TEAMS.map((tm) => <button class="btn" key={tm} disabled={busy} onClick={() => void send({ action: 'team', id: p.id, team: tm }, 'Команда сменена')}>{tm === 'spec' ? 'Spec' : tm.toUpperCase()}</button>)}
-              <button class="btn" disabled={busy} onClick={() => { if (window.confirm(`${t('Кикнуть игрока')} ${name}?`)) void send({ action: 'kick', id: p.id }, 'Игрок кикнут'); }}>{t('Кик')}</button>
+              <button class="btn" disabled={busy} onClick={() => { void host().confirm(`${t('Кикнуть игрока')} ${name}?`, { ok: 'Кикнуть', danger: true }).then((yes) => { if (yes) void send({ action: 'kick', id: p.id }, 'Игрок кикнут'); }); }}>{t('Кик')}</button>
               <button class="btn danger" disabled={busy} onClick={() => setBanFor(banFor === p.id ? null : p.id)}>{t('Бан…')}</button>
             </div>
           )}

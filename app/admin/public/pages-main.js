@@ -97,7 +97,7 @@ function pageOverview() {
         h('div', { class: 'row' }, connectButton(true)),
         h('div', { class: 'row' },
           h('button', { class: 'btn primary', disabled: vm.status !== 'STOPPED' || !!o.busy, onclick: act(async () => { await api('POST', '/vm/start'); await loadOverview(); }, 'Запуск ВМ начат') }, '▶ Включить сервер'),
-          h('button', { class: 'btn danger', disabled: vm.status !== 'RUNNING' || !!o.busy, onclick: act(async () => { if (!confirm('Выключить сервер? Игроки будут отключены, данные сохранятся.')) return; await api('POST', '/vm/stop'); await loadOverview(); }, 'Останавливаю: бэкап и выключение ВМ') }, '■ Выключить сервер')),
+          h('button', { class: 'btn danger', disabled: vm.status !== 'RUNNING' || !!o.busy, onclick: act(async () => { if (!await askConfirm('Выключить сервер? Игроки будут отключены, данные сохранятся.', { ok: 'Выключить', danger: true })) return; await api('POST', '/vm/stop'); await loadOverview(); }, 'Останавливаю: бэкап и выключение ВМ') }, '■ Выключить сервер')),
         o.settings && o.settings.autoStopIdleMinutes ? h('div', { class: 'muted small' }, `Автовыключение: через ${o.settings.autoStopIdleMinutes} мин без игроков${idle !== null ? ` (пусто уже ${idle} мин)` : ''}`) : h('div', { class: 'muted small' }, 'Автовыключение отключено'),
         o.lastError ? h('div', { class: 'bad small' }, o.lastError) : null,
         h('div', { class: 'muted small' }, 'Выключенная ВМ не тарифицируется по CPU/RAM; диск и статический IP продолжают стоить копейки.')),
@@ -219,10 +219,10 @@ function pagePlugins() {
         const plugins = {}; for (const [k, el] of Object.entries(boxes)) plugins[k] = el.checked;
         const f = {}; for (const [k, el] of Object.entries(flags)) f[k] = el.checked;
         const r = await api('PUT', '/state', { state: { plugins, flags: f } }); S.state = r;
-        if (r.needsRestart && confirm('Изменения вступят в силу после перезапуска CS2. Перезапустить сейчас?')) await api('POST', '/service/restart');
+        if (r.needsRestart && await askConfirm('Изменения вступят в силу после перезапуска CS2. Перезапустить сейчас?', { title: 'Перезапуск CS2', ok: 'Перезапустить' })) await api('POST', '/service/restart');
         renderPage();
       }, 'Сохранено') }, 'Сохранить'),
-      h('button', { class: 'btn', onclick: act(async () => { if (confirm('Обновить игру и плагины сейчас? CS2 перезапустится (несколько минут).')) await api('POST', '/update'); }, 'Обновление запущено') }, '⟳ Обновить игру и плагины сейчас')),
+      h('button', { class: 'btn', onclick: act(async () => { if (await askConfirm('Обновить игру и плагины сейчас? CS2 перезапустится (несколько минут).', { ok: 'Обновить' })) await api('POST', '/update'); }, 'Обновление запущено') }, '⟳ Обновить игру и плагины сейчас')),
     h('div', { class: 'card' }, h('h3', {}, 'Экономия: автовыключение ВМ'),
       h('div', { class: 'row' }, 'Выключать ВМ, если игроков нет', idleMin, 'мин (0 = никогда)'),
       h('div', { class: 'row' }, 'Не выключать первые', graceMin, 'мин после запуска ВМ'),
@@ -300,7 +300,7 @@ function pageBackups() {
     try {
       const r = await api('GET', '/backups');
       listBox.replaceChildren(r.backups.length ? h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Бэкап'), h('th', {}, 'Размер'), h('th', {}))), h('tbody', {}, r.backups.map((b) => h('tr', {}, h('td', {}, b.key.replace('cs2/', '')), h('td', {}, `${Math.round(b.size / 1024)} КБ`),
-        h('td', {}, h('button', { class: 'btn danger', onclick: act(async () => { if (confirm(`Восстановить ${b.key}? CS2 остановится, конфиги и БД скинов будут заменены.`)) await api('POST', '/restore', { key: b.key }); }, 'Восстановление запущено') }, 'Восстановить')))))) : h('div', { class: 'muted' }, 'Бэкапов пока нет.'));
+        h('td', {}, h('button', { class: 'btn danger', onclick: act(async () => { if (await askConfirm(`Восстановить ${b.key}? CS2 остановится, конфиги и БД скинов будут заменены.`, { ok: 'Восстановить', danger: true })) await api('POST', '/restore', { key: b.key }); }, 'Восстановление запущено') }, 'Восстановить')))))) : h('div', { class: 'muted' }, 'Бэкапов пока нет.'));
     } catch (e) { listBox.replaceChildren(h('div', { class: 'warn' }, `Нет связи с агентом: ${e.message}`)); }
   };
   const loadLogs = async () => { try { const r = await api('GET', `/logs?unit=${unit.value}&n=300`); logBox.textContent = r.text || tr('(пусто)'); logBox.scrollTop = logBox.scrollHeight; } catch (e) { logBox.textContent = e.message; } };
@@ -363,7 +363,7 @@ function cleanupCard() {
   const out = h('div', { class: 'muted small' });
   const run = act(async () => {
     const actions = boxes.filter((b) => b.checked).map((b) => b.dataset.k); if (!actions.length) throw new Error('Отметьте, что чистить');
-    if (actions.includes('world') && !confirm('Рестарт раунда выбросит текущий раунд. Продолжить?')) return;
+    if (actions.includes('world') && !await askConfirm('Рестарт раунда выбросит текущий раунд. Продолжить?', { ok: 'Продолжить', danger: true })) return;
     const r = await api('POST', '/cleanup', { actions });
     out.replaceChildren(h('div', {}, `Готово: ${r.done.map((d) => tr({ files: `файлы (${d.files} шт., ${d.mb} МБ)`, journal: 'журнал', ram: 'кэш ОС', world: 'мир' }[d.action] || d.action)).join(', ')}.`),
       h('div', {}, `Свободная RAM: ${r.mem.before.freeMb} → ${r.mem.after.freeMb} МБ.`), ...(r.skipped || []).map((x) => h('div', { class: 'warn small' }, `${x.action}: ${x.reason}`)));

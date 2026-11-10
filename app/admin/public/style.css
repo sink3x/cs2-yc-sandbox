@@ -585,3 +585,8 @@ td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .cmdtip-a { margin: 7px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; padding-top: 7px; border-top: 1px solid var(--line); }
 .cmdtip-a dt { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); } .cmdtip-a dd { margin: 0; }
 .cmdtip-f { margin-top: 7px; color: var(--muted); font-size: 11.5px; }
+
+/* Окно подтверждения */
+.modal.modal-sm { width: min(440px, 100%); }
+.confirm-text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; line-height: 1.5; }
+@media (max-width: 700px) { .modal.modal-sm { width: 100%; } }

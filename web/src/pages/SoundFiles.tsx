@@ -78,7 +78,7 @@ export function SoundFiles() {
       for (const f of files) {
         try { await upload(f, false); } catch (e) {
           if (e instanceof UploadError && e.status === 409 && /already exists/.test(e.raw)) {
-            if (!window.confirm(`${f.name}: ${t('файл с таким именем уже есть. Заменить?')}`)) continue;
+            if (!(await host().confirm(`${f.name}: ${t('файл с таким именем уже есть. Заменить?')}`, { title: 'Файл уже есть', ok: 'Заменить' }))) continue;
             await upload(f, true);
           } else throw e;
         }
@@ -104,7 +104,7 @@ export function SoundFiles() {
   const saveTrim = async (file: File, replace: boolean): Promise<void> => {
     try { await upload(file, replace); } catch (e) {
       if (e instanceof UploadError && e.status === 409 && /already exists/.test(e.raw)) {
-        if (!window.confirm(`${file.name}: ${t('файл с таким именем уже есть. Заменить?')}`)) throw new Error(t('Отменено'));
+        if (!(await host().confirm(`${file.name}: ${t('файл с таким именем уже есть. Заменить?')}`, { title: 'Файл уже есть', ok: 'Заменить' }))) throw new Error(t('Отменено'));
         await upload(file, true);
       } else throw e;
     }
@@ -124,8 +124,9 @@ export function SoundFiles() {
   };
 
   const remove = (f: SoundFile): void => {
-    if (!window.confirm(`${t('Удалить файл')} ${f.name}? ${t('Он пропадёт и с игровой ВМ.')}`)) return;
-    void run(async () => { await host().api('DELETE', `/sound-files/${encodeURIComponent(f.name)}`); await load(); }, 'Файл удалён');
+    void host().confirm(`${t('Удалить файл')} ${f.name}? ${t('Он пропадёт и с игровой ВМ.')}`, { ok: 'Удалить', danger: true }).then((yes) => {
+      if (yes) void run(async () => { await host().api('DELETE', `/sound-files/${encodeURIComponent(f.name)}`); await load(); }, 'Файл удалён');
+    });
   };
 
   const syncNow = (): void => void run(async () => { await host().api('POST', '/sound-files-sync'); await load(); }, 'Сверка выполнена');

@@ -76,7 +76,7 @@ function geoTag(id) {
 // ---- острова Preact + TypeScript: страница-обёртка подгружает /ui/main.js и монтирует компонент (см. web/) ----------
 function island(name) {
   const el = h('div');
-  import('/ui/main.js').then((m) => m.mount(name, el, { tr, ruErr, api, toast: (msg, kind) => toast(msg, kind), locale: typeof LOCALE === 'string' ? LOCALE : 'ru', lang: typeof LANG === 'string' ? LANG : 'ru', role: S.role, slug: (S.route && S.route.slug) || '', go: (page, slug) => go(page, slug), overview: () => S.ov || null, onOverview: (cb) => { S.onOverview = cb; }, refreshOverview: () => { loadOverview(); } }))
+  import('/ui/main.js').then((m) => m.mount(name, el, { tr, ruErr, api, toast: (msg, kind) => toast(msg, kind), confirm: (msg, o) => askConfirm(msg, o), locale: typeof LOCALE === 'string' ? LOCALE : 'ru', lang: typeof LANG === 'string' ? LANG : 'ru', role: S.role, slug: (S.route && S.route.slug) || '', go: (page, slug) => go(page, slug), overview: () => S.ov || null, onOverview: (cb) => { S.onOverview = cb; }, refreshOverview: () => { loadOverview(); } }))
     .catch((e) => el.replaceChildren(h('div', { class: 'banner' }, `${tr('Не удалось загрузить часть интерфейса')}: ${e.message}`)));
   return el;
 }
@@ -231,18 +231,55 @@ function renderBar() {
 const fmtNum = (n) => new Intl.NumberFormat(LOCALE).format(n);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-/** Модальное окно. content — узел или массив; возвращает {close}. */
-function modal(title, content, buttons = []) {
+/** Модальное окно. content — узел или массив; возвращает {close, el}. opts: onClose — вызывается при любом закрытии, role — 'dialog' | 'alertdialog'. */
+function modal(title, content, buttons = [], opts = {}) {
   const back = h('div', { class: 'modal-back', onclick: (e) => { if (e.target === back) close(); } });
-  const close = () => { back.remove(); document.removeEventListener('keydown', onKey); };
-  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const prevFocus = document.activeElement;
+  const close = () => {
+    if (!back.isConnected) return; back.remove(); document.removeEventListener('keydown', onKey);
+    if (prevFocus && prevFocus.isConnected && typeof prevFocus.focus === 'function') prevFocus.focus();
+    if (opts.onClose) opts.onClose();
+  };
+  const isTop = () => { const all = document.querySelectorAll('.modal-back'); return all[all.length - 1] === back; };
+  const onKey = (e) => {
+    if (!isTop()) return; // поверх открыто другое окно — оно и обработает клавишу
+    if (e.key === 'Escape') { close(); return; }
+    if (e.key !== 'Tab') return;
+    // фокус не уходит из окна
+    const f = [...back.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((x) => !x.disabled && x.offsetParent !== null);
+    if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && (i === -1 || i === f.length - 1)) { e.preventDefault(); f[0].focus(); }
+  };
   document.addEventListener('keydown', onKey);
-  back.append(h('div', { class: 'modal', role: 'dialog', 'aria-label': title },
+  back.append(h('div', { class: `modal${opts.small ? ' modal-sm' : ''}`, role: opts.role || 'dialog', 'aria-modal': 'true', 'aria-label': title },
     h('div', { class: 'modal-h' }, h('b', {}, title), h('button', { class: 'btn', onclick: close, 'aria-label': 'Закрыть' }, '×')),
     h('div', { class: 'modal-b' }, content),
     buttons.length ? h('div', { class: 'row modal-f' }, buttons.map((b) => h('button', { class: `btn ${b.kind || ''}`, onclick: async (ev) => { ev.currentTarget.disabled = true; try { const keep = await b.run(); if (keep !== false) close(); } catch (e) { toast(e.message, 'e'); ev.currentTarget.disabled = false; } } }, b.text))) : null));
   document.body.append(back);
-  return { close };
+  return { close, el: back };
+}
+
+/**
+ * Окно подтверждения вместо window.confirm: Promise<boolean>. Esc, «×» и клик по фону — отмена.
+ * Фокус на безопасной кнопке («Отмена») для опасных действий, иначе на подтверждении. danger — красная кнопка.
+ */
+function askConfirm(message, { title = 'Подтверждение', ok = 'Подтвердить', cancel = 'Отмена', danger = false } = {}) {
+  return new Promise((resolve) => {
+    let done = false; const fin = (v) => { if (!done) { done = true; resolve(v); } };
+    const m = modal(title, h('p', { class: 'confirm-text' }, String(message)),
+      [{ text: cancel, run: () => { fin(false); } }, { text: ok, kind: danger ? 'danger' : 'primary', run: () => { fin(true); } }],
+      { onClose: () => fin(false), role: 'alertdialog', small: true });
+    const btns = m.el.querySelectorAll('.modal-f button');
+    (danger ? btns[0] : btns[1]).focus();
+  });
+}
+/** Окно-уведомление вместо window.alert. */
+function askAlert(message, { title = 'Сообщение', ok = 'Понятно' } = {}) {
+  return new Promise((resolve) => {
+    const m = modal(title, h('p', { class: 'confirm-text' }, String(message)), [{ text: ok, kind: 'primary', run: () => {} }], { onClose: resolve, role: 'alertdialog', small: true });
+    m.el.querySelector('.modal-f button').focus();
+  });
 }
 
 /**
@@ -304,8 +341,8 @@ function parseSteamId(text) {
   return null;
 }
 
-// confirm()/alert() тоже переводим
-{ const _c = window.confirm.bind(window); window.confirm = (m) => _c(tr(String(m))); const _a = window.alert.bind(window); window.alert = (m) => _a(tr(String(m))); }
+// нативные alert()/confirm() не используем: askAlert/askConfirm рисуют своё окно (alert подменяем на случай стороннего кода)
+window.alert = (m) => { void askAlert(String(m)); };
 
 // ---------------------------------------------------------------- паутинка (radar / spider chart)
 /** axes: [{ label, value (0..1), text }], ref: необязательный контур для сравнения [0..1,...]. Рисует SVG без зависимостей. */

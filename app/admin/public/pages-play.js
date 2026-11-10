@@ -112,7 +112,7 @@ function pageMaps() {
     const card = (k, p, builtin) => h('div', { class: `btn preset ${st.server.preset === k ? 'on' : ''}`, style: 'cursor:default' },
       h('b', {}, p.label), h('span', { class: 'muted small' }, p.note || `game_type ${p.gameType} / game_mode ${p.gameMode}`),
       h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => applyPreset(k, p, builtin) }, 'Предпросмотр и применение'),
-        !builtin ? h('button', { class: 'btn danger', title: 'Удалить свой пресет', onclick: act(async () => { if (!confirm(`Удалить пресет «${p.label}»?`)) return; const next = { ...userPresets }; delete next[k]; userPresets = (await api('PUT', '/user-presets', { presets: next })).presets; drawPresets(); }) }, 'Удалить') : null));
+        !builtin ? h('button', { class: 'btn danger', title: 'Удалить свой пресет', onclick: act(async () => { if (!await askConfirm(`Удалить пресет «${p.label}»?`, { ok: 'Удалить', danger: true })) return; const next = { ...userPresets }; delete next[k]; userPresets = (await api('PUT', '/user-presets', { presets: next })).presets; drawPresets(); }) }, 'Удалить') : null));
     presetBox.replaceChildren(...Object.entries(S.catalog.presets).map(([k, p]) => card(k, p, true)), ...Object.entries(userPresets).map(([k, p]) => card(k, p, false)));
   };
   const nameIn = h('input', { type: 'text', placeholder: 'Название своего пресета', maxlength: 40 });
