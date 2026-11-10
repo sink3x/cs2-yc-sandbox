@@ -17,6 +17,18 @@ export interface Host {
   slug: string;
   /** Переход на страницу старого интерфейса. */
   go(page: string, slug?: string): void;
+  /** Последний обзор панели (раз в 4 с обновляется старым интерфейсом) или null. */
+  overview(): Overview | null;
+  /** Вызвать cb при каждом новом обзоре (один подписчик на страницу). */
+  onOverview(cb: () => void): void;
+  /** Запросить обзор прямо сейчас. */
+  refreshOverview(): void;
+}
+
+export interface LivePlayer { id: number | string; name: string | null; bot: boolean; ping?: number | string; time?: string }
+export interface Overview {
+  vm?: { status?: string };
+  server?: { live?: { map?: string; maxPlayers?: number; players?: LivePlayer[] } | null } | null;
 }
 
 let current: Host | null = null;

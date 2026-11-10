@@ -234,38 +234,7 @@ function ppSetupEditor(existingRef) {
 
 
 // ================================================================== ИГРОКИ ОНЛАЙН
-/** Кто сейчас на сервере: ник, пинг, время; кик / убить / команда / бан. Данные приходят с обзором (раз в 4 с), без отдельного опроса. */
+/** Кто сейчас на сервере: кик / убить / команда / бан и сообщение всем в чат. Остров Preact + TypeScript (web/src/pages/Online.tsx); данные — из обзора, который обновляется раз в 4 с. */
 function pageOnline() {
-  const box = h('div');
-  const send = (body, okMsg) => act(async () => { await api('POST', '/online/act', body); setTimeout(loadOverview, 700); }, okMsg);
-  const banDialog = (p) => {
-    const sel = h('select', { 'aria-label': tr('Срок') }, [[60, '1 час'], [1440, '1 день'], [10080, '7 дней'], [0, 'Навсегда']].map(([v, t]) => h('option', { value: String(v) }, tr(t))));
-    const m = modal(`${tr('Бан')}: ${p.name}`, h('div', {}, h('div', { class: 'muted small' }, 'Нужен плагин админ-команд CounterStrikeSharp (css_ban). Бан по userid — игрок отключится сразу.'),
-      h('div', { class: 'row', style: 'margin-top:10px' }, sel, h('button', { class: 'btn danger', onclick: act(async () => { await api('POST', '/online/act', { action: 'ban', id: p.id, minutes: Number(sel.value) }); m.close(); setTimeout(loadOverview, 700); }, 'Игрок забанен') }, 'Забанить'))));
-  };
-  const row = (p) => h('div', { class: 'adm-row onl-row' },
-    h('div', { class: 'adm-grid' },
-      h('div', { class: 'adm-name' }, p.bot ? h('span', { class: 'avatar ph', style: 'width:26px;height:26px;line-height:26px' }, '🤖') : h('span', { class: 'avatar ph', style: 'width:26px;height:26px;line-height:26px' }, (p.name || '?').slice(0, 1).toUpperCase()), h('span', {}, p.name || '—'), p.bot ? h('span', { class: 'pill' }, 'бот') : null),
-      h('div', { class: 'muted small onl-meta' }, p.bot ? '' : `${tr('пинг')} ${p.ping} · ${p.time}`),
-      p.bot ? h('div', { class: 'adm-act' }, h('button', { class: 'btn', onclick: send({ action: 'kick', id: p.id }, 'Бот убран') }, 'Убрать'))
-        : h('div', { class: 'adm-act onl-act' },
-          h('button', { class: 'btn', onclick: send({ action: 'slay', id: p.id }, 'Убит') }, 'Убить'),
-          ['ct', 't', 'spec'].map((t) => h('button', { class: 'btn', onclick: send({ action: 'team', id: p.id, team: t }, 'Команда сменена') }, t === 'spec' ? 'Spec' : t.toUpperCase())),
-          h('button', { class: 'btn', onclick: () => { if (confirm(`${tr('Кикнуть игрока')} ${p.name}?`)) send({ action: 'kick', id: p.id }, 'Игрок кикнут')(); } }, 'Кик'),
-          h('button', { class: 'btn danger', onclick: () => banDialog(p) }, 'Бан…'))));
-  const draw = () => {
-    if (S.page !== 'online') return;
-    const live = S.ov && S.ov.server && S.ov.server.live;
-    if (!serverUp()) { box.replaceChildren(h('div', { class: 'card muted' }, tr('Сервер выключен или ещё запускается — онлайн-списка нет.'))); return; }
-    const all = live.players || []; const humans = all.filter((p) => !p.bot); const bots = all.filter((p) => p.bot);
-    box.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'muted small' }, `${live.map || ''} · ${tr('людей')}: ${humans.length}${live.maxPlayers ? ` / ${live.maxPlayers}` : ''} · ${tr('ботов')}: ${bots.length}`),
-      all.length ? h('div', { class: 'adm-list' }, [...humans, ...bots].map(row)) : h('div', { class: 'muted', style: 'margin-top:8px' }, tr('На сервере пока никого нет.'))));
-  };
-  S.onOverview = draw; draw();
-  const msg = h('input', { type: 'text', maxlength: '120', placeholder: tr('Сообщение всем в чат (до 120 символов)'), 'aria-label': tr('Сообщение всем в чат (до 120 символов)'), style: 'flex:1;min-width:180px' });
-  const sendMsg = act(async () => { await api('POST', '/online/act', { action: 'say', text: msg.value }); msg.value = ''; }, 'Сообщение отправлено');
-  msg.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMsg(); });
-  return h('div', {}, h('h2', {}, 'Игроки онлайн'),
-    h('div', { class: 'card' }, h('div', { class: 'row' }, msg, h('button', { class: 'btn primary', onclick: sendMsg }, 'Отправить')), h('div', { class: 'muted small', style: 'margin-top:6px' }, 'Сообщение увидят все игроки в чате сервера. Без кавычек и «;».')),
-    box);
+  return h('div', {}, h('h2', {}, 'Игроки онлайн'), island('online'));
 }
