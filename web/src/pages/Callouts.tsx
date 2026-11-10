@@ -13,6 +13,8 @@ interface Data { maps: Record<string, MapDef>; names: Record<string, Record<stri
 interface Place { key: string; id?: string; en: string; x: number; y: number; side: Side; near: string; lvl: number; custom: boolean; renamed: boolean; moved: boolean; sided: boolean; name: string }
 interface Draft { map: string; x: number; y: number; name: string; side: Side }
 
+// версия картинок радаров: меняйте при замене файлов, иначе браузер неделю держит старые
+const IMG_V = 2;
 const SIDE_LABEL: Record<Side, string> = { t: 'Сторона T', m: 'Центр карты', ct: 'Сторона CT' };
 const NEAR: Record<string, string> = { a: 'Рядом с точкой A', b: 'Рядом с точкой B', m: 'Между точками A и B' };
 const LVL = ['Низкая', 'Средняя', 'Высокая'];
@@ -132,7 +134,7 @@ export function Callouts() {
         <div>
           <div class={`co-map${mode ? ' co-pick' : ''}${all ? ' co-all' : ''}`}>
             <svg class="co-svg" viewBox={`${bx} ${by} ${bs} ${bs}`} role="group" aria-label={t('Места на карте')} style={`--k:${k.toFixed(3)}`} onClick={onSvgClick}>
-              <image href={`/callouts/${id}.webp`} x={0} y={0} width={1000} height={1000} preserveAspectRatio="none"><title>{map.name}</title></image>
+              <image href={`/callouts/${id}.webp?v=${IMG_V}`} x={0} y={0} width={1000} height={1000} preserveAspectRatio="none"><title>{map.name}</title></image>
               {places.filter((p) => p.key !== sel).map((p) => point({ ...p, site: !p.custom && (p.en === 'A Site' || p.en === 'B Site') }, `${match(p) ? '' : 'dim'}`, () => pick(p.key)))}
               {cur ? point({ ...cur, site: !cur.custom && (cur.en === 'A Site' || cur.en === 'B Site') }, 'on', () => pick(cur.key)) : null}
               {draft && draft.map === id ? point({ name: draft.name || t('Новое место'), side: draft.side, x: draft.x, y: draft.y, custom: true }, 'on draft') : null}

@@ -34,23 +34,34 @@ test('данные: 10 карт, места в пределах схемы, пе
   }
 });
 
-test('CalloutMaps: скачивает один раз, кэширует на диск, не пускает чужие id и не-картинки', async () => {
+test('CalloutMaps: читает радары с диска, не пускает чужие id, битый файл — 503', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'co-'));
-  let hits = 0; const urls = [];
-  const m = new CalloutMaps({ dir, fetchBuf: async (u) => { hits++; urls.push(u); return webp(); } });
+  fs.writeFileSync(path.join(dir, 'de_mirage.webp'), webp());
+  fs.writeFileSync(path.join(dir, 'de_dust2.webp'), Buffer.from('<html>404</html>'.repeat(200)));
+  const m = new CalloutMaps({ dir });
   assert.equal(await m.get('../../etc/passwd'), null);
   assert.equal(await m.get('de_nowhere'), null);
-  const [a, b] = await Promise.all([m.get('de_mirage'), m.get('de_mirage')]);
-  assert.ok(isWebp(a) && isWebp(b)); assert.equal(hits, 1);
-  assert.match(urls[0], /sink3x\/cs2-callouts\/main\/maps\/de_mirage\.webp$/);
-  assert.ok(fs.existsSync(path.join(dir, 'de_mirage.webp')));
-  // новый экземпляр берёт картинку с диска без сети
-  const m2 = new CalloutMaps({ dir, fetchBuf: async () => { throw new Error('offline'); } });
-  assert.ok(isWebp(await m2.get('de_mirage')));
-  // сеть отдала не картинку — 503, на диск ничего не пишется
-  const bad = new CalloutMaps({ dir, fetchBuf: async () => Buffer.from('<html>404</html>'.repeat(200)) });
-  await assert.rejects(() => bad.get('de_dust2'), (e) => e.status === 503);
-  assert.ok(!fs.existsSync(path.join(dir, 'de_dust2.webp')));
+  assert.ok(isWebp(await m.get('de_mirage')));
+  await assert.rejects(() => m.get('de_dust2'), (e) => e.status === 503); // не картинка
+  await assert.rejects(() => m.get('de_inferno'), (e) => e.status === 503); // файла нет
+});
+
+test('радары из репозитория: 10 файлов WebP, квадратные, места попадают на изображение', () => {
+  const real = new CalloutMaps({ dir: path.join(__dirname, '..', 'admin', 'public', 'callouts') });
+  for (const id of MAP_IDS) {
+    const b = fs.readFileSync(path.join(real.dir, `${id}.webp`));
+    assert.ok(isWebp(b), id);
+    // VP8/VP8L/VP8X: ширина и высота равны (радар квадратный; страница рисует его в квадрате 1000×1000)
+    const kind = b.toString('ascii', 12, 16);
+    let w; let h;
+    if (kind === 'VP8 ') { w = b.readUInt16LE(26) & 0x3fff; h = b.readUInt16LE(28) & 0x3fff; }
+    else if (kind === 'VP8L') { const v = b.readUInt32LE(21); w = (v & 0x3fff) + 1; h = ((v >> 14) & 0x3fff) + 1; }
+    else { w = b.readUIntLE(24, 3) + 1; h = b.readUIntLE(27, 3) + 1; }
+    assert.equal(w, h, `${id}: ${w}×${h}`);
+    const [bx, by, bs] = DATA.maps[id].box;
+    assert.ok(bx >= 0 && by >= 0 && bs > 300 && bx + bs <= 1000 && by + bs <= 1000, `${id}: рамка ${DATA.maps[id].box}`);
+    for (const [en, x, y] of DATA.maps[id].places) assert.ok(x >= bx && x <= bx + bs && y >= by && y <= by + bs, `${id}/${en}: метка вне рамки обзора`);
+  }
 });
 
 test('сервер: /api/callouts доступен игроку, картинка схемы отдаётся без входа с image/webp', async () => {
@@ -60,7 +71,6 @@ test('сервер: /api/callouts доступен игроку, картинк�
     config: { instanceId: 'i1', agentUrl: 'http://x', publicPort: 0 }, secrets: { AGENT_TOKEN: 't' }, compute: {}, agent: async () => ({}),
     usersFile: path.join(dir, 'users.json'), settingsFile: path.join(dir, 'settings.json'), auditFile: path.join(dir, 'audit.log'),
     faceitFile: path.join(dir, 'faceit.json'), statsCacheFile: path.join(dir, 'stats-cache.json'), brandFile: path.join(dir, 'brand.json'), brandLogoFile: path.join(dir, 'brand-logo.bin'),
-    calloutMaps: new CalloutMaps({ dir: path.join(dir, 'callouts'), fetchBuf: async () => webp() }),
   });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${app.server.address().port}`;

@@ -98,7 +98,7 @@ function createApp(deps = {}) {
   const soundSyncFile = deps.soundSyncFile || path.join(VAR, 'sound-sync.json');
   const calloutsCustomFile = deps.calloutsCustomFile || path.join(VAR, 'callouts-custom.json');
   const loadCalloutCustom = () => { const v = validateCalloutCustom(readJson(calloutsCustomFile, EMPTY_CALLOUT_CUSTOM())); return v.custom; };
-  const calloutMaps = deps.calloutMaps || new CalloutMaps({ dir: path.join(VAR, 'callouts') });
+  const calloutMaps = deps.calloutMaps || new CalloutMaps({ dir: path.join(PUBLIC_DIR, 'callouts') });
   const catalogCache = deps.catalogCache || new CatalogCache({ file: path.join(VAR, 'skin-catalog.json') });
   const keysBlocked = (ip) => limiter.blocked(`ip:${ip}`);
   const loadUsers = () => (readJson(usersFile, { users: {} }).users) || {};
@@ -816,7 +816,7 @@ function createApp(deps = {}) {
         return send(res, 200, fs.readFileSync(brandLogoFile), { ...SEC_HEADERS, 'Content-Type': b.logoType, 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox", 'Cache-Control': 'public, max-age=3600' });
       }
       const cm = req.method === 'GET' && /^\/callouts\/(de_[a-z0-9]+)\.webp$/.exec(url.pathname);
-      if (cm) { // схема карты: публичная картинка, как иконки; хранится в репозитории sink3x/cs2-callouts
+      if (cm) { // радар карты: публичная картинка, как иконки; лежит в public/callouts и едет вместе с панелью
         try {
           const b = await calloutMaps.get(cm[1]); if (!b) return send(res, 404, 'not found', SEC_HEADERS);
           return send(res, 200, b, { ...SEC_HEADERS, 'Content-Type': 'image/webp', 'Cache-Control': 'public, max-age=604800' });
