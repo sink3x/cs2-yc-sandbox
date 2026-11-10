@@ -21,13 +21,13 @@ locals {
   panel_host = var.panel_domain != "" ? var.panel_domain : "${replace(yandex_vpc_address.admin.external_ipv4_address[0].address, ".", "-")}.sslip.io"
 
   cs2_config = {
-    hostname   = var.server_hostname
-    admins     = var.cs2_admins
-    bucket     = yandex_storage_bucket.backups.bucket
-    endpoint   = "https://storage.yandexcloud.net"
-    region     = "ru-central1"
-    agentPort  = 8081
-    agentBind  = var.cs2_private_ip
+    hostname  = var.server_hostname
+    admins    = var.cs2_admins
+    bucket    = yandex_storage_bucket.backups.bucket
+    endpoint  = "https://storage.yandexcloud.net"
+    region    = "ru-central1"
+    agentPort = 8081
+    agentBind = var.cs2_private_ip
   }
 }
 
@@ -157,8 +157,6 @@ resource "yandex_compute_instance" "admin" {
       key    = yandex_storage_object.public.key
       sha256 = filesha256(local.public_path)
     })
-    # legacy copy, kept for one transition deploy as a fallback; removed once Object Storage delivery is verified
-    app-public = filebase64(local.public_path)
     panel-host = local.panel_host
     config-json = jsonencode({
       instanceId = yandex_compute_instance.cs2.id
