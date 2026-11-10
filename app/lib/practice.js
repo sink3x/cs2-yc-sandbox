@@ -82,6 +82,8 @@ const ACTIONS = {
     return [`css_spawnanimal ${kind} ${n}${target ? ` ${target}` : ''}`];
   },
   'animal-clear': () => ['css_killanimals'],
+  // Очистка карты — команда плагина CS2Panel ≥ 0.5.0 (гранаты и дымы, огонь, оружие на полу, следы пуль и спреи).
+  cleanup: (a) => [`css_cleanup ${pick(a.what ?? 'all', ['grenades', 'fire', 'weapons', 'decals', 'all'], 'what')}`],
   'bot-add': (a) => {
     const team = pick(a.team ?? 'any', ['ct', 't', 'any'], 'team');
     const n = int(a.count ?? 1, 1, 10, 'count');

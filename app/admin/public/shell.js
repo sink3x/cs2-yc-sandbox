@@ -24,7 +24,7 @@ const MOBILE_MAIN = { admin: ['overview', 'practice', 'maps', 'console'], player
 const mobileMain = () => MOBILE_MAIN[S.role === 'player' ? 'player' : 'admin'];
 function openMoreSheet() {
   const vis = visiblePages(); const by = new Map(vis); const used = new Set(); const kids = [];
-  const item = (k, label, icon, fn, on) => h('button', { class: `sheet-i${on ? ' on' : ''}`, onclick: fn }, svgIcon(icon, 22), h('span', {}, label));
+  const item = (k, label, icon, fn, on, extra) => h('button', { class: `sheet-i${on ? ' on' : ''}${extra ? ' ' + extra : ''}`, onclick: fn }, svgIcon(icon, 22), h('span', {}, label));
   let m;
   const goTo = (k) => { m.close(); if (S.page !== k) go(k); };
   for (const [cap, keys] of NAV_GROUPS) {
@@ -36,7 +36,7 @@ function openMoreSheet() {
   if (rest.length) kids.push(h('div', { class: 'sheet-grid' }, rest.map(([k, v]) => item(k, v[0], k, () => goTo(k), S.page === k))));
   kids.push(h('div', { class: 'sheet-grid sheet-sys' },
     item('search', 'Поиск', 'search', () => { m.close(); openPalette(); }),
-    item('logout', 'Выйти', 'logout', async () => { m.close(); await api('POST', '/logout'); showLogin(); })));
+    item('logout', 'Выйти', 'logout', async () => { m.close(); await api('POST', '/logout'); showLogin(); }, false, 'danger')));
   m = modal('Меню', h('div', { class: 'sheet' }, kids));
 }
 function navSections(vis) {
@@ -147,7 +147,8 @@ async function renderPage() {
     h('div', { class: 'sp' }),
     navBtn('more', 'Ещё', { class: `mob-more${mobileMain().includes(S.page) ? '' : ' on'}`, onclick: openMoreSheet }),
     navBtn('search', 'Поиск (Ctrl+K)', { class: 'mob-hide', onclick: openPalette }),
-    navBtn('logout', `Выйти (${S.display || S.user})`, { class: 'mob-hide', onclick: async () => { await api('POST', '/logout'); showLogin(); } }),
+    navBtn('logout', `Выйти (${S.display || S.user})`, { class: 'mob-hide nav-danger', onclick: async () => { await api('POST', '/logout'); showLogin(); } }),
+    h('div', { class: 'nav-sep' }),
     navBtn('sidebar', 'Свернуть меню', { class: 'collapse-btn', onclick: toggleNav }));
   applyNav(); renderNavLabels();
   const wantsState = S.role !== 'player' && (needsState.has(S.page) || S.page === 'skins');

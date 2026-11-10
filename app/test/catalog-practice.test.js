@@ -62,6 +62,12 @@ test('buildCatalog: картинка «голого» оружия из base_wea
   assert.equal(buildCatalog(SRC).weapons[0].img, undefined);
 });
 
+test('practice: cleanup — команда плагина и валидация', () => {
+  assert.deepEqual(P.buildCommands('cleanup', { what: 'grenades' }), ['css_cleanup grenades']);
+  assert.deepEqual(P.buildCommands('cleanup', {}), ['css_cleanup all']);
+  assert.throws(() => P.buildCommands('cleanup', { what: 'all; quit' }));
+});
+
 test('practice: animals — команды плагина, цель и валидация', () => {
   assert.deepEqual(P.buildCommands('animal', { kind: 'chicken', count: 3 }), ['css_spawnanimal chicken 3']);
   assert.deepEqual(P.buildCommands('animal', { kind: 'pig', count: 1, target: 'sink333' }), ['css_spawnanimal pig 1 sink333']);
