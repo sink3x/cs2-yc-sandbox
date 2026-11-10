@@ -101,7 +101,9 @@ test('the audit log keeps the RCON command name but not the secret inside it', a
   } finally { t.close(); }
 });
 
-test('restore: an archive with links, absolute or .. paths is refused before extraction', async () => {
+// Агент работает на Ubuntu (GNU tar): формат оглавления bsdtar (macOS) другой, поэтому на Mac тест пропускается.
+const GNU_TAR = (() => { try { return /GNU tar/.test(execFileSync('tar', ['--version'], { encoding: 'utf8' })); } catch { return false; } })();
+test('restore: an archive with links, absolute or .. paths is refused before extraction', { skip: !GNU_TAR && 'needs GNU tar' }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cs2tar-'));
   fs.mkdirSync(path.join(dir, 'ok/data'), { recursive: true }); fs.writeFileSync(path.join(dir, 'ok/data/a'), 'x');
   execFileSync('tar', ['czf', path.join(dir, 'ok.tgz'), '-C', path.join(dir, 'ok'), 'data']);
