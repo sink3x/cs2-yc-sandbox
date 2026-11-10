@@ -295,7 +295,7 @@ function pageAdmins() {
 }
 
 function pageBackups() {
-  const listBox = h('div'); const logBox = h('div', { class: 'console logbox' }); const unit = h('select', {}, ['cs2', 'cs2-agent', 'mariadb'].map((u) => h('option', { value: u }, u)));
+  const listBox = h('div'); const logBox = h('div', { class: 'console logbox' }); const unit = h('select', {}, ['cs2', 'cs2-agent', 'cs2-block-metadata', 'mariadb'].map((u) => h('option', { value: u }, u)));
   const loadList = async () => {
     try {
       const r = await api('GET', '/backups');

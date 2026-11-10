@@ -233,7 +233,7 @@ const routes = [
     return r;
   }) })],
   ['GET', '/logs', async ({ query }) => {
-    const unit = ['cs2', 'cs2-agent', 'mariadb'].includes(query.unit) ? query.unit : 'cs2';
+    const unit = ['cs2', 'cs2-agent', 'cs2-block-metadata', 'mariadb'].includes(query.unit) ? query.unit : 'cs2';
     const n = Math.min(Math.max(parseInt(query.n || '200', 10) || 200, 10), 1000);
     const r = await exec('journalctl', ['-u', `${unit}.service`, '-n', String(n), '--no-pager', '-o', 'short-iso']);
     return { unit, text: r.stdout };
