@@ -74,12 +74,12 @@ const ctx = vm.createContext({ document: { documentElement: {} }, navigator: { l
 ctx.window = ctx;
 for (const f of I18N) vm.runInContext(read(f), ctx, { filename: f });
 const { D, P, TIPS } = vm.runInContext('({ D, P, TIPS })', ctx);
-function blank(src, name, open, close) {
+function blank(src, name, open, close, fill = '') {
   const start = src.indexOf(`const ${name} = ${open}`); if (start < 0) die(`i18n.js: нет const ${name}`);
   const end = src.indexOf(`\n${close};`, start); if (end < 0) die(`i18n.js: нет конца ${name}`);
-  return `${src.slice(0, start)}const ${name} = ${open}${close};${src.slice(end + close.length + 2)}`;
+  return `${src.slice(0, start)}const ${name} = ${open}${fill}${close};${src.slice(end + close.length + 2)}`;
 }
-let i18nCore = read('i18n.js'); i18nCore = blank(blank(blank(i18nCore, 'D', '{', '}'), 'P', '[', ']'), 'TIPS', '{', '}');
+let i18nCore = read('i18n.js'); i18nCore = blank(blank(blank(i18nCore, 'D', '{', '}'), 'P', '[', ']'), 'TIPS', '{', '}', JSON.stringify(Object.fromEntries(Object.entries(TIPS).map(([k, v]) => [k, { ru: v.ru }]))).slice(1, -1));
 const langBodies = {};
 for (const [i, lang] of LANG_LIST.entries()) {
   const d = {}; for (const [k, v] of Object.entries(D)) if (v && v[i]) d[k] = [v[i]];
@@ -136,6 +136,14 @@ for (const [i, lang] of LANG_LIST.entries()) {
   const probe = [...Object.keys(D), 'Админ 3 указан дважды', '12 скинов', 'Карта: de_mirage', 'Занято: тест', 'Простой — текст. И ещё одно предложение.'];
   for (const k of probe) { const a = vm.runInContext(`tr(${JSON.stringify(k)})`, orig); const b = vm.runInContext(`tr(${JSON.stringify(k)})`, split); if (a !== b) die(`перевод (${lang}) расходится: «${k}» → «${a}» / «${b}»`); }
   for (const code of Object.keys(TIPS)) { const a = vm.runInContext(`tipText({code:${JSON.stringify(code)},p:{n:1}})`, orig); const b = vm.runInContext(`tipText({code:${JSON.stringify(code)},p:{n:1}})`, split); if (a !== b) die(`подсказка ${code} (${lang}) расходится`); }
+}
+
+// русский — язык исходников: словарь не подгружается, но тексты подсказок анализа должны быть в ядре (иначе вместо них видны коды вроде kd_mid)
+{
+  const mk = (extra) => { const c = vm.createContext({ document: { documentElement: {}, write() {} }, navigator: { languages: ['ru'] }, localStorage: { getItem: () => JSON.stringify('ru'), setItem() {} }, location: { reload() {} }, self: { __app: manifest }, console }); c.window = c; vm.runInContext(extra, c); return c; };
+  const orig = mk(I18N.map(read).join('\n'));
+  const split = mk(i18nCore);
+  for (const code of Object.keys(TIPS)) { const a = vm.runInContext(`tipText({code:${JSON.stringify(code)},p:{n:1}})`, orig); const b = vm.runInContext(`tipText({code:${JSON.stringify(code)},p:{n:1}})`, split); if (a !== b || a === code) die(`подсказка ${code} (ru) расходится или пуста: «${b}»`); }
 }
 
 const total = out.reduce((a, [, s]) => a + s, 0); const gz = out.reduce((a, [, , g]) => a + g, 0);
