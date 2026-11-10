@@ -356,6 +356,7 @@ function createApp(deps = {}) {
     audit(user, ip, 'vm.stop', reason);
     (async () => {
       try {
+        try { await seenTick(true); } catch { /* агент недоступен — останется прошлая копия */ }
         try { await agent('POST', '/prepare-stop', { delaySec: reason === 'manual' ? 5 : 15 }, 170000); } catch (e) { log('prepare-stop failed (continuing):', e.message); }
         await compute.stop();
       } catch (e) { vmState.lastError = e.message; log('stop failed:', e.message); }
@@ -393,6 +394,15 @@ function createApp(deps = {}) {
       const all = cache.all; const players = only ? all.players.filter((x) => x.steamid === only) : all.players;
       return { ...all, players, offline: true };
     }
+  }
+  // Реестр игроков сервера: статистика живёт на игровой ВМ, а ВМ выключается. Пока ВМ работает, раз в минуту (и перед остановкой)
+  // забираем сводку игроков в кэш панели — тогда новый игрок (по SteamID64) виден в панели и при выключенном сервере.
+  let seenSyncAt = 0;
+  async function seenTick(force = false) {
+    if (!force && now() - seenSyncAt < 55_000) return;
+    if (vmState.lastStatus !== 'RUNNING') return;
+    seenSyncAt = now();
+    await statsGet('/stats');
   }
   async function overview() {
     const out = { vm: null, server: null, busy: vmState.busy, lastError: vmState.lastError, settings: loadSettings(), idleSince: vmState.idleSince ? new Date(vmState.idleSince).toISOString() : null, lastAutoStop: vmState.lastAutoStop };
@@ -651,6 +661,42 @@ function createApp(deps = {}) {
       const users = Object.values(loadUsers()); // страна и язык — то, что игрок сам указал в профиле панели
       for (const id of Object.keys(profiles)) { const u = users.find((x) => x.steamid === id); if (u && (u.country || u.lang)) profiles[id] = { ...profiles[id], country: u.country || '', lang: u.lang || '' }; }
       return { profiles };
+    }],
+    // ---- игроки, которых видел сервер (по SteamID64 из лога), и их связь с аккаунтами панели ----
+    ['GET', '/api/seen', async ({ user }) => {
+      if (roleOf(user) !== 'admin') throw Object.assign(new Error('forbidden'), { status: 403 });
+      const all = readJson(statsCacheFile, {}).all || { players: [] };
+      const us = usersWithSlugs(); const entries = Object.entries(us);
+      const owners = new Map(entries.filter(([, u]) => /^\d{17}$/.test(String(u.steamid || ''))).map(([n, u]) => [String(u.steamid), n]));
+      const players = (all.players || []).filter((p) => /^\d{17}$/.test(String(p.steamid)));
+      const profiles = players.length ? await steamProfilesFor(players.map((p) => p.steamid).slice(0, 30)) : {};
+      const free = entries.filter(([, u]) => u.role !== 'player' && !u.steamid); // аккаунты по паролю без привязанного Steam
+      const norm = (s) => String(s || '').toLowerCase().trim();
+      const card = (n) => { const c = people.publicUser(n, us[n]); return { slug: c.slug, name: n, displayName: c.displayName, via: us[n].hash ? 'password' : 'steam' }; };
+      const rows = players.map((p) => {
+        const prof = profiles[p.steamid] || {}; const owner = owners.get(String(p.steamid));
+        let suggest = null;
+        if (!owner) { // подсказка, не автопривязка: чужой ник может совпасть случайно
+          const names = [norm(p.name), norm(prof.name)].filter(Boolean);
+          const m = free.filter(([n, u]) => names.includes(norm(n)) || names.includes(norm(u.persona)));
+          if (m.length === 1) suggest = card(m[0][0]);
+        }
+        return { steamid: p.steamid, name: p.name || '', persona: prof.name || '', avatar: prof.avatar || '', firstSeen: p.firstSeen || null, lastSeen: p.lastSeen || null, seconds: p.seconds || 0, kills: p.kills || 0, online: !!p.online, account: owner ? card(owner) : null, suggest };
+      }).sort((a, b) => String(b.lastSeen || '').localeCompare(String(a.lastSeen || '')));
+      return { savedAt: all.savedAt || null, since: all.since || null, players: rows, free: free.map(([n]) => card(n)) };
+    }],
+    ['POST', '/api/seen/:steamid/link', async ({ params, body, user, ip }) => {
+      if (roleOf(user) !== 'admin') throw Object.assign(new Error('forbidden'), { status: 403 });
+      const id = String(params.steamid); const name = String((body && body.user) || '');
+      if (!/^\d{17}$/.test(id)) throw Object.assign(new Error('seen: bad SteamID64'), { status: 400 });
+      const users = loadUsers(); const t = users[name];
+      if (!t || t.role === 'player') throw Object.assign(new Error('seen: выберите аккаунт панели (админ с паролем)'), { status: 404 });
+      if (t.steamid && t.steamid !== id) throw Object.assign(new Error('seen: у аккаунта уже привязан другой Steam'), { status: 409 });
+      const other = Object.keys(users).find((n) => n !== name && users[n].steamid === id);
+      if (other && !absorbPlayer(users, other, name)) throw Object.assign(new Error('seen: этот SteamID уже привязан к другому аккаунту'), { status: 409 });
+      t.steamid = id; saveUsers(users); audit(user, ip, 'seen.link', { steamid: id, user: name });
+      await refreshPersona(users, name, id).catch(() => {});
+      return { ok: true };
     }],
     ['GET', '/api/people', async () => {
       const us = usersWithSlugs();
@@ -922,7 +968,7 @@ function createApp(deps = {}) {
     server, sessions, limiter, vmState, idleTick, stateSyncTick, soundSyncTick, syncSounds, soundStore, getState, putState, overview, startVm, stopVm,
     listen(port = Number(config.publicPort || 8080), host = '127.0.0.1') {
       return new Promise((resolve) => server.listen(port, host, () => {
-        timer = setInterval(() => { vmDescribe().catch(() => {}); idleTick().catch((e) => log('idle tick:', e.message)); soundSyncTick().catch((e) => log('sound sync:', e.message)); stateSyncTick().catch((e) => log('state sync:', e.message)); sessions.sweep(); }, 60_000);
+        timer = setInterval(() => { vmDescribe().catch(() => {}); idleTick().catch((e) => log('idle tick:', e.message)); seenTick().catch((e) => log('seen sync:', e.message)); soundSyncTick().catch((e) => log('sound sync:', e.message)); stateSyncTick().catch((e) => log('state sync:', e.message)); sessions.sweep(); }, 60_000);
         timer.unref();
         voteTimer = setInterval(() => { voteTick().catch((e) => log('vote tick:', e.message)); }, 5000); voteTimer.unref();
         resolve();

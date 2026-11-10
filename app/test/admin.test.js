@@ -509,3 +509,28 @@ test('uptime: аптайм ВМ и цена часа — только для а�
     assert.equal((await t.req('GET', '/api/uptime')).status, 401);
   } finally { await t.close(); }
 });
+
+test('seen: игроки из статистики сопоставляются с аккаунтами; привязка Steam к аккаунту по паролю', async () => {
+  const t = await setup({ deps: { httpGet: async () => ({ status: 404, text: '' }) } });
+  try {
+    const c = await t.login();
+    const ID = '76561198000000042';
+    fs.writeFileSync(path.join(t.dir, 'stats-cache.json'), JSON.stringify({ all: { savedAt: '2026-11-09T18:00:00.000Z', since: '2026-11-07T00:00:00.000Z', players: [
+      { steamid: ID, name: 'Friend', kills: 3, seconds: 1200, firstSeen: '2026-11-09T17:00:00.000Z', lastSeen: '2026-11-09T17:30:00.000Z', online: false },
+      { steamid: 'bad', name: 'x' }] } }));
+    // добавляем аккаунт по паролю без Steam
+    const us = JSON.parse(fs.readFileSync(path.join(t.dir, 'users.json'), 'utf8')); us.users.friend = { hash: hashPassword('hunter2hunter2'), role: 'admin' };
+    fs.writeFileSync(path.join(t.dir, 'users.json'), JSON.stringify(us));
+    let r = (await t.req('GET', '/api/seen', undefined, c)).json;
+    assert.equal(r.players.length, 1, 'мусорный steamid отброшен');
+    assert.equal(r.players[0].account, null); assert.equal(r.players[0].suggest.name, 'friend', 'подсказка по совпадению ника');
+    assert.ok(r.free.some((u) => u.name === 'friend'));
+    assert.equal((await t.req('POST', `/api/seen/${ID}/link`, { user: 'nobody' }, c, CSRF)).status, 404);
+    assert.equal((await t.req('POST', '/api/seen/123/link', { user: 'friend' }, c, CSRF)).status, 400);
+    assert.equal((await t.req('POST', `/api/seen/${ID}/link`, { user: 'friend' }, c, CSRF)).status, 200);
+    r = (await t.req('GET', '/api/seen', undefined, c)).json;
+    assert.equal(r.players[0].account.name, 'friend'); assert.equal(r.players[0].account.via, 'password'); assert.equal(r.players[0].suggest, null);
+    // чужой Steam уже занят этим аккаунтом
+    assert.equal((await t.req('POST', `/api/seen/76561198000000043/link`, { user: 'friend' }, c, CSRF)).status, 409);
+  } finally { t.close(); }
+});

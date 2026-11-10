@@ -47,7 +47,41 @@ function pageUsers() {
   }
   load();
   return h('div', {}, h('h2', {}, 'Пользователи'), h('div', { class: 'muted small' }, 'Все, кто входил в панель: админы и игроки со Steam. Карточка — по клику; ссылка на неё доступна только тем, у кого есть права.'),
+    ppSeenCard(),
+    h('h3', {}, 'Аккаунты панели'),
     h('div', { class: 'card' }, h('div', { class: 'row' }, qIn, roleSel, sortSel)), list);
+}
+
+// Игроки, которых видел сервер (по SteamID64 из лога игры). Сопоставляются с аккаунтами панели: вошёл через Steam / аккаунт по паролю /
+// аккаунта нет. Аккаунт по паролю связывается со Steam одним нажатием (подсказка — по совпадению ника, автопривязки нет).
+function ppSeenCard() {
+  const box = h('div', { class: 'card' });
+  const hours = (s) => (s >= 3600 ? `${(s / 3600).toFixed(1)} ${tr('ч')}` : `${Math.max(1, Math.round(s / 60))} ${tr('мин')}`);
+  async function draw() {
+    let r; try { r = await api('GET', '/seen'); } catch (e) { put(box, h('h3', {}, 'Игроки сервера'), h('div', { class: 'banner' }, tr(e.message))); return; }
+    const link = (steamid, name) => act(async () => { await api('POST', `/seen/${steamid}/link`, { user: name }); toast('Steam привязан к аккаунту', 's'); await draw(); });
+    const row = (p) => {
+      const label = p.persona || p.name || p.steamid;
+      let status;
+      if (p.account) status = h('span', {}, pill(p.account.via === 'steam' ? 'вошёл через Steam' : 'аккаунт по паролю, Steam привязан', 'ok'), ' ', h('a', { href: `#users/${p.account.slug}`, onclick: (e) => { e.preventDefault(); go('users', p.account.slug); } }, p.account.displayName));
+      else if (p.suggest) status = h('span', {}, h('span', { class: 'muted small' }, `${tr('Похоже, это')} «${p.suggest.displayName}»: `), h('button', { class: 'btn', onclick: link(p.steamid, p.suggest.name) }, 'Связать'));
+      else if (r.free.length) {
+        const sel = h('select', {}, r.free.map((u) => h('option', { value: u.name }, u.displayName)));
+        status = h('span', { class: 'row', style: 'gap:6px;margin:0' }, h('span', { class: 'muted small' }, 'Нет аккаунта. Привязать к:'), sel, h('button', { class: 'btn', onclick: act(async () => { await link(p.steamid, sel.value)(); }) }, 'Связать'));
+      } else status = h('span', { class: 'muted small' }, 'Аккаунта нет: игрок ещё не входил в панель (при входе через Steam аккаунт создастся сам)');
+      return h('div', { class: 'urow' }, ppAvatar({ avatar: p.avatar }, 40),
+        h('div', { class: 'grow' }, h('b', {}, label), p.online ? h('span', { style: 'margin-left:8px' }, pill('на сервере', 'ok')) : null,
+          h('div', { class: 'muted small' }, p.persona && p.name && p.persona !== p.name ? `${tr('в игре')}: ${p.name} · ` : '', h('a', { href: `https://steamcommunity.com/profiles/${p.steamid}`, target: '_blank', rel: 'noopener noreferrer' }, p.steamid)),
+          h('div', { class: 'muted small' }, `${tr('первый заход')}: ${ppDate(p.firstSeen)} · ${tr('последний')}: ${ppDate(p.lastSeen)} · ${hours(p.seconds)} · ${p.kills} ${tr('убийств')}`),
+          h('div', { style: 'margin-top:4px' }, status)));
+    };
+    put(box, h('h3', {}, 'Игроки сервера'),
+      h('div', { class: 'muted small' }, `${tr('Все, кто заходил на сервер: определяются по SteamID64 из лога игры, данные обновляются, пока сервер включён.')}${r.savedAt ? ` ${tr('Обновлено')}: ${ppDate(r.savedAt)}.` : ''}`),
+      r.players.length ? h('div', { class: 'ulist' }, r.players.map(row)) : h('div', { class: 'muted' }, 'Пока никого: игроки появятся после первого захода на сервер.'));
+  }
+  put(box, h('h3', {}, 'Игроки сервера'), h('div', { class: 'muted' }, 'Загрузка…'));
+  draw();
+  return box;
 }
 
 function ppUserCard(slug) {

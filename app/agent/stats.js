@@ -82,7 +82,7 @@ class Stats {
     const live = new Map(); for (const [id, s] of this.sessions) live.set(id, Math.max(0, Math.round((this.now() - s.at) / 1000)));
     const players = Object.entries(this.data.players).filter(([id]) => !onlySteamid || id === onlySteamid).map(([id, p]) => ({
       steamid: id, name: p.name, kills: p.kills, deaths: p.deaths, kd: p.deaths ? +(p.kills / p.deaths).toFixed(2) : p.kills, headshots: p.headshots, hsPct: p.kills ? Math.round(100 * p.headshots / p.kills) : 0,
-      damage: p.damage, hits: p.hits, grenades: p.grenades, weapons: p.weapons, hitgroups: p.hitgroups, seconds: p.seconds + (live.get(id) || 0), online: live.has(id), maps: p.maps, ...(onlySteamid ? { heat: p.heat || {}, cell: CELL } : {}), firstSeen: p.firstSeen, lastSeen: p.lastSeen,
+      firstSeen: p.firstSeen, lastSeen: live.has(id) ? new Date(this.now()).toISOString() : p.lastSeen, damage: p.damage, hits: p.hits, grenades: p.grenades, weapons: p.weapons, hitgroups: p.hitgroups, seconds: p.seconds + (live.get(id) || 0), online: live.has(id), maps: p.maps, ...(onlySteamid ? { heat: p.heat || {}, cell: CELL } : {}), firstSeen: p.firstSeen, lastSeen: p.lastSeen,
     })).sort((a, b) => b.kills - a.kills);
     const maps = Object.entries(this.data.maps).map(([map, m]) => ({ map, ...m })).sort((a, b) => b.seconds - a.seconds);
     return { since: this.data.since, map: this.map, players, maps };
