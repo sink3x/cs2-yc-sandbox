@@ -7,20 +7,6 @@ const RAR_ORDER = ['consumer', 'industrial', 'mil-spec', 'restricted', 'classifi
 const rarRank = (r) => { const n = String((r && r.n) || '').toLowerCase(); const i = RAR_ORDER.findIndex((x) => n.includes(x)); return i < 0 ? (n === 'своё' ? 99 : -1) : i; };
 const SKIN_TABS = [['Knives', 'Ножи'], ['Gloves', 'Перчатки'], ['Rifles', 'Винтовки'], ['Pistols', 'Пистолеты'], ['SMGs', 'Пистолеты-пулемёты'], ['Heavy', 'Тяжёлое'], ['Equipment', 'Zeus'], ['Agents', 'Агенты'], ['Music', 'Музыка'], ['Custom', 'Свои']];
 
-/** Моменты, на которые играет музыкальный набор: [id, подпись, когда играет, кто слышит, слово для поиска]. */
-const MUSIC_EVENTS = [
-  ['mainmenu', 'Главное меню', 'играет в меню игры', 'me', 'main menu'],
-  ['chooseteam', 'Выбор команды', 'пока вы выбираете сторону', 'me', 'choose team'],
-  ['startround', 'Начало раунда', 'в начале раунда, во время заморозки', 'me', 'round start'],
-  ['startaction', 'Экшн-старт', 'в первые секунды после заморозки', 'me', 'start action'],
-  ['bombplanted', 'Бомба заложена', 'сразу после установки бомбы', 'me', 'bomb planted'],
-  ['bombtenseccount', '10 сек до взрыва', 'последние 10 секунд таймера бомбы', 'me', 'bomb 10 second'],
-  ['roundtenseccount', '10 сек до конца', 'последние 10 секунд раунда', 'me', 'round 10 seconds'],
-  ['wonround', 'Победа в раунде', 'когда ваша команда выиграла раунд', 'me', 'won round'],
-  ['lostround', 'Поражение', 'когда ваша команда проиграла раунд', 'me', 'lost round'],
-  ['roundmvpanthem', 'MVP-гимн', 'когда вас выбрали MVP раунда', 'all', 'MVP anthem'],
-  ['deathcam', 'Камера смерти', 'после вашей гибели', 'me', 'deathcam'],
-];
 const extLink = (href, text) => h('a', { class: 'btn', href, target: '_blank', rel: 'noopener noreferrer' }, text);
 const WEAR_PRESETS = [['FN', 0.03], ['MW', 0.1], ['FT', 0.25], ['WW', 0.41], ['BS', 0.6]];
 const WEAR_ANCHORS = [['Factory New', 0.035], ['Minimal Wear', 0.11], ['Field-Tested', 0.265], ['Well-Worn', 0.415], ['Battle-Scarred', 0.65]]; // центры диапазонов float
@@ -325,53 +311,9 @@ function viewSwitch(redraw) {
     h('button', { class: on ? 'on' : '', onclick: () => { v3dSave(true); redraw(); } }, '3D'), h('button', { class: on ? '' : 'on', onclick: () => { v3dSave(false); redraw(); } }, '2D'));
 }
 
-// ---------------------------------------------------------------- прослушивание музыкальных наборов (звук из файлов игры, через игровую ВМ)
-const MUSIC_PLAYER = { audio: null, key: '' };
-function musicStop() { if (MUSIC_PLAYER.audio) { MUSIC_PLAYER.audio.pause(); MUSIC_PLAYER.audio = null; MUSIC_PLAYER.key = ''; } }
-/** Событие по имени файла: startround_02 → «Начало раунда 2». */
-function musicTrackLabel(file) {
-  const base = String(file).replace(/\.(mp3|wav)$/i, '');
-  const m = /^(.*?)(?:_(\d+))?$/.exec(base); const ev = MUSIC_EVENTS.find((e) => e[0] === m[1]);
-  return ev ? `${tr(ev[1])}${m[2] ? ` ${Number(m[2])}` : ''}` : base;
-}
-function musicPlayer(m) {
-  const box = h('div', { class: 'mk-player' }, h('div', { class: 'muted small' }, 'Загрузка списка треков… В первый раз звук извлекается из файлов игры — до минуты.'));
-  let rows = [];
-  const paint = () => { for (const r of rows) { const on = MUSIC_PLAYER.key === r.key; r.btn.textContent = on ? '⏸' : '▶'; r.el.classList.toggle('on', on); } };
-  const play = (r, chain) => {
-    if (MUSIC_PLAYER.key === r.key) { musicStop(); paint(); return; }
-    musicStop();
-    const a = new Audio(`/api/music-kit/${m.id}/${encodeURIComponent(r.file)}`); MUSIC_PLAYER.audio = a; MUSIC_PLAYER.key = r.key;
-    a.addEventListener('ended', () => { if (MUSIC_PLAYER.audio !== a) return; MUSIC_PLAYER.audio = null; MUSIC_PLAYER.key = ''; paint(); const next = chain && rows[rows.indexOf(r) + 1]; if (next && box.isConnected) play(next, true); });
-    a.addEventListener('timeupdate', () => { if (MUSIC_PLAYER.audio === a && !box.isConnected && !document.querySelector('.mk-player')) musicStop(); });
-    a.addEventListener('error', () => { if (MUSIC_PLAYER.audio !== a) return; musicStop(); paint(); toast(tr('Не удалось загрузить трек: игровая ВМ выключена или файл не извлёкся'), 'e'); });
-    a.play().catch(() => {}); paint();
-  };
-  api('GET', `/music-kit?id=${m.id}`).then((r) => {
-    if (!box.isConnected) return;
-    const order = (f) => { const i = MUSIC_EVENTS.findIndex((e) => f.startsWith(e[0])); return i < 0 ? 99 : i; };
-    const tracks = [...(r.tracks || [])].sort((x, y) => order(x.file) - order(y.file) || x.file.localeCompare(y.file));
-    if (!tracks.length) { box.replaceChildren(h('div', { class: 'warn small' }, 'В файлах игры не нашлось треков этого набора.')); return; }
-    rows = tracks.map((t) => {
-      const ev = MUSIC_EVENTS.find((e) => t.file.startsWith(e[0]));
-      const row = { file: t.file, key: `${m.id}/${t.file}` };
-      row.btn = h('button', { class: 'btn mk-play', 'aria-label': tr('Слушать'), onclick: () => play(row, false) }, '▶');
-      row.el = h('div', { class: 'mk-row' }, row.btn, h('div', {}, h('b', {}, musicTrackLabel(t.file)), ev ? h('div', { class: 'muted small' }, ev[2], ' · ', ev[3] === 'all' ? 'слышат все игроки' : 'слышите только вы') : null));
-      return row;
-    });
-    box.replaceChildren(h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { musicStop(); play(rows[0], true); } }, '▶ Весь набор подряд'), h('button', { class: 'btn', onclick: () => { musicStop(); paint(); } }, '■ Стоп'),
-      r.cached ? null : h('span', { class: 'muted small' }, 'Треки загружаются с игровой ВМ и остаются в кэше панели.')), ...rows.map((x) => x.el));
-    paint();
-  }).catch((e) => {
-    if (!box.isConnected) return;
-    box.replaceChildren(h('div', { class: 'warn small' }, `${tr('Прослушивание недоступно')}: ${e.message}`), h('div', { class: 'hint' }, 'Звук берётся из файлов игры на игровой ВМ: включите её и откройте набор ещё раз. Уже прослушанные наборы играют из кэша панели и при выключенной ВМ.'));
-  });
-  return box;
-}
-
 function previewPanel(redraw, L) {
   const sel = K.sel;
-  E.onStickers = null; if (!sel || !sel.music) musicStop();
+  E.onStickers = null;
   if (!sel) return h('div', { class: 'card preview' }, h('h3', {}, 'Предпросмотр'), h('div', { class: 'muted' }, 'Выберите скин слева: здесь появятся картинка, настройки износа, паттерна и кнопка «Надеть».'));
   const need = () => { if (!K.steamid || !L) throw new Error(warn2()); };
   const warn2 = () => (!K.steamid ? 'Сначала выберите игрока' : (K.err || (K.loadout && K.loadout.reason) || 'База скинов недоступна'));

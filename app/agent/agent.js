@@ -254,6 +254,8 @@ const routes = [
   // Свои аудиофайлы: копия того, что загружено в панель (панель — источник правды, сверяет и досылает сама).
   // музыкальные наборы: звук из файлов игры (первое обращение к набору извлекает его из VPK)
   ['GET', '/music/kit', async ({ query }) => { const r = await music.kit(String(query.id || '')); return { id: r.id, kit: r.kit, tracks: r.tracks.map(({ file, size }) => ({ file, size })) }; }],
+  ['GET', '/sounds/search', async ({ query }) => music.sounds({ q: query.q, dir: /^[a-z0-9_-]{1,40}$/.test(String(query.dir || '')) ? query.dir : '', offset: query.offset, limit: query.limit })],
+  ['GET', '/sounds/file', async ({ query }) => music.sound(query.path)],
   ['GET', '/music/track', async ({ query }) => music.track(String(query.id || ''), query.file)],
   ['GET', '/sound-files', async () => ({ files: sounds.list().map(({ name, size, sha1 }) => ({ name, size, sha1 })) })],
   ['PUT', '/sound-files/:name', async ({ params, raw }) => sounds.put(params.name, raw)],

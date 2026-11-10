@@ -89,8 +89,4 @@ part. Current prices: <https://yandex.cloud/ru/prices>. Auto-stop (default 30 mi
   Restrict `panel_allowed_cidrs` if you have a fixed IP.
 * Secrets travel as instance metadata (visible to folder viewers and in Terraform state). Keep the state private.
 * Third-party plugins run as unprivileged user `steam`; root-only secrets (agent token, S3 keys) are not readable by it.
-
-## Благодарности
-
-- 3D-просмотр скинов, ножей, перчаток, агентов и наклеек — встроенный просмотрщик [ChainSkins 3D Viewer](https://github.com/ChainSkins/cs2-3d-viewer) (iframe `3d.chainskins.net/embed`).
-- Звук музыкальных наборов извлекается из файлов игры. Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).
+- Снимки встроенных карт: [ghostcap-gaming/cs2-map-images](https://github.com/ghostcap-gaming/cs2-map-images); значки карт: [MurkyYT/cs2-map-icons](https://github.com/MurkyYT/cs2-map-icons). Превью, размер и теги карт Workshop панель берёт из Steam Web API. Подборка комьюнити-карт — коллекция Workshop «Best Counter-Strike 2 Community Maps» (scritch).

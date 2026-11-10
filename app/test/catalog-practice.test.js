@@ -78,9 +78,17 @@ test('practice: animals — команды плагина, цель и вали�
 
 
 test('presets: curated workshop map catalog has valid ids and known categories', () => {
-  const { WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');
-  assert.ok(WORKSHOP_MAPS.length >= 10);
-  for (const w of WORKSHOP_MAPS) { assert.match(w.id, /^\d{6,12}$/); assert.ok(WORKSHOP_CATS[w.cat], w.cat); assert.ok(w.label && w.note); }
+  const { WORKSHOP_MAPS, WORKSHOP_CATS, WORKSHOP_TAGS, MAPS } = require('../lib/presets');
+  assert.ok(WORKSHOP_MAPS.length >= 100);
+  for (const w of WORKSHOP_MAPS) {
+    assert.match(w.id, /^\d{6,12}$/); assert.ok(WORKSHOP_CATS[w.cat], w.cat); assert.ok(w.label && !/[";\\]/.test(w.label), w.label);
+    assert.ok(w.cat === 'community' || w.note, `нужна подпись: ${w.label}`);
+    assert.ok(Array.isArray(w.tags) && w.tags.every((t) => WORKSHOP_TAGS[t]), `теги: ${w.label}`);
+    assert.match(w.img, /^\d+\/[0-9A-F]{40}$/, `превью: ${w.label}`); assert.ok(w.mb > 0);
+  }
+  for (const id of ['3071733061', '3181655247', '3777797034']) assert.ok(WORKSHOP_MAPS.some((w) => w.id === id), id);
+  assert.ok(WORKSHOP_MAPS.filter((w) => w.cat === 'inspect').length >= 8);
+  for (const m of MAPS) assert.match(m.shot, /^https:\/\/raw\.githubusercontent\.com\/ghostcap-gaming\/cs2-map-images\/main\/cs2\/[a-z0-9_]+\.png$/);
   assert.equal(new Set(WORKSHOP_MAPS.map((w) => w.id)).size, WORKSHOP_MAPS.length);
 });
 

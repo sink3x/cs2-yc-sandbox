@@ -7,8 +7,10 @@ const http = require('node:http');
 const { Sessions, FailureLimiter, verifyPassword, hashPassword, parseCookies } = require('../lib/auth');
 const { readBody, readRaw, readJsonBody, send, matchRoute } = require('../lib/http');
 const soundFiles = require('../lib/soundfiles');
+const gameSound = require('../agent/music'); // только чистые функции: путь звука и определение формата
 const { readJson, writeJsonAtomic, loadEnvFile, makeLogger, sleep } = require('../lib/util');
-const { PRESETS, MAPS, CATALOG, WORKSHOP_MAPS, WORKSHOP_CATS } = require('../lib/presets');
+const { PRESETS, MAPS, CATALOG, WORKSHOP_MAPS, WORKSHOP_CATS, WORKSHOP_TAGS, WORKSHOP_IMG } = require('../lib/presets');
+const { createWorkshopMeta } = require('../lib/workshop');
 const { YandexCompute } = require('../lib/yc');
 const { CatalogCache, StickerCache, queryStickers } = require('../lib/catalog');
 const { DATA: CALLOUTS, CalloutMaps, validateCustom: validateCalloutCustom, EMPTY_CUSTOM: EMPTY_CALLOUT_CUSTOM } = require('../lib/callouts');
@@ -212,6 +214,7 @@ function createApp(deps = {}) {
 
   // ---- agent client ---------------------------------------------------------------------------
   // кэш прослушанных треков музыкальных наборов: не больше MUSIC_CACHE_MAX, старые (давно не слушали) удаляются первыми
+  const workshopMeta = deps.workshopMeta || createWorkshopMeta({ file: path.join(VAR, 'workshop-meta.json'), fetchImpl: deps.fetchImpl || fetch, log });
   const musicDir = deps.musicDir || path.join(VAR, 'music');
   const MUSIC_FILE_RE = /^[a-z0-9_.-]{1,80}\.(mp3|wav)$/; const MUSIC_MAX_TRACK = 24 << 20; const MUSIC_CACHE_MAX = deps.musicCacheMax || (400 << 20);
   function trimMusicCache() {
@@ -477,10 +480,10 @@ function createApp(deps = {}) {
   function mapInfo(id) {
     if (!id) return { id: null, label: null, img: null };
     const std = MAPS.find((m) => m.id === id);
-    if (std) return { id, label: std.label, img: std.img };
+    if (std) return { id, label: std.label, img: std.img, shot: std.shot };
     const num = (String(id).match(/\d{6,}/) || [])[0];
     const ws = num && WORKSHOP_MAPS.find((m) => m.id === num);
-    if (ws) return { id, label: ws.label, img: null, workshop: true };
+    if (ws) return { id, label: ws.label, img: null, shot: ws.img ? `${WORKSHOP_IMG}${ws.img}/?imw=640&imh=360&ima=fit&impolicy=Letterbox&imcolor=%23000000&letterbox=true` : null, workshop: true };
     return { id, label: id, img: null, workshop: /workshop/i.test(String(id)) };
   }
 
@@ -526,7 +529,9 @@ function createApp(deps = {}) {
     ['GET', '/api/me', async ({ user }) => { const all = usersWithSlugs(); await backfillAvatars(all, [user]); const u = all[user] || {}; return { user, slug: u.slug || '', displayName: u.persona || user, avatar: u.avatar || '', role: roleOf(user), steamid: u.steamid || '', playerLogin: playerLoginOn() }; }],
     ['GET', '/api/public-info', async () => { const o = await overview(); return { ...o.glance, map: o.glance.map.id, mapInfo: o.glance.map, playerStart: o.settings.playerStart === true }; }],
     ['GET', '/api/overview', async () => overview()],
-    ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS, workshop: WORKSHOP_MAPS, workshopCats: WORKSHOP_CATS })],
+    ['GET', '/api/catalog', async () => ({ presets: PRESETS, maps: MAPS, catalog: CATALOG, toggles: practice.TOGGLES, fun: practice.FUN_PRESETS, workshop: WORKSHOP_MAPS, workshopCats: WORKSHOP_CATS, workshopTags: WORKSHOP_TAGS, workshopImg: WORKSHOP_IMG })],
+    // превью, размер и теги карт Workshop (в том числе добавленных по ссылке): Steam Web API, ответ хранится неделю
+    ['GET', '/api/workshop-meta', async ({ query }) => ({ meta: await workshopMeta.get(String(query.ids || '').split(',').filter((x) => /^\d{6,12}$/.test(x)).slice(0, 200)) })],
     ['GET', '/api/user-presets', async () => ({ presets: readJson(userPresetsFile, {}) })],
     ['PUT', '/api/user-presets', async ({ body, user, ip }) => { const v = validateUserPresets(body.presets); writeJsonAtomic(userPresetsFile, v); audit(user, ip, 'user-presets', Object.keys(v)); return { presets: v }; }],
     ['GET', '/api/custom-skins', async () => ({ skins: readJson(customSkinsFile, []) })],
@@ -736,6 +741,25 @@ function createApp(deps = {}) {
       fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(p, buf); trimMusicCache();
       return { __file: { buf, type, name: file, download: false } };
     }],
+    // ---- звуки игры: поиск по файлам игры и прослушивание; извлечённое остаётся в кэше панели (общий лимит с музыкой) ----
+    ['GET', '/api/game-sounds', async ({ query }) => {
+      const q = String(query.q || '').slice(0, 80); const dir = /^[a-z0-9_-]{1,40}$/.test(String(query.dir || '')) ? String(query.dir) : '';
+      const offset = Math.max(0, Math.min(100000, Number(query.offset) || 0));
+      return agent('GET', `/sounds/search?q=${encodeURIComponent(q)}&dir=${dir}&offset=${offset}&limit=60`, null, 200000);
+    }],
+    ['GET', '/api/game-sound', async ({ query }) => {
+      const rel = gameSound.normalizeSoundPath(query.path);
+      if (!rel) throw Object.assign(new Error('game-sound: bad path'), { status: 400 });
+      const key = crypto.createHash('sha1').update(rel).digest('hex').slice(0, 16); const dir = path.join(musicDir, 'sounds');
+      const hit = ['mp3', 'wav'].map((e) => path.join(dir, `${key}.${e}`)).find((f) => fs.existsSync(f));
+      const out = (buf, f) => ({ __file: { buf, type: f.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg', name: path.basename(f), download: false } });
+      if (hit) { const t = new Date(); try { fs.utimesSync(hit, t, t); } catch { /* ok */ } return out(fs.readFileSync(hit), hit); }
+      const r = await agent('GET', `/sounds/file?path=${encodeURIComponent(rel)}`, null, 200000);
+      const buf = Buffer.from(String(r.b64 || ''), 'base64'); const ext = gameSound.sniffAudio(buf);
+      if (!ext || buf.length > MUSIC_MAX_TRACK) throw Object.assign(new Error('game-sound: empty or unsupported sound'), { status: 502 });
+      const f = path.join(dir, `${key}.${ext}`); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(f, buf); trimMusicCache();
+      return out(buf, f);
+    }],
     ['GET', '/api/skin-wears', async ({ query }) => {
       const name = String(query.name || '').trim();
       if (!WEAR_NAME_RE.test(name)) throw Object.assign(new Error('skin-wears: bad name'), { status: 400 });
@@ -937,7 +961,7 @@ function createApp(deps = {}) {
 
   const SEC_HEADERS = {
     'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://avatars.fastly.steamstatic.com https://avatars.cloudflare.steamstatic.com https://raw.githubusercontent.com; frame-src https://3d.chainskins.net; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
+    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://avatars.fastly.steamstatic.com https://avatars.cloudflare.steamstatic.com https://images.steamusercontent.com https://steamuserimages-a.akamaihd.net https://raw.githubusercontent.com; frame-src https://3d.chainskins.net; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
   };
 
   function clientIp(req) {

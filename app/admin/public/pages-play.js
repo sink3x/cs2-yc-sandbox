@@ -78,6 +78,7 @@ function pageConsole() {
 // ---------------------------------------------------------------- карты и режимы
 const mapHue = (id) => { let x = 0; for (const c of id) x = (x * 31 + c.charCodeAt(0)) % 360; return x; };
 const mapMonogram = (id) => id.replace(/^(de|cs|ar|dz)_/, '').slice(0, 3).toUpperCase();
+const MAPMETA = {}; const MAPMETA_BUSY = { on: false }; // сведения о картах Workshop из Steam (превью, размер, теги)
 const workshopId = (text) => { const m = /(?:[?&]id=)?(\d{6,12})/.exec(String(text)); return m ? m[1] : null; };
 
 function pageMaps() {
@@ -124,71 +125,147 @@ function pageMaps() {
   }, 'Пресет сохранён');
   setTimeout(async () => { try { userPresets = (await api('GET', '/user-presets')).presets; } catch { /* нет доступа */ } drawPresets(); }, 0);
 
-  // ---- карты
-  const wsOf = (id) => (S.catalog.workshop || []).find((w) => w.id === id);
-  const metaOf = (m) => (wsOf(m.id) ? ['workshop', wsOf(m.id).note] : null) || MAP_META[m.id] || [/^\d+$/.test(m.id) ? 'workshop' : 'other', /^\d+$/.test(m.id) ? 'Воркшоп-карта' : ''];
-  const allMaps = () => S.catalog.maps.concat(st.maps.filter((m) => !S.catalog.maps.some((x) => x.id === m.id)));
-  const drawMaps = () => {
-    const list = allMaps().filter((m) => {
-      const k = metaOf(m)[0];
-      if (filter === 'fav' && !favs.has(m.id)) return false;
-      if (filter !== 'all' && filter !== 'fav' && k !== filter) return false;
-      return !query || `${m.label} ${m.id}`.toLowerCase().includes(query);
-    });
-    gridBox.replaceChildren(...(list.length ? list.map((m) => {
-      const [kind, note] = metaOf(m); const hue = mapHue(m.id);
-      return h('div', { class: `mapcard ${live === m.id ? 'live' : ''} ${st.server.map === m.id ? 'start' : ''}` },
-        h('div', { class: `mapart ${m.img ? 'has-img' : ''}`, style: `background:linear-gradient(135deg,hsl(${hue} 55% 32%),hsl(${(hue + 50) % 360} 60% 18%))` }, m.img ? h('img', { class: 'mapimg', src: m.img, alt: m.label, loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e) => { e.target.remove(); } }) : h('span', {}, mapMonogram(m.id)), h('button', { class: `fav ${favs.has(m.id) ? 'on' : ''}`, title: 'В избранное', onclick: () => { favs.has(m.id) ? favs.delete(m.id) : favs.add(m.id); store.set('favmaps', [...favs]); drawMaps(); } }, favs.has(m.id) ? '★' : '☆')),
-        h('div', { class: 'mapbody' }, h('b', {}, m.label), h('div', { class: 'muted small' }, note || m.id),
-          h('div', { class: 'row' }, h('span', { class: 'tag' }, { bomb: 'бомба', hostage: 'заложники', workshop: 'воркшоп', other: 'прочее' }[kind]), live === m.id ? h('span', { class: 'tag okc' }, 'сейчас') : null, st.server.map === m.id ? h('span', { class: 'tag', style: 'color:var(--accent)' }, 'при старте') : null),
-          h('div', { class: 'row' },
-            h('button', { class: 'btn primary', onclick: act(() => api('POST', '/map', { map: m.id }), `Загружаю ${m.id}`) }, '▶ Играть'),
-            h('button', { class: 'btn', title: 'Сделать картой при запуске сервера', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { server: { map: m.id } } }); renderPage(); }, 'Карта при старте обновлена') }, 'Сделать стартовой'),
-            st.maps.some((x) => x.id === m.id) ? h('button', { class: 'btn danger', title: 'Убрать из списка', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((x) => x.id !== m.id) } }); renderPage(); }) }, 'Убрать') : null)));
-    }) : [h('div', { class: 'muted' }, 'Ничего не найдено.')]));
+  // ---- карты: общий вид карточки для списка сервера и каталога Workshop
+  const WS = S.catalog.workshop || []; const wsCats = S.catalog.workshopCats || {}; const wsTags = S.catalog.workshopTags || {};
+  const wsOf = (id) => WS.find((w) => w.id === id);
+  const wsThumb = (u, w = 480) => (u ? `${u.replace(/\/?$/, '/')}?imw=${w}&imh=${Math.round((w * 9) / 16)}&ima=fit&impolicy=Letterbox&imcolor=%23000000&letterbox=true` : '');
+  const wsRaw = (id) => { const m = MAPMETA[id]; const w = wsOf(id); return (m && m.img) || (w && w.img ? `${S.catalog.workshopImg}${w.img}/` : ''); };
+  const KIND = { bomb: 'бомба', hostage: 'заложники', workshop: 'воркшоп', other: 'прочее', training: 'тренировка' };
+  const tagName = (t) => tr(wsCats[t] || wsTags[t] || KIND[t] || t);
+  const sizeText = (mb) => (mb >= 1000 ? `${(mb / 1000).toFixed(1)} ${tr('ГБ')}` : `${mb} ${tr('МБ')}`);
+  /** Всё, что нужно карточке: тип, подпись, теги, превью, размер загрузки. */
+  const info = (m) => {
+    const isWs = /^\d+$/.test(m.id); const w = wsOf(m.id); const meta = MAPMETA[m.id] || {}; const std = MAP_META[m.id];
+    const kind = isWs ? 'workshop' : std ? std[0] : 'other';
+    const modes = (meta.tags && meta.tags.length ? meta.tags : (w && w.tags)) || [];
+    return {
+      isWs, kind, tags: isWs ? [...new Set([...(w ? [w.cat] : []), ...modes])] : [kind],
+      note: (w && w.note) || (std && std[1]) || (isWs ? (meta.title && meta.title !== m.label ? meta.title : '') : ''),
+      shot: isWs ? wsThumb(wsRaw(m.id)) : (m.shot || ''), big: isWs ? wsThumb(wsRaw(m.id), 1280) : (m.shot || ''), icon: isWs ? '' : (m.img || ''),
+      mb: meta.mb || (w && w.mb) || 0, missing: !!meta.missing,
+    };
   };
-  const search = h('input', { type: 'text', placeholder: 'Поиск карты (Dust, mirage, ID воркшопа…)', style: 'width:300px' });
-  const searchW = autocomplete(search, (t) => rank(allMaps().map((m) => ({ value: m.id, label: `${m.label} — ${m.id}`, desc: (metaOf(m)[1] || '') })), t, (o) => `${o.value} ${o.label}`), { onPick: (o) => { query = o.value; drawMaps(); } });
+  const playMap = (m) => act(() => api('POST', '/map', { map: m.id }), `Загружаю ${m.label}`);
+  const addToList = (m) => act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((x) => x.id !== m.id).concat([{ id: m.id, label: m.label }]) } }); renderPage(); }, 'Добавлено в список');
+  const wsLink = (id) => h('a', { class: 'small', href: `https://steamcommunity.com/sharedfiles/filedetails/?id=${id}`, target: '_blank', rel: 'noopener noreferrer' }, 'Воркшоп ↗');
+  const tagRow = (i, extra) => h('div', { class: 'row maptags' }, i.tags.map((t) => h('span', { class: 'tag' }, document.createTextNode(tagName(t)))), i.mb ? h('span', { class: 'tag', title: 'Размер загрузки карты на сервер' }, document.createTextNode(sizeText(i.mb))) : null, extra || null);
+  const showBig = (m, i) => modal(m.label, h('div', {},
+    h('img', { class: 'map-big', src: i.big, alt: m.label, referrerpolicy: 'no-referrer' }),
+    i.note ? h('p', { class: 'muted' }, i.note) : null, tagRow(i, i.isWs ? wsLink(m.id) : null),
+    h('div', { class: 'muted small' }, document.createTextNode(i.isWs ? `Workshop ID ${m.id}` : m.id))),
+  [{ text: '▶ Играть', kind: 'primary', run: async () => { await api('POST', '/map', { map: m.id }); toast(`${tr('Загружаю')} ${m.label}`, 's'); } }, { text: 'Закрыть', run: () => true }]);
+  /** Картинка карты: снимок (если есть), поверх него значок; без картинки — цветная плашка с буквами. */
+  const mapArt = (m, i, withFav) => {
+    const hue = mapHue(m.id);
+    const box = h('div', { class: `mapart ${i.shot ? 'has-shot' : i.icon ? 'has-img' : ''}`, style: `background:linear-gradient(135deg,hsl(${hue} 55% 32%),hsl(${(hue + 50) % 360} 60% 18%))` });
+    const mono = () => h('span', {}, document.createTextNode(/^\d+$/.test(m.id) ? m.label.replace(/[^A-Za-zА-Яа-я0-9]/g, '').slice(0, 3).toUpperCase() : mapMonogram(m.id)));
+    if (i.shot) {
+      const open = h('button', { class: 'mapshot-btn', 'aria-label': `${tr('Показать крупно')}: ${m.label}`, title: 'Показать крупно', onclick: () => showBig(m, i) },
+        h('img', { class: 'mapshot', src: i.shot, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', onerror: () => { open.remove(); box.classList.remove('has-shot'); if (!i.icon) box.prepend(mono()); else box.classList.add('has-img'); } }));
+      box.append(open);
+    }
+    if (i.icon) box.append(h('img', { class: 'mapimg', src: i.icon, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e) => { e.target.remove(); } }));
+    else if (!i.shot) box.append(mono());
+    if (withFav) box.append(h('button', { class: `fav ${favs.has(m.id) ? 'on' : ''}`, title: 'В избранное', 'aria-label': 'В избранное', 'aria-pressed': String(favs.has(m.id)), onclick: () => { favs.has(m.id) ? favs.delete(m.id) : favs.add(m.id); store.set('favmaps', [...favs]); drawMaps(); } }, favs.has(m.id) ? '★' : '☆'));
+    return box;
+  };
+  const matches = (m, i, q) => !q || `${m.label} ${m.id} ${i.note} ${i.tags.map(tagName).join(' ')} ${i.tags.join(' ')}`.toLowerCase().includes(q);
+  const chipRow = (list, cur, pick) => h('div', { class: 'row maptagbar' }, h('span', { class: 'muted small' }, 'Теги:'),
+    h('button', { class: `chip ${cur ? '' : 'on'}`, 'aria-pressed': String(!cur), onclick: () => pick('') }, 'Любые'),
+    list.map((t) => h('button', { class: `chip ${cur === t ? 'on' : ''}`, 'aria-pressed': String(cur === t), onclick: () => pick(cur === t ? '' : t) }, document.createTextNode(tagName(t)))));
+
+  // ---- карты сервера: встроенные и добавленные в список
+  let tag = '';
+  const allMaps = () => S.catalog.maps.concat(st.maps.filter((m) => !S.catalog.maps.some((x) => x.id === m.id)));
+  const tagBox = h('div'); const countBox = h('span', { class: 'muted small' });
+  const drawMaps = () => {
+    const all = allMaps().map((m) => [m, info(m)]);
+    const tagsHere = [...new Set(all.flatMap(([, i]) => i.tags))];
+    if (tag && !tagsHere.includes(tag)) tag = '';
+    put(tagBox, tagsHere.length > 1 ? chipRow(tagsHere, tag, (t) => { tag = t; drawMaps(); }) : null);
+    const list = all.filter(([m, i]) => {
+      if (filter === 'fav' && !favs.has(m.id)) return false;
+      if (filter !== 'all' && filter !== 'fav' && i.kind !== filter) return false;
+      if (tag && !i.tags.includes(tag)) return false;
+      return matches(m, i, query);
+    });
+    countBox.textContent = `${tr('Карт')}: ${list.length} ${tr('из')} ${all.length}`;
+    gridBox.replaceChildren(...(list.length ? list.map(([m, i]) => h('div', { class: `mapcard ${live === m.id ? 'live' : ''} ${st.server.map === m.id ? 'start' : ''}` },
+      mapArt(m, i, true),
+      h('div', { class: 'mapbody' }, h('b', {}, document.createTextNode(m.label)), h('div', { class: 'muted small' }, i.note || document.createTextNode(m.id)),
+        tagRow(i, [live === m.id ? h('span', { class: 'tag okc' }, 'сейчас') : null, st.server.map === m.id ? h('span', { class: 'tag', style: 'color:var(--accent)' }, 'при старте') : null, i.missing ? h('span', { class: 'tag', style: 'color:var(--bad)', title: 'Steam не нашёл такую карту: проверьте ID' }, 'нет в Workshop') : null]),
+        h('div', { class: 'row' },
+          h('button', { class: 'btn primary', onclick: playMap(m) }, '▶ Играть'),
+          h('button', { class: 'btn', title: 'Сделать картой при запуске сервера', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { server: { map: m.id } } }); renderPage(); }, 'Карта при старте обновлена') }, 'Сделать стартовой'),
+          st.maps.some((x) => x.id === m.id) ? h('button', { class: 'btn danger', title: 'Убрать из списка', onclick: act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((x) => x.id !== m.id) } }); renderPage(); }) }, 'Убрать') : null)))) : [h('div', { class: 'muted' }, 'Ничего не найдено.')]));
+  };
+  const search = h('input', { type: 'text', inputmode: 'search', placeholder: 'Поиск: название, ID, тег (Dust, inspect, напарники…)', 'aria-label': 'Поиск карты', style: 'width:320px' });
   search.addEventListener('input', () => { query = search.value.trim().toLowerCase(); drawMaps(); });
   const tabs = h('div', { class: 'tabs' });
   const drawTabs = () => tabs.replaceChildren(...[['all', 'Все'], ['bomb', 'Бомба'], ['hostage', 'Заложники'], ['workshop', 'Воркшоп'], ['fav', 'Избранные']].map(([k, t]) => h('button', { class: filter === k ? 'on' : '', onclick: () => { filter = k; drawTabs(); drawMaps(); } }, t)));
   drawTabs(); drawMaps();
 
-  // ---- каталог воркшоп-карт для тренировки
-  let wsCat = 'all'; const wsBox = h('div', { class: 'mapgrid' }); const wsTabs = h('div', { class: 'tabs' });
-  const wsCats = S.catalog.workshopCats || {};
+  // ---- каталог карт Workshop: осмотр скинов, тренировка, комьюнити-карты
+  let wsCat = store.get('wsCat', 'all'); let wsTag = ''; let wsQ = ''; let wsShown = 24;
+  if (wsCat !== 'all' && !wsCats[wsCat]) wsCat = 'all';
+  const wsBox = h('div', { class: 'mapgrid' }); const wsTabs = h('div', { class: 'tabs' }); const wsTagBox = h('div'); const wsCount = h('span', { class: 'muted small' }); const wsMore = h('div', { class: 'row' }); const wsHint = h('div');
+  const wsFiltered = () => WS.map((w) => [w, info(w)]).filter(([w, i]) => (wsCat === 'all' || w.cat === wsCat) && (!wsTag || i.tags.includes(wsTag)) && matches(w, i, wsQ));
   const drawWs = () => {
-    wsTabs.replaceChildren(...[['all', 'Все'], ...Object.entries(wsCats)].map(([k, t]) => h('button', { class: wsCat === k ? 'on' : '', onclick: () => { wsCat = k; drawWs(); } }, t)));
-    wsBox.replaceChildren(...(S.catalog.workshop || []).filter((w) => wsCat === 'all' || w.cat === wsCat).map((w) => {
-      const hue = mapHue(w.id); const added = st.maps.some((x) => x.id === w.id);
-      return h('div', { class: `mapcard ${live === w.id ? 'live' : ''}` },
-        h('div', { class: 'mapart', style: `background:linear-gradient(135deg,hsl(${hue} 55% 32%),hsl(${(hue + 50) % 360} 60% 18%))` }, h('span', {}, w.label.replace(/[^A-Za-zА-Яа-я0-9]/g, '').slice(0, 3).toUpperCase())),
-        h('div', { class: 'mapbody' }, h('b', {}, w.label), h('div', { class: 'muted small' }, w.note), h('div', { class: 'row' }, h('span', { class: 'tag' }, wsCats[w.cat] || w.cat), h('a', { class: 'small', href: `https://steamcommunity.com/sharedfiles/filedetails/?id=${w.id}`, target: '_blank', rel: 'noopener noreferrer' }, 'Воркшоп ↗')),
-          h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: act(() => api('POST', '/map', { map: w.id }), `Загружаю ${w.label}`) }, '▶ Играть'),
-            h('button', { class: 'btn', disabled: added, onclick: act(async () => { S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((m) => m.id !== w.id).concat([{ id: w.id, label: w.label }]) } }); renderPage(); }, 'Добавлено в список') }, added ? 'В списке' : '＋ В список'))));
-    }));
+    wsTabs.replaceChildren(...[['all', 'Все'], ...Object.entries(wsCats)].map(([k, t]) => h('button', { class: wsCat === k ? 'on' : '', onclick: () => { wsCat = k; store.set('wsCat', k); wsShown = 24; drawWs(); } }, t, h('span', { class: 'muted small' }, document.createTextNode(` ${k === 'all' ? WS.length : WS.filter((w) => w.cat === k).length}`)))));
+    put(wsTagBox, chipRow(Object.keys(wsTags), wsTag, (t) => { wsTag = t; wsShown = 24; drawWs(); }));
+    const list = wsFiltered();
+    wsCount.textContent = `${tr('Карт')}: ${list.length} ${tr('из')} ${WS.length}`;
+    put(wsHint, wsCat === 'inspect' ? h('div', { class: 'hint' }, 'Карты для осмотра и скриншотов скинов. Скины на них — те, что выбраны на странице «Скины» (в игре: !wp). Команды клиента для чистого кадра: cl_drawhud 0 прячет интерфейс, r_drawviewmodel 0 прячет оружие в руках, r_show_build_info 0 убирает версию игры в углу. Коды !gen и !g с сайта cs2inspects работают только на их серверах.') : null);
+    wsBox.replaceChildren(...(list.length ? list.slice(0, wsShown).map(([w, i]) => {
+      const added = st.maps.some((x) => x.id === w.id);
+      return h('div', { class: `mapcard ${live === w.id ? 'live' : ''}` }, mapArt(w, i, false),
+        h('div', { class: 'mapbody' }, h('b', {}, document.createTextNode(w.label)), i.note ? h('div', { class: 'muted small' }, i.note) : null, tagRow(i, wsLink(w.id)),
+          h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: playMap(w) }, '▶ Играть'), h('button', { class: 'btn', disabled: added, onclick: addToList(w) }, added ? 'В списке' : '＋ В список'))));
+    }) : [h('div', { class: 'muted' }, 'Ничего не найдено.')]));
+    put(wsMore, list.length > wsShown ? h('button', { class: 'btn', onclick: () => { wsShown += 48; drawWs(); } }, `${tr('Показать ещё')} (${list.length - wsShown})`) : null);
   };
+  const wsSearch = h('input', { type: 'text', inputmode: 'search', placeholder: 'Поиск в каталоге: inspect, aim, Mirage, напарники…', 'aria-label': 'Поиск в каталоге Workshop', style: 'width:320px' });
+  wsSearch.addEventListener('input', () => { wsQ = wsSearch.value.trim().toLowerCase(); wsShown = 24; drawWs(); });
   drawWs();
-  const addAllWs = act(async () => { const have = new Set(st.maps.map((m) => m.id)); const add = (S.catalog.workshop || []).filter((w) => !have.has(w.id)).map((w) => ({ id: w.id, label: w.label })); if (!add.length) return; S.state = await api('PUT', '/state', { state: { maps: st.maps.concat(add) } }); renderPage(); }, 'Все карты добавлены в список');
+  const addShownWs = act(async () => {
+    const have = new Set(st.maps.map((m) => m.id)); const add = wsFiltered().map(([w]) => w).filter((w) => !have.has(w.id)).map((w) => ({ id: w.id, label: w.label }));
+    if (!add.length) return;
+    if (st.maps.length + add.length > 100) throw new Error(tr('В списке сервера помещается до 100 карт: сузьте выбор поиском или тегом'));
+    S.state = await api('PUT', '/state', { state: { maps: st.maps.concat(add) } }); renderPage();
+  }, 'Карты добавлены в список');
+  // свежие превью, размер и теги из Steam (ответ панель хранит неделю): для каталога и для карт, добавленных по ссылке
+  const metaIds = [...new Set(WS.map((w) => w.id).concat(st.maps.map((m) => m.id).filter((id) => /^\d+$/.test(id))))].filter((id) => !MAPMETA[id]);
+  if (metaIds.length && !MAPMETA_BUSY.on) {
+    MAPMETA_BUSY.on = true;
+    api('GET', `/workshop-meta?ids=${metaIds.slice(0, 200).join(',')}`).then((r) => { Object.assign(MAPMETA, r.meta || {}); if (gridBox.isConnected) { drawMaps(); drawWs(); } }).catch(() => { /* останутся превью из каталога */ }).finally(() => { MAPMETA_BUSY.on = false; });
+  }
 
   // ---- воркшоп / своя карта
   const custom = h('input', { type: 'text', placeholder: 'de_xxx, ID или ссылка на воркшоп', style: 'width:300px' });
   const label = h('input', { type: 'text', placeholder: 'Название (необязательно)', style: 'width:220px' });
   const parseCustom = () => { const v = custom.value.trim(); const w = /steamcommunity|^\d{6,}$/.test(v) ? workshopId(v) : null; return w || v; };
+  const addCustom = act(async () => {
+    const id = parseCustom(); if (!id) return;
+    let name = label.value.trim();
+    if (!name && /^\d+$/.test(id)) { try { const r = await api('GET', `/workshop-meta?ids=${id}`); Object.assign(MAPMETA, r.meta || {}); name = (r.meta[id] && r.meta[id].title) || ''; } catch { /* название останется номером */ } }
+    S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((m) => m.id !== id).concat([{ id, label: (name || id).replace(/[";\\]/g, '').slice(0, 48) }]) } }); renderPage();
+  }, 'Добавлено в список');
   return h('div', {}, h('h2', {}, 'Карты и режимы'),
     h('div', { class: 'card' }, h('h3', {}, 'Режимы игры'),
       h('div', { class: 'row' }, 'Карта при старте:', startMap, h('label', { class: 'switch' }, restart, 'сразу перезапускать CS2 при смене режима')),
       presetBox,
       h('div', { class: 'row' }, nameIn, h('button', { class: 'btn', onclick: saveCurrent }, 'Сохранить текущие настройки как пресет')),
       h('div', { class: 'muted small' }, `Сейчас: пресет «${st.server.preset}», game_type ${st.server.gameType} / game_mode ${st.server.gameMode}, карта ${st.server.map}. Свои пресеты хранятся на панели и доступны всем админам.`)),
-    h('div', { class: 'card' }, h('h3', {}, 'Воркшоп-карты для тренировки'), h('div', { class: 'row' }, wsTabs, h('button', { class: 'btn', onclick: addAllWs }, '＋ Добавить все в список')), wsBox,
-      h('div', { class: 'muted small' }, 'Подборка карт для аима, раскидок, дуэлей и движения. Для скачивания воркшоп-карт нужен Steam Web API ключ на сервере (-authkey); первая загрузка карты занимает время.')),
-    h('div', { class: 'card' }, h('h3', {}, 'Карты'), h('div', { class: 'row' }, searchW, tabs), gridBox,
+    h('div', { class: 'card' }, h('h3', {}, 'Карты сервера'), h('div', { class: 'row' }, search, tabs, countBox), tagBox, gridBox,
       h('h3', { style: 'margin-top:16px' }, 'Добавить свою или воркшоп-карту'),
       h('div', { class: 'row' }, custom, label,
         h('button', { class: 'btn', onclick: act(() => api('POST', '/map', { map: parseCustom() }), 'Карта загружается') }, '▶ Загрузить'),
-        h('button', { class: 'btn', onclick: act(async () => { const id = parseCustom(); if (!id) return; S.state = await api('PUT', '/state', { state: { maps: st.maps.filter((m) => m.id !== id).concat([{ id, label: label.value.trim() || id }]) } }); renderPage(); }, 'Добавлено в список') }, '＋ В список')),
-      h('div', { class: 'muted small' }, 'Вставьте ссылку на страницу воркшопа — ID вытащится сам. Для воркшопа нужен Steam Web API ключ в секретах (-authkey), иначе скачивание не сработает.')));
+        h('button', { class: 'btn', onclick: addCustom }, '＋ В список')),
+      h('div', { class: 'muted small' }, 'Вставьте ссылку на страницу воркшопа — ID вытащится сам, а название и картинка подтянутся из Steam.')),
+    h('div', { class: 'card' }, h('h3', {}, 'Каталог карт Workshop'),
+      h('div', { class: 'row' }, wsSearch, wsCount, h('button', { class: 'btn', title: 'Добавить в список сервера все карты, которые сейчас показаны фильтром', onclick: addShownWs }, '＋ Добавить найденные в список')),
+      wsTabs, wsTagBox, wsHint, wsBox, wsMore,
+      h('div', { class: 'muted small' }, 'Карта скачивается на игровую ВМ при первом запуске: это от нескольких секунд до нескольких минут, размер указан на карточке. Скачанные карты занимают диск ВМ. Игрокам карта загрузится из Workshop при входе.')));
 }
 
 // ---------------------------------------------------------------- настройки

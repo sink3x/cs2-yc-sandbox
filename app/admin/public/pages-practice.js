@@ -116,6 +116,7 @@ function practiceView(redraw) {
       h('div', { class: 'muted small' }, 'Люди за CT, зомби — боты T с ножами, быстрый респавн. Это имитация на штатных cvar без плагина; настоящий зомби-мод (заражение, классы) требует отдельного плагина — пока не ставлю, чтобы не ломать совместимость.'),
       h('div', { class: 'row' }, 'Зомби:', zRange, zNum), h('div', { class: 'row' }, zSeg),
       h('div', { class: 'row' }, h('button', { class: 'btn primary', disabled: !live, onclick: zStart }, '▶ Начать осаду'), h('button', { class: 'btn', disabled: !live, onclick: zStop }, '■ Закончить'))),
+    soundBrowser({ tabs: ['library', 'files', 'music', 'game'], toPlayers: (id) => act(async () => { await api('POST', '/sounds/play', { sound: id, target: 'all' }); }, 'Команда отправлена') }),
     mapCleanupCard(live, redraw),
     animalsCard(live, redraw),
     h('div', { class: 'card' }, h('h3', {}, 'Приколы'), h('div', { class: 'grid' }, funs.map(funCard)),

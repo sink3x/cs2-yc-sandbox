@@ -15,7 +15,7 @@ const OUT = path.resolve(here, '../build/public');
 
 const EAGER = ['core.js', 'data.js', 'tooltip.js', 'fx.js', 'shell.js']; // нужны сразу после загрузки
 const LAZY = { // страницы: подгружаются при первом переходе
-  main: ['pages-main.js'], play: ['pages-play.js'], skins: ['skin-links.js', 'pages-skins.js'], practice: ['pages-practice.js'], account: ['pages-account.js'],
+  audio: ['audio.js'], main: ['pages-main.js'], play: ['pages-play.js'], skins: ['skin-links.js', 'pages-skins.js'], practice: ['pages-practice.js'], account: ['pages-account.js'],
   stats: ['pages-stats.js'], callouts: ['pages-callouts.js'], sounds: ['pages-sounds.js'], people: ['pages-people.js'],
 };
 const I18N = ['i18n.js', 'i18n-extra.js', 'i18n-extra2.js', 'i18n-extra3.js', 'i18n-extra4.js', 'i18n-extra5.js', 'i18n-extra6.js', 'i18n-extra7.js', 'i18n-extra8.js', 'i18n-extra9.js'];

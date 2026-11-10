@@ -607,3 +607,48 @@ td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mk-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; }
 .mk-row.on { border-color: var(--accent); }
 .mk-play { width: 38px; padding: 0; flex: none; }
+
+/* ================= Плеер: закреплённая панель и списки прослушивания ================= */
+.audio-dock { position: fixed; z-index: 35; left: 50%; transform: translateX(-50%); bottom: 12px; width: min(860px, calc(100vw - 24px)); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow, 0 10px 30px rgba(0,0,0,.35)); padding: 10px 12px; }
+body.has-audio-dock main, body.has-audio-dock .main { padding-bottom: 130px; }
+.ad-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ad-head .ad-count { margin-right: auto; }
+.ad-btn { min-width: 36px; padding: 0 8px; } .ad-btn.on, .snd-pv.on { border-color: var(--accent); color: var(--accent); }
+.ad-volbox { display: inline-flex; align-items: center; gap: 6px; } .ad-vol { width: 96px; }
+.ad-body { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; max-height: 38vh; overflow: auto; }
+.ad-voice, .ad-q { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel2); }
+.ad-voice.lane { border-color: var(--accent); }
+.ad-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.ad-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13px; }
+.ad-bar { height: 8px; border-radius: 99px; background: var(--line); cursor: pointer; overflow: hidden; } .ad-bar:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ad-fill { height: 100%; width: 0; background: var(--accent); border-radius: 99px; }
+.ad-time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ad-qbox { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; } .ad-n { width: 18px; text-align: right; }
+.ad-pair { display: inline-flex; gap: 4px; flex: 0 0 auto; }
+.snd-row.on, .snd-kit.on { border-color: var(--accent); }
+.snd-dirs .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.snd-browser .snd-list { max-height: 420px; overflow: auto; }
+.snd-kits { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; max-height: 240px; overflow: auto; margin: 8px 0; }
+.snd-kit { justify-content: flex-start; height: auto; min-height: 44px; padding: 6px 8px; white-space: normal; text-align: left; font-size: 12.5px; } .snd-kit img { width: 32px; height: 32px; object-fit: contain; flex: 0 0 auto; }
+.snd-kitbox { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; } .snd-kitbox h4 { margin: 0 0 4px; }
+@media (max-width: 780px) {
+  .audio-dock { bottom: calc(58px + var(--sab)); width: calc(100vw - 12px); padding: 8px; border-radius: 12px; }
+  body.has-audio-dock main, body.has-audio-dock .main { padding-bottom: 200px; }
+  .ad-head .ad-count { flex: 1 1 100%; order: -1; margin: 0; } .ad-head > b { display: none; }
+  .ad-vol { width: 72px; } .ad-body { max-height: 30vh; }
+  .ad-voice { flex-wrap: wrap; } .ad-voice .ad-meta { flex: 1 1 60%; }
+  .snd-browser .snd-row { flex-wrap: nowrap; } .snd-browser .snd-row .snd-name { flex: 1 1 auto; min-width: 0; overflow: hidden; } .snd-browser .snd-row .btn { flex: 0 0 auto; }
+}
+
+/* ================= Карты: снимок карты на карточке, теги, крупный просмотр ================= */
+.mapart.has-shot { height: 118px; position: relative; padding: 0; filter: none; }
+.mapshot-btn { position: absolute; inset: 0; padding: 0; border: 0; background: none; cursor: zoom-in; display: block; width: 100%; height: 100%; }
+.mapshot-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mapshot { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mapart.has-shot .mapimg { position: absolute; left: 8px; bottom: 8px; height: 38px; max-width: 40%; pointer-events: none; }
+.mapart.has-shot .fav { position: absolute; top: 6px; right: 8px; background: rgba(0,0,0,.45); border-radius: 999px; width: 28px; height: 28px; color: #fff; }
+.mapart.has-shot .fav.on { color: #ffd54a; }
+.maptags { flex-wrap: wrap; } .maptagbar { flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.maptagbar .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.map-big { width: 100%; max-height: 62vh; object-fit: contain; border-radius: 10px; background: #000; display: block; margin-bottom: 10px; }
+.mapgrid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }

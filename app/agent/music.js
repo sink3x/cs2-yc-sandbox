@@ -51,6 +51,46 @@ function findAudio(dir) {
 }
 const findFile = (dir, name) => { let hit = null; const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else if (e.name === name) hit = hit || p; } }; try { walk(dir); } catch { /* нет */ } return hit; };
 
+// ---- любые звуки игры (не только музыка): поиск по списку файлов VPK и извлечение одного файла ----
+const SOUND_RE = /^sounds\/[a-z0-9_./-]{1,200}\.vsnd_c$/;
+/** Путь звука в любом привычном виде (как в команде play, с sounds/ или без, с расширением или без) → путь файла в VPK. */
+function normalizeSoundPath(p) {
+  let s = String(p || '').trim().toLowerCase().replace(/\\/g, '/').replace(/^\/+/, '');
+  s = s.replace(/\.(vsnd_c|vsnd|wav|mp3)$/, '');
+  if (!s.startsWith('sounds/')) s = `sounds/${s}`;
+  s = `${s}.vsnd_c`;
+  return SOUND_RE.test(s) && !s.includes('..') && !s.includes('//') ? s : null;
+}
+/** Список файлов VPK → отсортированные пути звуков (музыкальные наборы пропускаем: у них свой раздел). */
+function parseSoundList(text) {
+  const set = new Set();
+  for (const m of String(text).matchAll(/sounds\/[a-z0-9_./-]+?\.vsnd_c/gi)) { const f = m[0].toLowerCase(); if (!f.startsWith('sounds/music/') && SOUND_RE.test(f)) set.add(f); }
+  return [...set].sort();
+}
+/** Поиск: все слова запроса должны встречаться в пути; совпадения в имени файла выше; dir — папка верхнего уровня. */
+function searchSounds(files, { q = '', dir = '', offset = 0, limit = 60 } = {}) {
+  const words = String(q).toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean).slice(0, 6);
+  const pre = dir ? `sounds/${dir}/` : '';
+  const hits = [];
+  for (const f of files) {
+    if (pre && !f.startsWith(pre)) continue;
+    if (!words.every((w) => f.includes(w))) continue;
+    const name = f.slice(f.lastIndexOf('/') + 1);
+    hits.push([words.length && words.every((w) => name.includes(w)) ? 0 : 1, f]);
+  }
+  if (words.length) hits.sort((a, b) => a[0] - b[0] || a[1].length - b[1].length || (a[1] < b[1] ? -1 : 1));
+  const o = Math.max(0, Number(offset) || 0); const n = Math.min(200, Math.max(1, Number(limit) || 60));
+  return { total: hits.length, items: hits.slice(o, o + n).map((x) => x[1]) };
+}
+const soundDirs = (files) => { const c = {}; for (const f of files) { const d = f.split('/')[1]; if (f.split('/').length > 2) c[d] = (c[d] || 0) + 1; } return Object.entries(c).sort((a, b) => b[1] - a[1]).map(([dir, count]) => ({ dir, count })); };
+/** Формат по первым байтам: утилита может сохранить файл без расширения. */
+function sniffAudio(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WAVE') return 'wav';
+  if (buf.toString('latin1', 0, 3) === 'ID3' || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0)) return 'mp3';
+  return null;
+}
+
 function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log = () => {} }) {
   const toolDir = path.join(toolsDir, `s2v-${TOOL.tag}`);
   const bin = path.join(toolDir, TOOL.bin);
@@ -103,7 +143,7 @@ function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log 
         if (!Object.keys(defs).length) throw fail(`не удалось прочитать music_definitions из items_game.txt (${why})`);
         const c = { stamp, tool: TOOL.tag, kits, defs };
         // наборы из старой версии игры больше не актуальны
-        for (const e of fs.readdirSync(cacheDir, { withFileTypes: true })) if (e.isDirectory()) fs.rmSync(path.join(cacheDir, e.name), { recursive: true, force: true });
+        for (const e of fs.readdirSync(cacheDir, { withFileTypes: true })) if (e.isDirectory() && e.name !== '_snd') fs.rmSync(path.join(cacheDir, e.name), { recursive: true, force: true });
         fs.writeFileSync(indexFile, JSON.stringify(c));
         return c;
       })().finally(() => { indexBusy = null; });
@@ -160,7 +200,65 @@ function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log 
     return { file: f, type: TYPES[f.split('.').pop()], b64: fs.readFileSync(t.path).toString('base64') };
   }
 
-  return { kit, track, index, ensureTool };
+  // ---- звуки игры ----
+  const sndIndexFile = path.join(cacheDir, 'sounds-index.json');
+  const sndDir = path.join(cacheDir, '_snd');
+  let sndMem = null; let sndBusy = null;
+  const soundIndex = () => {
+    if (!fs.existsSync(pak)) return Promise.reject(fail('игра ещё не установлена: нет pak01_dir.vpk'));
+    const stamp = pakStamp();
+    if (sndMem && sndMem.stamp === stamp) return Promise.resolve(sndMem);
+    const keep = (c) => { sndMem = { stamp, files: c.files, set: new Set(c.files), dirs: soundDirs(c.files) }; return sndMem; };
+    try { const c = JSON.parse(fs.readFileSync(sndIndexFile, 'utf8')); if (c.stamp === stamp && c.tool === TOOL.tag && Array.isArray(c.files)) return Promise.resolve(keep(c)); } catch { /* нет кэша */ }
+    if (!sndBusy) {
+      sndBusy = (async () => {
+        await ensureTool();
+        fs.mkdirSync(cacheDir, { recursive: true });
+        log('indexing game sounds');
+        const files = parseSoundList(await run(['--input', pak, '--vpk_list', '--vpk_filepath', 'sounds/', '--vpk_extensions', 'vsnd_c']));
+        if (!files.length) throw fail('в pak01_dir.vpk не найдено звуков sounds/*.vsnd_c');
+        fs.rmSync(sndDir, { recursive: true, force: true }); // звуки старой версии игры
+        fs.writeFileSync(sndIndexFile, JSON.stringify({ stamp, tool: TOOL.tag, files }));
+        return keep({ files });
+      })().finally(() => { sndBusy = null; });
+    }
+    return sndBusy;
+  };
+  async function sounds(opts) { const ix = await soundIndex(); return { ...searchSounds(ix.files, opts), dirs: ix.dirs, all: ix.files.length }; }
+
+  const oneBusy = new Map();
+  /** Один звук игры по пути: извлекается из VPK и остаётся в кэше игровой ВМ. */
+  async function sound(p) {
+    const rel = normalizeSoundPath(p);
+    if (!rel) throw fail('bad sound path', 400);
+    const ix = await soundIndex();
+    if (!ix.set.has(rel)) throw fail('такого файла звука в игре нет (возможно, это имя события, а не путь к файлу)', 404);
+    const key = require('node:crypto').createHash('sha1').update(rel).digest('hex').slice(0, 16);
+    const cached = () => ['mp3', 'wav'].map((e) => path.join(sndDir, `${key}.${e}`)).find((f) => fs.existsSync(f));
+    if (!cached()) {
+      if (!oneBusy.has(key)) {
+        oneBusy.set(key, (async () => {
+          fs.mkdirSync(sndDir, { recursive: true });
+          const tmpName = `.tmp-${key}`; const tmp = path.join(sndDir, tmpName);
+          const clean = () => { for (const e of fs.readdirSync(sndDir)) if (e.startsWith(tmpName)) fs.rmSync(path.join(sndDir, e), { recursive: true, force: true }); };
+          clean();
+          const r = await exec(bin, ['--input', pak, '--vpk_filepath', rel, '--vpk_decompile', '--output', tmp], { env, timeout: 120000, maxBuffer: 16 << 20 });
+          // один файл утилита пишет прямо по пути --output (возможно, со своим расширением), несколько — в каталог
+          const found = [];
+          for (const e of fs.readdirSync(sndDir)) { if (!e.startsWith(tmpName)) continue; const f = path.join(sndDir, e); if (fs.statSync(f).isDirectory()) found.push(...findAudio(f)); else found.push(f); }
+          let done = false;
+          for (const f of found) { const buf = fs.readFileSync(f); const ext = sniffAudio(buf); if (ext && buf.length <= MAX_TRACK) { fs.writeFileSync(path.join(sndDir, `${key}.${ext}`), buf); done = true; break; } }
+          clean();
+          if (!done) throw fail(`Source2Viewer-CLI не выдал аудио для ${rel}: ${tail(r) || 'пусто'}`);
+        })().finally(() => oneBusy.delete(key)));
+      }
+      await oneBusy.get(key);
+    }
+    const f = cached(); const ext = f.split('.').pop();
+    return { path: rel, type: TYPES[ext], b64: fs.readFileSync(f).toString('base64') };
+  }
+
+  return { kit, track, index, ensureTool, sounds, sound };
 }
 
-module.exports = { createMusic, parseVpkList, parseMusicDefs, findAudio, TOOL, KIT_RE, FILE_RE, TYPES, MAX_TRACK };
+module.exports = { createMusic, normalizeSoundPath, parseSoundList, searchSounds, soundDirs, sniffAudio, SOUND_RE, parseVpkList, parseMusicDefs, findAudio, TOOL, KIT_RE, FILE_RE, TYPES, MAX_TRACK };
