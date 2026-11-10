@@ -17,12 +17,13 @@ This repository is [MIT](LICENSE) licensed. It does **not** contain the software
 
 | Item | Source | License |
 |---|---|---|
-| Callout positions and schematic maps (`app/lib/callouts.json`) | [cs2-callouts](https://github.com/sink3x/cs2-callouts), derived from navigation mesh data processed with [awpy](https://github.com/pnxenopoulos/awpy) | MIT |
+| Callout positions and place names (`app/lib/callouts.json`) | [cs2-callouts](https://github.com/sink3x/cs2-callouts), from navigation data processed with [awpy](https://github.com/pnxenopoulos/awpy) | MIT |
+| **Map radar images** (`app/admin/public/callouts/*.webp`) | [Boltobserv](https://github.com/boltgolt/boltobserv) `src/maps/<map>/radar.png`, resized, transparent background filled with the panel's dark colour; Ancient and Anubis from Lexogrine | GPL-3.0 as distributed by Boltobserv (Ancient and Anubis: MIT). **The underlying artwork is Valve's**; see `app/admin/public/callouts/NOTICE.md`. To remove them, delete the directory; the Callouts page then shows an error for the missing images |
 | CS2Panel plugin build (`app/plugins-bundled/CS2Panel.zip`) | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | MIT |
 | Preact (frontend build dependency) | preactjs/preact | MIT |
 | Vite, TypeScript, esbuild (build tools) | their projects | MIT / Apache-2.0 |
-| Map names and place names | Valve | Names only; no Valve artwork is included |
+| Map names and place names | Valve | Names only |
 
-Map preview images in the panel are loaded from their original hosts at run time (Steam Workshop and a community image set) and are not redistributed here.
+Workshop map preview images in the panel are loaded from their original hosts at run time (Steam Workshop and a community image set) and are not redistributed here.
 
 If you are a rights holder and see something that should be changed, open an issue.

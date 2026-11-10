@@ -6,7 +6,7 @@ The panel has a **plugin catalogue** (`app/lib/plugins.json`). Each entry is a C
 
 | Plugin | Upstream | On by default | What it gives you |
 |---|---|---|---|
-| **CS2Panel** | [sink3x/cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | yes | `!menu` in-game menu, `css_playsound`, animals, `css_refreshskins`, team and player identity. Installed from the copy bundled with the panel |
+| **CS2Panel** | [sink3x/cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | yes | `!menu` in-game menu, sounds, animals, map cleanup, `css_refreshskins`, team and player identity. Installed from the copy bundled with the panel |
 | MatchZy | shobhit-pathak/MatchZy | yes | Practice commands (`.prac`, `.bot`, `.spawn`, `.rethrow`, `.timer`, `.savenade`), scrims and pugs |
 | WeaponPaints | Nereziel/cs2-WeaponPaints | yes | Skins, knives, gloves, agents via `!ws` / `!skins`. **Against Valve's server rules, see below** |
 | ThirdPerson | KKNecmi/ThirdPerson-Revamped | yes | `!tp` third person view |
@@ -58,13 +58,15 @@ You use this at your own risk; the maintainers are not responsible for banned to
 
 The first-party plugin ([source](https://github.com/sink3x/cs2-panel-plugin)):
 
-| Command | What |
-|---|---|
-| `!menu` | In-game chat menu |
-| `css_playsound <id>` | Play a sound from the panel's sound library. Built-in game sounds play at once; your own files need a Workshop addon on the clients |
-| `css_spawnanimal`, `css_killanimals` | Spawn and remove decorative animals |
-| `css_refreshskins` | Apply a skin change without waiting for a respawn |
+| Command | Permission | What |
+|---|---|---|
+| `!menu` (`css_menu`) | everyone | Centre-screen menu. Sections for everybody: skins and look, team, practice. With flags: round and bots and sounds (`@css/generic`), change map (`@css/changemap`), animals and cleanup (`@css/cheats`) |
+| `css_playsound <name\|path> [target]`, `!snd`, `!sounds` | `@css/generic` | Play a sound from the panel's library (or a raw sound path) on `all`, `me`, `#userid`, a SteamID64 or part of a nickname; list the library |
+| `css_refreshskins [target]` | `@css/generic` | Apply new WeaponPaints skins right away |
+| `css_identity` | server console / RCON | Re-read `identity.json`: team names, logos, flags, clan tags, nicknames |
+| `css_cleanup [grenades\|fire\|weapons\|decals\|all]` | `@css/cheats` | Clean the map |
+| `css_spawnanimal [chicken\|pig\|cow] [1-30] [target]`, `css_killanimals` | `@css/cheats` | Decorative animals in front of a living player (at most 60) |
 
-Full command list, permissions and build instructions: [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin).
+Built-in game sounds play at once; your own files need a Workshop addon on the clients. Full reference, file formats and build instructions: [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin).
 
 Team names, logos, flags, clan tags and nicknames are set on the **Teams & tags** page of the panel and applied by this plugin. What the game does not allow a server to change (the side icons at the bottom of the screen, the layout of the TAB scoreboard) stays as is, see the [FAQ](faq.md).

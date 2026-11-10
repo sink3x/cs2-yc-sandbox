@@ -69,7 +69,7 @@
 |---|---|
 | **[cs2-yc-sandbox](https://github.com/sink3x/cs2-yc-sandbox)** (этот) | Инфраструктура, админ-панель, агент, скрипты деплоя |
 | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | Плагин CounterStrikeSharp: `!menu`, звуки, названия и логотипы команд, клан-теги, животные, очистка карты |
-| [cs2-callouts](https://github.com/sink3x/cs2-callouts) | Схемы карт и позиции callouts для 10 карт (ru / en / de / fr): данные для страницы «Callouts» |
+| [cs2-callouts](https://github.com/sink3x/cs2-callouts) | Позиции callouts для 10 карт (ru / en / de / fr): данные для страницы «Callouts» |
 
 Панель содержит копию плагина CS2Panel (`app/plugins-bundled/CS2Panel.zip`) и данные callouts (`app/lib/callouts.json`);
 они обновляются из релизов соседних репозиториев.

@@ -110,7 +110,7 @@ A built copy is bundled in `app/plugins-bundled/CS2Panel.zip`. See [cs2-panel-pl
 - **Systemd units** live in `vm-*/systemd/`. The game process is never restarted by a re-bootstrap.
 
 ### 3.7 Callouts data (separate repository)
-**Python 3** scripts turn navigation-mesh data ([awpy](https://github.com/pnxenopoulos/awpy), MIT) into schematic **WebP** maps and `callouts.json`. See [cs2-callouts](https://github.com/sink3x/cs2-callouts).
+`callouts.json` (place names in four languages and positions) is built from navigation-mesh data ([awpy](https://github.com/pnxenopoulos/awpy), MIT) with **Python 3** scripts and drawn on the radars of [Boltobserv](https://github.com/boltgolt/boltobserv) (WebP copies in `app/admin/public/callouts/`, origin in its `NOTICE.md`). See [cs2-callouts](https://github.com/sink3x/cs2-callouts), which also has a licence-clean schematic variant.
 
 ## 4. Where state lives
 

@@ -110,7 +110,7 @@ CS2 (SteamCMD, app 730) -> **Metamod:Source** -> **CounterStrikeSharp** (хос�
 - **Юниты systemd** лежат в `vm-*/systemd/`. Повторный bootstrap никогда не перезапускает игровой процесс.
 
 ### 3.7 Данные callouts (отдельный репозиторий)
-Скрипты на **Python 3** превращают данные навигационной сетки ([awpy](https://github.com/pnxenopoulos/awpy), MIT) в схематичные карты **WebP** и `callouts.json`. См. [cs2-callouts](https://github.com/sink3x/cs2-callouts).
+`callouts.json` (названия мест на четырёх языках и позиции) собран скриптами на **Python 3** из данных навигационной сетки ([awpy](https://github.com/pnxenopoulos/awpy), MIT) и рисуется поверх радаров [Boltobserv](https://github.com/boltgolt/boltobserv) (копии WebP в `app/admin/public/callouts/`, происхождение в `NOTICE.md`). См. [cs2-callouts](https://github.com/sink3x/cs2-callouts); там же есть вариант со схемами и чистой лицензией.
 
 ## 4. Где хранится состояние
 

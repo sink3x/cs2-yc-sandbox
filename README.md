@@ -68,7 +68,7 @@ English · [Русский](README.ru.md)
 |---|---|
 | **[cs2-yc-sandbox](https://github.com/sink3x/cs2-yc-sandbox)** (this one) | Infrastructure, admin panel, agent, deploy scripts |
 | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | CounterStrikeSharp plugin: `!menu`, sounds, team names / logos / clan tags, animals, cleanup |
-| [cs2-callouts](https://github.com/sink3x/cs2-callouts) | Schematic maps and callout positions for 10 maps (ru / en / de / fr), the data behind the panel's Callouts page |
+| [cs2-callouts](https://github.com/sink3x/cs2-callouts) | Callout positions for 10 maps (ru / en / de / fr), the data behind the panel's Callouts page |
 
 The panel ships a copy of the CS2Panel plugin (`app/plugins-bundled/CS2Panel.zip`) and the callouts data (`app/lib/callouts.json`);
 they are updated from the other repositories' releases.
