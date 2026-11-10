@@ -49,7 +49,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "restart=${{ inputs.restart_panel }}" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only HEAD~1 HEAD | grep -qE '^(app|common|vm-admin|terraform|scripts)/'; then
+          elif git diff --name-only HEAD~1 HEAD | grep -qE '^(app|common|web|vm-admin|terraform|scripts)/'; then
             echo "restart=true" >> "$GITHUB_OUTPUT"
           else
             echo "restart=false" >> "$GITHUB_OUTPUT"
