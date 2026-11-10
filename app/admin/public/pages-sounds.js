@@ -15,7 +15,7 @@ const sndSlug = (path, taken) => {
 
 // ---------------------------------------------------------------- прослушивание в браузере: свои файлы, музыка, звуки игры
 const SB = { tab: store.get('sndTab', 'files'), files: null, kits: null, kit: null, kitQ: '', q: '', dir: '', res: null, busy: false, err: '' };
-const gameSrc = (path, title) => ({ key: `game/${path}`, url: `/api/game-sound?path=${encodeURIComponent(path)}`, title: title || path.split('/').pop().replace(/\.vsnd_c$/, ''), sub: path.replace(/^sounds\//, '').split('/').slice(0, -1).join('/'), hint: 'Игровая ВМ выключена, или это имя события, а не путь к файлу' });
+const gameSrc = (path, title) => ({ play: path.replace(/\.vsnd_c$/, '.vsnd'), key: `game/${path}`, url: `/api/game-sound?path=${encodeURIComponent(path)}`, title: title || path.split('/').pop().replace(/\.vsnd_c$/, ''), sub: path.replace(/^sounds\//, '').split('/').slice(0, -1).join('/'), hint: 'Игровая ВМ выключена, или это имя события, а не путь к файлу' });
 const fileSrc = (name) => ({ key: `file/${name}`, url: `/api/sound-files/${encodeURIComponent(name)}`, title: name, sub: tr('свой файл') });
 const sbRow = (src, title, sub, extra) => {
   const el = h('div', { class: 'snd-row' }, AudioHub.buttons(src), h('div', { class: 'snd-name' }, h('b', {}, document.createTextNode(title)), sub ? h('span', { class: 'muted small' }, document.createTextNode(sub)) : null), extra || null);
@@ -93,13 +93,13 @@ function soundBrowser({ tabs = ['files', 'music', 'game'], toPlayers = null } = 
   function view() {
     body = bodyView();
     return [h('h3', {}, 'Прослушать здесь'),
-      h('p', { class: 'muted small' }, 'Звук играет только в вашем браузере: игроки на сервере его не слышат. ▶ играет по выбранному режиму, ＋ добавляет в очередь. Плеер внизу экрана остаётся при переходе между страницами.'),
-      h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Режим кнопки ▶:'), AudioHub.modeSwitch(), h('button', { class: 'btn', onclick: () => AudioHub.stopAll() }, '■ Стоп всё')),
+      h('p', { class: 'muted small' }, '▶ играет по выбранному режиму, ＋ добавляет в очередь. Обычно звук слышите только вы; включите «У всех на сервере» — и каждый запущенный звук одновременно сыграет у всех игроков. Плеер внизу экрана остаётся при переходе между страницами.'),
+      h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Режим кнопки ▶:'), AudioHub.modeSwitch(), AudioHub.serverToggle(), h('button', { class: 'btn', onclick: () => AudioHub.stopAll() }, '■ Стоп всё')),
       h('div', { class: 'tabs snd-tabs', role: 'tablist' }, tabs.map((t) => h('button', { class: SB.tab === t ? 'on' : '', role: 'tab', 'aria-selected': String(SB.tab === t), onclick: () => { SB.tab = t; store.set('sndTab', t); draw(); } }, TABS[t]))),
       body];
   }
   let seen = false;
-  AudioHub.onChange(() => { if (root.isConnected) { seen = true; const sw = root.querySelector('.ad-mode'); if (sw) sw.replaceWith(AudioHub.modeSwitch()); return true; } return !seen; });
+  AudioHub.onChange(() => { if (root.isConnected) { seen = true; const sw = root.querySelector('.ad-mode'); if (sw) sw.replaceWith(AudioHub.modeSwitch()); const sv = root.querySelector('.ad-srv'); if (sv) sv.replaceWith(AudioHub.serverToggle()); return true; } return !seen; });
   draw();
   return root;
 }

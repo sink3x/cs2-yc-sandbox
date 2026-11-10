@@ -161,6 +161,8 @@ const routes = [
     if (!ok) throw Object.assign(new Error(errors.join('; ')), { status: 400 });
     saveState(state);
     const res = applyState(state, secrets);
+    // названия команд, теги и ники плагин перечитывает сразу (если CS2 запущен)
+    if (res.changed.includes('identity.json')) rconRun(['css_identity'], 5000).catch(() => {});
     return { state, applied: res, needsRestart: Boolean(body.live === false) || res.changed.some((c) => /^[+-]/.test(c) || c === 'core.json' || c === 'WeaponPaints.json') };
   }],
   ['POST', '/apply-live', async () => {
@@ -256,6 +258,8 @@ const routes = [
   ['GET', '/music/kit', async ({ query }) => { const r = await music.kit(String(query.id || '')); return { id: r.id, kit: r.kit, tracks: r.tracks.map(({ file, size }) => ({ file, size })) }; }],
   ['GET', '/sounds/search', async ({ query }) => music.sounds({ q: query.q, dir: /^[a-z0-9_-]{1,40}$/.test(String(query.dir || '')) ? query.dir : '', offset: query.offset, limit: query.limit })],
   ['GET', '/sounds/file', async ({ query }) => music.sound(query.path)],
+  ['GET', '/team-logos', async () => ({ codes: await music.teamLogos() })],
+  ['GET', '/team-logo', async ({ query }) => music.teamLogo(query.code)],
   ['GET', '/music/track', async ({ query }) => music.track(String(query.id || ''), query.file)],
   ['GET', '/sound-files', async () => ({ files: sounds.list().map(({ name, size, sha1 }) => ({ name, size, sha1 })) })],
   ['PUT', '/sound-files/:name', async ({ params, raw }) => sounds.put(params.name, raw)],

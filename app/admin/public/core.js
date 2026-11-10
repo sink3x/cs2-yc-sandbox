@@ -95,6 +95,7 @@ const ERR_RU = [
   [/^server\.hostname/i, 'Имя сервера: 1–64 символа, без кавычек и «;»'], [/^server\.map/i, 'Карта: имя вида de_xxx или ID воркшопа'], [/^server\.maxPlayers/i, 'Слотов: от 2 до 64'],
   [/^server\.password/i, 'Пароль входа: до 32 символов [A-Za-z0-9_.!@#-]'], [/^server\.extraArgs/i, 'Доп. аргументы: только [A-Za-z0-9_+-.=] и пробелы'],
   [/^cvars\.(\S+): bad name/i, 'Недопустимое имя cvar: $1'], [/^cvars\.(\S+): bad value/i, 'Недопустимое значение cvar $1 (нельзя ; \" \\ и переводы строк)'],
+  [/^identity: bad team (\w+)/i, 'Команда $1: в названии нельзя кавычки и «;», флаг — две латинские буквы'], [/^identity: bad player (\d*)/i, 'Игрок $1: тег до 16 символов, ник до 32, без кавычек и «;»'],
   [/^admins: duplicate (\d+)/i, 'Админ $1 указан дважды'], [/^admins: bad SteamID64/i, 'Админы: неверный SteamID64'], [/^admins: (.*) needs at least one flag/i, 'Админы: у $1 нет ни одного права'],
   [/^maps: bad entry (.+)/i, 'Карты: недопустимая запись $1'], [/^Failed to fetch|NetworkError/i, 'Нет связи с панелью'], [/^agent HTTP (\d+)/i, 'Агент ответил ошибкой $1'],
   [/^skin catalog unavailable/i, 'Каталог скинов недоступен (нет доступа к GitHub). Повторите позже'],

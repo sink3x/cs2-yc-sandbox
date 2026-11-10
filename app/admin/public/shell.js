@@ -4,7 +4,7 @@
 // Страницы подгружаются по требованию (в сборке — отдельные файлы, см. web/build-public.mjs), поэтому функции вызываются через стрелки.
 const PAGES = {
   overview: ['Сервер', (...a) => pageOverview(...a)], skins: ['Скины', (...a) => pageSkins(...a)], practice: ['Тренировка', (...a) => pagePractice(...a)], callouts: ['Callouts', (...a) => pageCallouts(...a)], sounds: ['Звуки', (...a) => pageSounds(...a)], maps: ['Карты и режимы', (...a) => pageMaps(...a)],
-  console: ['Консоль', (...a) => pageConsole(...a)], settings: ['Настройки', (...a) => pageSettings(...a)], plugins: ['Плагины и флаги', (...a) => pagePlugins(...a)], admins: ['Админы', (...a) => pageAdmins(...a)],
+  console: ['Консоль', (...a) => pageConsole(...a)], settings: ['Настройки', (...a) => pageSettings(...a)], plugins: ['Плагины и флаги', (...a) => pagePlugins(...a)], admins: ['Админы', (...a) => pageAdmins(...a)], teams: ['Команды и теги', (...a) => pageTeams(...a)],
   users: ['Пользователи', (...a) => pageUsers(...a)], online: ['Игроки онлайн', (...a) => pageOnline(...a)], setups: ['Сетапы', (...a) => pageSetups(...a)], look: ['Оформление', (...a) => pageLook(...a)], stats: ['Статистика', (...a) => pageStats(...a)], profile: ['Профиль', (...a) => pageProfile(...a)], info: ['Сервер', (...a) => pageInfo(...a)], backups: ['Бэкапы и логи', (...a) => pageBackups(...a)], help: ['Справка', (...a) => pageHelp(...a)], panel: ['Панель', (...a) => pagePanel(...a)],
 };
 // Главная страница — «Сервер»: у админа это обзор сервера, у игрока — информация о сервере. Логотип и вход ведут только сюда.
@@ -17,7 +17,7 @@ const routable = (k) => visiblePages().some(([p]) => p === k) || (S.role === 'pl
 const NAV_GROUPS = [
   ['Управление', ['overview', 'info', 'maps', 'settings', 'console']],
   ['Игра', ['practice', 'callouts', 'skins', 'plugins', 'setups', 'sounds']],
-  ['Игроки', ['online', 'stats', 'users', 'admins']],
+  ['Игроки', ['online', 'stats', 'users', 'admins', 'teams']],
   ['Панель и аккаунт', ['profile', 'look', 'panel', 'backups', 'help']],
 ];
 // Мобильная нижняя панель: 4 основных пункта + «Ещё» (остальное — в листе меню, как в мобильных приложениях).
@@ -66,6 +66,7 @@ const ICONS = {
   settings: '<line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/>',
   plugins: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
   admins: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/>',
+  teams: '<path d="M4 21V4"/><path d="M4 4h13l-2 4 2 4H4"/>',
   look: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/>',
   backups: '<rect x="3" y="3" width="18" height="5" rx="1.5"/><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><line x1="10" y1="12" x2="14" y2="12"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9.2a3 3 0 0 1 5.8 1c0 2-2.9 2.6-2.9 4.3"/><line x1="12" y1="17.5" x2="12.01" y2="17.5"/>',

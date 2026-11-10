@@ -67,6 +67,7 @@ function applyState(state, secrets, gp = E.gamePaths) {
   if (fs.existsSync(gp.css)) {
     if (writeIfChanged(gp.cssAdmins, S.renderCssAdmins(state))) changed.push('admins.json');
     if (writeIfChanged(gp.cssSounds, S.renderSounds(state))) changed.push('sounds.json');
+    if (gp.cssIdentity && writeIfChanged(gp.cssIdentity, S.renderIdentity(state))) changed.push('identity.json');
     const core = S.patchCoreJson(readJsonc(gp.cssCore, null), state);
     if (writeIfChanged(gp.cssCore, JSON.stringify(core, null, 2) + '\n')) changed.push('core.json');
   }

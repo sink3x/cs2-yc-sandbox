@@ -248,6 +248,90 @@ function uptimeCard() {
     h('div', { class: 'muted small' }, 'Считается по статусу ВМ «Работает» (дни по UTC). Диск, адрес и трафик не входят: цену часа возьмите из калькулятора Yandex Cloud.'));
 }
 
+// ---------------------------------------------------------------- команды, клан-теги и меню на сервере
+// Известные коды логотипов из файлов игры → [название команды, флаг]. Код, которого нет в списке, показывается как есть.
+const PRO_TEAMS = {
+  navi: ['Natus Vincere', 'UA'], faze: ['FaZe Clan', 'EU'], vita: ['Team Vitality', 'FR'], g2: ['G2 Esports', 'EU'], spir: ['Team Spirit', 'RU'], mouz: ['MOUZ', 'DE'],
+  astr: ['Astralis', 'DK'], liq: ['Team Liquid', 'US'], c9: ['Cloud9', 'US'], furi: ['FURIA', 'BR'], hero: ['Heroic', 'DK'], ence: ['ENCE', 'FI'], nip: ['Ninjas in Pyjamas', 'SE'],
+  fntc: ['Fnatic', 'GB'], big: ['BIG', 'DE'], vp: ['Virtus.pro', 'RU'], col: ['Complexity', 'US'], mibr: ['MIBR', 'BR'], pain: ['paiN Gaming', 'BR'], mngz: ['The MongolZ', 'MN'],
+  gl: ['GamerLegion', 'EU'], og: ['OG', 'EU'], eg: ['Evil Geniuses', 'US'], nrg: ['NRG', 'US'], imp: ['Imperial', 'BR'], apex: ['Apeks', 'NO'], mont: ['Monte', 'UA'], saw: ['SAW', 'PT'],
+};
+const TEAM_LOGOS = { codes: null, err: '' };
+function pageTeams() {
+  const st = S.state.state;
+  const cur = st.identity || { teams: {}, players: [] };
+  const D = { teams: { ct: { name: '', logo: '', flag: '', ...(cur.teams.ct || {}) }, t: { name: '', logo: '', flag: '', ...(cur.teams.t || {}) } }, players: (cur.players || []).map((x) => ({ ...x })) };
+  const root = h('div'); const known = {}; // steamid → ник
+  const logoImg = (code, size = 40) => (code ? h('img', { class: 'tm-logo', src: `/api/team-logo/${code}`, alt: code, width: size, height: size, loading: 'lazy', onerror: (e) => { e.target.replaceWith(h('span', { class: 'tm-logo tm-nologo', style: `width:${size}px;height:${size}px` }, document.createTextNode(code.slice(0, 4).toUpperCase()))); } }) : h('span', { class: 'tm-logo tm-nologo', style: `width:${size}px;height:${size}px` }, '—'));
+  const loadLogos = () => api('GET', '/team-logos').then((r) => { TEAM_LOGOS.codes = r.codes || []; TEAM_LOGOS.err = ''; }).catch((e) => { TEAM_LOGOS.err = e.message; });
+  const pickLogo = (side) => {
+    const grid = h('div', { class: 'tm-grid' }); const q = h('input', { type: 'text', inputmode: 'search', placeholder: 'Поиск: navi, vitality, faze…', 'aria-label': 'Поиск логотипа', style: 'width:100%' });
+    let m;
+    const fill = () => {
+      if (!TEAM_LOGOS.codes) { put(grid, h('div', { class: TEAM_LOGOS.err ? 'warn small' : 'muted' }, TEAM_LOGOS.err ? `${tr('Логотипы недоступны')}: ${TEAM_LOGOS.err}. ${tr('Список читается из файлов игры: включите игровую ВМ.')}` : 'Читаю логотипы из файлов игры… В первый раз до минуты.')); return; }
+      const w = q.value.trim().toLowerCase();
+      const list = TEAM_LOGOS.codes.filter((c) => !w || c.includes(w) || (PRO_TEAMS[c] && PRO_TEAMS[c][0].toLowerCase().includes(w)));
+      list.sort((a, b) => (PRO_TEAMS[a] ? 0 : 1) - (PRO_TEAMS[b] ? 0 : 1) || a.localeCompare(b));
+      put(grid, h('button', { class: 'btn tm-cell', onclick: () => { D.teams[side].logo = ''; m.close(); draw(); } }, logoImg('', 44), h('span', {}, 'Без логотипа')),
+        list.slice(0, 120).map((c) => h('button', { class: `btn tm-cell${D.teams[side].logo === c ? ' on' : ''}`, onclick: () => { const t = D.teams[side]; t.logo = c; if (PRO_TEAMS[c]) { if (!t.name || Object.values(PRO_TEAMS).some((x) => x[0] === t.name)) t.name = PRO_TEAMS[c][0]; if (PRO_TEAMS[c][1].length === 2 && PRO_TEAMS[c][1] !== 'EU') t.flag = PRO_TEAMS[c][1]; } m.close(); draw(); } },
+          logoImg(c, 44), h('span', {}, document.createTextNode(PRO_TEAMS[c] ? PRO_TEAMS[c][0] : c)))),
+        list.length > 120 ? h('div', { class: 'muted small' }, `… ${tr('и ещё')} ${list.length - 120}: ${tr('уточните поиск')}`) : null, !list.length ? h('div', { class: 'muted' }, 'Ничего не найдено') : null);
+    };
+    q.addEventListener('input', fill);
+    m = modal('Логотип команды', h('div', {}, q, h('p', { class: 'muted small' }, 'Это логотипы из файлов самой игры: клиент показывает только их. Свою картинку сервер игрокам показать не может.'), grid), [{ text: 'Закрыть', run: () => true }]);
+    fill(); if (!TEAM_LOGOS.codes) loadLogos().then(fill);
+  };
+  const teamCard = (side, title) => {
+    const t = D.teams[side];
+    const name = h('input', { type: 'text', value: t.name, maxlength: 32, placeholder: side === 'ct' ? 'Спецназ (по умолчанию)' : 'Террористы (по умолчанию)', 'aria-label': 'Название команды', style: 'min-width:220px' }); name.addEventListener('input', () => { t.name = name.value; });
+    const flag = h('input', { type: 'text', value: t.flag, maxlength: 2, placeholder: 'RU', 'aria-label': 'Флаг: код страны из двух букв', title: 'Код страны из двух латинских букв: RU, UA, DE, US…', style: 'width:64px;text-transform:uppercase' }); flag.addEventListener('input', () => { t.flag = flag.value.toUpperCase(); });
+    return h('div', { class: 'preset tm-team' }, h('b', {}, title),
+      h('div', { class: 'row' }, logoImg(t.logo, 56), h('div', {}, h('div', { class: 'muted small' }, t.logo ? document.createTextNode(`${tr('Логотип')}: ${PRO_TEAMS[t.logo] ? PRO_TEAMS[t.logo][0] : t.logo}`) : 'Логотип не выбран'), h('button', { class: 'btn', onclick: () => pickLogo(side) }, 'Выбрать логотип'))),
+      h('div', { class: 'row' }, name, flag));
+  };
+  const playerRow = (x) => {
+    const tag = h('input', { type: 'text', value: x.tag, maxlength: 16, placeholder: 'Клан-тег', 'aria-label': 'Клан-тег', style: 'width:150px' }); tag.addEventListener('input', () => { x.tag = tag.value; });
+    const name = h('input', { type: 'text', value: x.name, maxlength: 32, placeholder: 'Ник на сервере (пусто — как в Steam)', 'aria-label': 'Ник на сервере', style: 'min-width:240px' }); name.addEventListener('input', () => { x.name = name.value; });
+    return h('div', { class: 'snd-row' }, h('div', { class: 'snd-name' }, h('b', {}, document.createTextNode(known[x.steamid] || x.steamid)), h('span', { class: 'muted small' }, document.createTextNode(x.steamid))), tag, name,
+      h('button', { class: 'btn danger', onclick: () => { D.players = D.players.filter((y) => y !== x); draw(); } }, 'Убрать'));
+  };
+  const sidIn = h('input', { type: 'text', placeholder: 'SteamID64 (17 цифр)', maxlength: 17, inputmode: 'numeric', style: 'width:200px' });
+  const addSid = (sid) => { if (!/^\d{17}$/.test(sid)) { toast(tr('SteamID64 — это 17 цифр'), 'e'); return; } if (D.players.some((x) => x.steamid === sid)) return; if (D.players.length >= 64) { toast(tr('Не больше 64 игроков'), 'e'); return; } D.players.push({ steamid: sid, tag: '', name: '' }); draw(); };
+  const save = act(async () => {
+    S.state = await api('PUT', '/state', { state: { identity: { teams: D.teams, players: D.players.filter((x) => x.tag.trim() || x.name.trim()) } } });
+    renderPage();
+  }, 'Сохранено: названия, теги и ники применяются сразу');
+  const swap = () => { [D.teams.ct, D.teams.t] = [D.teams.t, D.teams.ct]; draw(); };
+  const reset = () => { D.teams = { ct: { name: '', logo: '', flag: '' }, t: { name: '', logo: '', flag: '' } }; draw(); };
+  function draw() {
+    const others = Object.keys(known).filter((sid) => !D.players.some((x) => x.steamid === sid));
+    put(root, h('h2', {}, 'Команды и теги'),
+      st.plugins && st.plugins.cs2panel === false ? h('div', { class: 'banner' }, 'Плагин CS2Panel выключен: включите его в «Плагины и флаги», иначе оформление не применится.') : null,
+      h('div', { class: 'card' }, h('h3', {}, 'Команды'),
+        h('p', { class: 'muted small' }, 'Название, логотип и флаг видны в таблице счёта (TAB), в шапке со счётом и в конце матча — там, где обычно написано «Спецназ» и «Террористы».'),
+        h('div', { class: 'grid' }, teamCard('ct', 'Спецназ (CT)'), teamCard('t', 'Террористы (T)')),
+        h('div', { class: 'row' }, h('button', { class: 'btn', onclick: swap }, '⇄ Поменять местами'), h('button', { class: 'btn', onclick: reset }, 'Сбросить к стандартным'))),
+      h('div', { class: 'card' }, h('h3', {}, 'Клан-теги и ники'),
+        h('p', { class: 'muted small' }, 'Тег показывается перед ником в таблице счёта и в ленте убийств. Ник меняется только на этом сервере. Игра время от времени возвращает тег из Steam — плагин ставит ваш заново каждые 10 секунд.'),
+        D.players.length ? h('div', { class: 'snd-list' }, D.players.map(playerRow)) : h('div', { class: 'muted' }, 'Пока никому не назначено.'),
+        others.length ? h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Добавить игрока:'), others.slice(0, 20).map((sid) => h('button', { class: 'chip', onclick: () => addSid(sid) }, document.createTextNode(`＋ ${known[sid]}`)))) : null,
+        h('div', { class: 'row' }, sidIn, h('button', { class: 'btn', onclick: () => { addSid(sidIn.value.trim()); sidIn.value = ''; } }, '＋ По SteamID'))),
+      h('div', { class: 'sticky-bar' }, h('div', { class: 'row', style: 'margin:0' }, h('button', { class: 'btn primary', onclick: save }, 'Сохранить и применить'), h('span', { class: 'muted small' }, serverUp() ? 'Применится сразу, без перезапуска.' : 'Сервер выключен: применится при запуске.'))),
+      h('div', { class: 'card' }, h('h3', {}, 'Меню на сервере'),
+        h('p', { class: 'muted' }, 'В игре напишите в чат !menu — по центру экрана откроется меню, пункты выбираются цифрами. Разделы: скины и внешний вид, выбор команды, тренировка; админам ещё раунд и боты, смена карты, звуки, животные и очистка карты.'),
+        h('div', { class: 'row' }, h('span', { class: 'muted small' }, 'Чтобы открывать меню одной клавишей, выполните в консоли игры:'), h('span', { class: 'chip', tabindex: '0', onclick: copy('bind m css_menu') }, 'bind m css_menu'))),
+      h('div', { class: 'card' }, h('h3', {}, 'Что сервер изменить не может'),
+        h('ul', { class: 'muted' },
+          h('li', {}, 'Свой логотип сервера вместо значков сторон T и CT внизу экрана: интерфейс рисует клиент игры, и своих картинок он с сервера не берёт. Доступны только логотипы команд из файлов игры — они показываются в таблице счёта и в шапке.'),
+          h('li', {}, 'Оформление самой таблицы TAB (колонки, цвета, шрифты): меняются только названия команд, логотипы, флаги, теги и ники.'),
+          h('li', {}, 'Модели персонажей настраиваются на странице «Скины» (агенты): свои модели требуют Workshop-аддон.'))));
+  }
+  draw();
+  api('GET', '/skins/players').then((r) => { for (const p of r.players || []) if (p.steamid && p.name) known[p.steamid] = p.name; if (root.isConnected) draw(); }).catch(() => {});
+  if (!TEAM_LOGOS.codes) loadLogos();
+  return root;
+}
+
 function pageAdmins() {
   const st = S.state.state;
   const locked = new Set(S.state.protectedAdmins || S.protectedAdmins || []);

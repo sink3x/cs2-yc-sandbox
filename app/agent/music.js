@@ -91,6 +91,14 @@ function sniffAudio(buf) {
   return null;
 }
 
+const LOGO_RE = /^[a-z0-9_]{1,24}$/;
+/** Список файлов VPK → коды логотипов команд (имя файла без расширения). */
+function parseLogoList(text) {
+  const set = new Set();
+  for (const m of String(text).matchAll(/panorama\/images\/tournaments\/teams\/([a-z0-9_]+)\.vsvg_c/gi)) { const c = m[1].toLowerCase(); if (LOGO_RE.test(c)) set.add(c); }
+  return [...set].sort();
+}
+
 function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log = () => {} }) {
   const toolDir = path.join(toolsDir, `s2v-${TOOL.tag}`);
   const bin = path.join(toolDir, TOOL.bin);
@@ -143,7 +151,7 @@ function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log 
         if (!Object.keys(defs).length) throw fail(`не удалось прочитать music_definitions из items_game.txt (${why})`);
         const c = { stamp, tool: TOOL.tag, kits, defs };
         // наборы из старой версии игры больше не актуальны
-        for (const e of fs.readdirSync(cacheDir, { withFileTypes: true })) if (e.isDirectory() && e.name !== '_snd') fs.rmSync(path.join(cacheDir, e.name), { recursive: true, force: true });
+        for (const e of fs.readdirSync(cacheDir, { withFileTypes: true })) if (e.isDirectory() && e.name !== '_snd' && e.name !== '_logos') fs.rmSync(path.join(cacheDir, e.name), { recursive: true, force: true });
         fs.writeFileSync(indexFile, JSON.stringify(c));
         return c;
       })().finally(() => { indexBusy = null; });
@@ -258,7 +266,55 @@ function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log 
     return { path: rel, type: TYPES[ext], b64: fs.readFileSync(f).toString('base64') };
   }
 
-  return { kit, track, index, ensureTool, sounds, sound };
+  // ---- логотипы команд из файлов игры (их же показывает клиент по mp_teamlogo_N) ----
+  const LOGO_DIR = 'panorama/images/tournaments/teams/';
+  const logoIndexFile = path.join(cacheDir, 'logos-index.json'); const logoDir = path.join(cacheDir, '_logos');
+  let logoBusy = null;
+  const teamLogos = () => {
+    if (!fs.existsSync(pak)) return Promise.reject(fail('игра ещё не установлена: нет pak01_dir.vpk'));
+    const stamp = pakStamp();
+    try { const c = JSON.parse(fs.readFileSync(logoIndexFile, 'utf8')); if (c.stamp === stamp && c.tool === TOOL.tag && Array.isArray(c.codes)) return Promise.resolve(c.codes); } catch { /* нет кэша */ }
+    if (!logoBusy) {
+      logoBusy = (async () => {
+        await ensureTool(); fs.mkdirSync(cacheDir, { recursive: true });
+        const codes = parseLogoList(await run(['--input', pak, '--vpk_list', '--vpk_filepath', LOGO_DIR, '--vpk_extensions', 'vsvg_c']));
+        if (!codes.length) throw fail('в файлах игры не найдено логотипов команд');
+        fs.rmSync(logoDir, { recursive: true, force: true });
+        fs.writeFileSync(logoIndexFile, JSON.stringify({ stamp, tool: TOOL.tag, codes }));
+        return codes;
+      })().finally(() => { logoBusy = null; });
+    }
+    return logoBusy;
+  };
+  const logoOne = new Map();
+  async function teamLogo(code) {
+    const c = String(code || '').toLowerCase();
+    if (!LOGO_RE.test(c)) throw fail('bad logo code', 400);
+    if (!(await teamLogos()).includes(c)) throw fail('такого логотипа в игре нет', 404);
+    const file = path.join(logoDir, `${c}.svg`);
+    if (!fs.existsSync(file)) {
+      if (!logoOne.has(c)) {
+        logoOne.set(c, (async () => {
+          fs.mkdirSync(logoDir, { recursive: true });
+          const tmpName = `.tmp-${c}`; const tmp = path.join(logoDir, tmpName);
+          const clean = () => { for (const e of fs.readdirSync(logoDir)) if (e.startsWith(tmpName)) fs.rmSync(path.join(logoDir, e), { recursive: true, force: true }); };
+          clean();
+          const r = await exec(bin, ['--input', pak, '--vpk_filepath', `${LOGO_DIR}${c}.vsvg_c`, '--vpk_decompile', '--output', tmp], { env, timeout: 120000, maxBuffer: 16 << 20 });
+          const found = [];
+          const walk = (f) => { if (fs.statSync(f).isDirectory()) { for (const e of fs.readdirSync(f)) walk(path.join(f, e)); } else found.push(f); };
+          for (const e of fs.readdirSync(logoDir)) if (e.startsWith(tmpName)) walk(path.join(logoDir, e));
+          let done = false;
+          for (const f of found) { const st = fs.statSync(f); if (st.size > 600000) continue; const text = fs.readFileSync(f, 'utf8'); if (/<svg[\s>]/i.test(text)) { fs.writeFileSync(file, text); done = true; break; } }
+          clean();
+          if (!done) throw fail(`Source2Viewer-CLI не выдал SVG для ${c}: ${tail(r) || 'пусто'}`);
+        })().finally(() => logoOne.delete(c)));
+      }
+      await logoOne.get(c);
+    }
+    return { code: c, svg: fs.readFileSync(file, 'utf8') };
+  }
+
+  return { kit, track, index, ensureTool, sounds, sound, teamLogos, teamLogo };
 }
 
-module.exports = { createMusic, normalizeSoundPath, parseSoundList, searchSounds, soundDirs, sniffAudio, SOUND_RE, parseVpkList, parseMusicDefs, findAudio, TOOL, KIT_RE, FILE_RE, TYPES, MAX_TRACK };
+module.exports = { createMusic, parseLogoList, LOGO_RE, normalizeSoundPath, parseSoundList, searchSounds, soundDirs, sniffAudio, SOUND_RE, parseVpkList, parseMusicDefs, findAudio, TOOL, KIT_RE, FILE_RE, TYPES, MAX_TRACK };

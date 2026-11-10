@@ -36,6 +36,7 @@ const AudioHub = (() => {
     mode: AUDIO_MODES.some((m) => m[0] === saved.mode) ? saved.mode : 'single',
     vol: Number.isFinite(saved.vol) ? Math.min(1, Math.max(0, saved.vol)) : 0.8,
     loop: !!saved.loop, open: saved.open !== false,
+    server: false, // дублировать каждый запуск игрокам на сервер (не запоминается: включается осознанно)
     voices: [], // играют сейчас: { id, src, audio, lane }
     queue: [], // ждут своей очереди: src
   };
@@ -52,7 +53,18 @@ const AudioHub = (() => {
     v.audio.pause(); v.audio.removeAttribute('src'); try { v.audio.load(); } catch { /* ok */ }
     if (!silent) emit();
   }
+  let warnedLocal = false;
+  /** Тот же звук — всем игрокам на сервере (плагин CS2Panel выполняет у каждого команду play). Свои файлы у игроков не лежат. */
+  function serverSend(src) {
+    if (!src.play) { if (!warnedLocal) { warnedLocal = true; toast(tr('Свои файлы игрокам не слышны: у них этих файлов нет. На сервере играют только звуки игры и музыкальные наборы.'), 'e'); } return; }
+    api('POST', '/sounds/play', { sound: src.play, target: 'all' }).then((r) => {
+      const out = String((r && r.output) || '');
+      if (/Нет подходящих игроков/.test(out)) toast(tr('На сервере сейчас нет игроков: звук слышите только вы'), 'e');
+      else if (/unknown command/i.test(out)) toast(tr('Плагин CS2Panel не загружен: звук на сервер не ушёл'), 'e');
+    }).catch((e) => toast(`${tr('Звук на сервер не ушёл')}: ${e.message}`, 'e'));
+  }
   function start(src, isLane) {
+    if (st.server) serverSend(src);
     const a = new Audio(src.url); a.preload = 'auto'; a.volume = st.vol;
     const v = { id: ++seq, src, audio: a, lane: isLane };
     a.loop = st.loop && !isLane;
@@ -98,6 +110,7 @@ const AudioHub = (() => {
   const inQueue = (key) => st.queue.some((s) => s.key === key);
   const setMode = (m) => { st.mode = m; save(); emit(); };
   const setVol = (x) => { st.vol = x; for (const v of st.voices) v.audio.volume = x; save(); };
+  const setServer = (on) => { st.server = !!on; warnedLocal = false; emit(); };
   const setLoop = (on) => { st.loop = on; for (const v of st.voices) if (!v.lane) v.audio.loop = on; save(); emit(); };
   /** Подписка на изменения; обработчик, вернувший false, отписывается (так делают списки, которых уже нет на странице). */
   const onChange = (fn) => { subs.add(fn); };
@@ -142,7 +155,7 @@ const AudioHub = (() => {
     vol.addEventListener('input', () => setVol(Number(vol.value) / 100));
     const head = h('div', { class: 'ad-head' },
       h('b', {}, 'Плеер'), h('span', { class: 'muted small ad-count' }, `${tr('играет')}: ${st.voices.length}${st.queue.length ? ` · ${tr('в очереди')}: ${st.queue.length}` : ''}`),
-      modeSwitch(),
+      modeSwitch(), serverToggle(),
       h('label', { class: 'ad-volbox', title: tr('Громкость') }, '🔊', vol),
       h('button', { class: `btn ad-btn${st.loop ? ' on' : ''}`, 'aria-pressed': String(st.loop), title: tr('Повтор: звук или вся очередь играют по кругу'), 'aria-label': tr('Повтор'), onclick: () => setLoop(!st.loop) }, '🔁'),
       st.queue.length || lane() ? h('button', { class: 'btn ad-btn', title: tr('Следующий в очереди'), 'aria-label': tr('Следующий в очереди'), onclick: skip }, '⏭') : null,
@@ -157,6 +170,11 @@ const AudioHub = (() => {
   /** Переключатель режима кнопки ▶ (один и тот же в панели плеера и на страницах). */
   function modeSwitch() {
     return h('div', { class: 'seg ad-mode', role: 'group', 'aria-label': tr('Режим воспроизведения') }, AUDIO_MODES.map(([id, title, tip]) => h('button', { class: st.mode === id ? 'on' : '', title: tr(tip), 'aria-pressed': String(st.mode === id), onclick: () => setMode(id) }, title)));
+  }
+  /** Переключатель «у всех на сервере»: только админу. Каждый запуск звука (и следующий в очереди) уходит ещё и игрокам. */
+  function serverToggle() {
+    if (S.role !== 'admin') return null;
+    return h('button', { class: `btn ad-srv${st.server ? ' on' : ''}`, 'aria-pressed': String(st.server), title: tr('Каждый звук, запущенный в плеере, одновременно играет у всех игроков на сервере. Пауза, перемотка и «Стоп» на игроков не действуют.'), onclick: () => setServer(!st.server) }, st.server ? '📢 У всех на сервере: вкл' : '📢 У всех на сервере');
   }
   /** Пара кнопок для строки списка: ▶ (по режиму) и ＋ (в очередь). Сами перерисовываются, пока строка на странице. */
   function buttons(src) {
@@ -174,11 +192,11 @@ const AudioHub = (() => {
     onChange(() => { if (box.isConnected) { seen = true; paint(); return true; } return !seen; });
     return box;
   }
-  return { play, enqueue, stopAll, stopKey, skip, isPlaying, inQueue, onChange, setMode, modeSwitch, buttons, get mode() { return st.mode; } };
+  return { play, enqueue, stopAll, stopKey, skip, isPlaying, inQueue, onChange, setMode, modeSwitch, serverToggle, buttons, get mode() { return st.mode; } };
 })();
 
 /** Источник для плеера: трек музыкального набора. */
-const musicSrc = (m, file) => ({ key: `kit/${m.id}/${file}`, url: `/api/music-kit/${m.id}/${encodeURIComponent(file)}`, title: musicTrackLabel(file), sub: m.name || `№${m.id}`, hint: 'Игровая ВМ выключена или файл не извлёкся' });
+const musicSrc = (m, file, kit) => ({ play: kit && /^[a-z0-9_]{1,64}$/.test(kit) ? `sounds/music/${kit}/${file.replace(/\.(mp3|wav)$/i, '')}.vsnd` : '', key: `kit/${m.id}/${file}`, url: `/api/music-kit/${m.id}/${encodeURIComponent(file)}`, title: musicTrackLabel(file), sub: m.name || `№${m.id}`, hint: 'Игровая ВМ выключена или файл не извлёкся' });
 
 /** Список треков музыкального набора (звук из файлов игры, через игровую ВМ; прослушанное остаётся в кэше панели). */
 function musicPlayer(m) {
@@ -188,7 +206,7 @@ function musicPlayer(m) {
     const order = (f) => { const i = MUSIC_EVENTS.findIndex((e) => f.startsWith(e[0])); return i < 0 ? 99 : i; };
     const tracks = [...(r.tracks || [])].sort((x, y) => order(x.file) - order(y.file) || x.file.localeCompare(y.file));
     if (!tracks.length) { box.replaceChildren(h('div', { class: 'warn small' }, 'В файлах игры не нашлось треков этого набора.')); return; }
-    const srcs = tracks.map((t) => musicSrc(m, t.file));
+    const srcs = tracks.map((t) => musicSrc(m, t.file, r.kit));
     const rows = tracks.map((t, i) => {
       const ev = MUSIC_EVENTS.find((e) => t.file.startsWith(e[0]));
       const el = h('div', { class: 'mk-row' }, AudioHub.buttons(srcs[i]), h('div', {}, h('b', {}, musicTrackLabel(t.file)), ev ? h('div', { class: 'muted small' }, ev[2], ' · ', ev[3] === 'all' ? 'слышат все игроки' : 'слышите только вы') : null));

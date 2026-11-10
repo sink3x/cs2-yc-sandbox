@@ -760,6 +760,25 @@ function createApp(deps = {}) {
       const f = path.join(dir, `${key}.${ext}`); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(f, buf); trimMusicCache();
       return out(buf, f);
     }],
+    // ---- логотипы команд из файлов игры (для mp_teamlogo_N): список кодов и сами картинки, кэш в панели ----
+    ['GET', '/api/team-logos', async () => {
+      const file = path.join(musicDir, 'logos', 'index.json');
+      try { const r = await agent('GET', '/team-logos', null, 200000); const codes = (r.codes || []).filter((c) => gameSound.LOGO_RE.test(c)); if (codes.length) { fs.mkdirSync(path.dirname(file), { recursive: true }); writeJsonAtomic(file, { codes }); } return { codes, cached: false }; } catch (e) {
+        const c = readJson(file, null); if (c && Array.isArray(c.codes) && c.codes.length) return { codes: c.codes, cached: true };
+        throw e;
+      }
+    }],
+    ['GET', '/api/team-logo/:code', async ({ params }) => {
+      const code = String(params.code).toLowerCase();
+      if (!gameSound.LOGO_RE.test(code)) throw Object.assign(new Error('team-logo: bad code'), { status: 400 });
+      const f = path.join(musicDir, 'logos', `${code}.svg`);
+      if (fs.existsSync(f)) return { __file: { buf: fs.readFileSync(f), type: 'image/svg+xml', name: `${code}.svg`, download: false } };
+      const r = await agent('GET', `/team-logo?code=${code}`, null, 200000);
+      const buf = Buffer.from(String(r.svg || ''), 'utf8');
+      if (!buf.length || buf.length > 600000 || !/<svg[\s>]/i.test(String(r.svg))) throw Object.assign(new Error('team-logo: empty'), { status: 502 });
+      fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, buf);
+      return { __file: { buf, type: 'image/svg+xml', name: `${code}.svg`, download: false } };
+    }],
     ['GET', '/api/skin-wears', async ({ query }) => {
       const name = String(query.name || '').trim();
       if (!WEAR_NAME_RE.test(name)) throw Object.assign(new Error('skin-wears: bad name'), { status: 400 });
@@ -1077,7 +1096,15 @@ function createApp(deps = {}) {
       const result = await m.handler({ params: m.params, body, raw, query: Object.fromEntries(url.searchParams), user: session.user, ip, sid });
       if (result && result.__file) { // отдача файла (предпросмотр / скачивание); песочница CSP, чтобы ничего не исполнялось
         const f = result.__file;
-        return send(res, 200, f.buf, { ...SEC_HEADERS, 'Content-Type': f.type, 'Content-Security-Policy': "default-src 'none'; sandbox", 'Content-Disposition': `${f.download ? 'attachment' : 'inline'}; filename="${f.name}"`, 'Cache-Control': 'private, no-cache' });
+        const fh = { ...SEC_HEADERS, 'Content-Type': f.type, 'Content-Security-Policy': "default-src 'none'; sandbox", 'Content-Disposition': `${f.download ? 'attachment' : 'inline'}; filename="${f.name}"`, 'Cache-Control': 'private, no-cache', 'Accept-Ranges': 'bytes' };
+        // запрос части файла (Range): без него браузер не может перематывать звук в плеере
+        const rg = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || '')); const size = f.buf.length;
+        if (rg && (rg[1] || rg[2]) && size) {
+          let from = rg[1] ? Number(rg[1]) : Math.max(0, size - Number(rg[2])); let to = rg[1] && rg[2] ? Math.min(Number(rg[2]), size - 1) : size - 1;
+          if (!(from <= to) || from >= size) return send(res, 416, '', { ...fh, 'Content-Range': `bytes */${size}` });
+          return send(res, 206, f.buf.subarray(from, to + 1), { ...fh, 'Content-Range': `bytes ${from}-${to}/${size}` });
+        }
+        return send(res, 200, f.buf, fh);
       }
       return send(res, 200, result, SEC_HEADERS);
     } catch (e) {

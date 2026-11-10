@@ -7,6 +7,7 @@ const { PRESETS } = require('./presets');
 const { STEAMID64_RE, CVAR_NAME_RE, MAP_RE, WORKSHOP_RE, cvarValueOk } = require('./util');
 // Звук: id в библиотеке и то, что подставляется в клиентскую команду «play …» (путь/событие без пробелов, кавычек и «;»).
 const SOUND_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+const IDENT_TEXT_RE = /^[^"\\;\u0000-\u001f]{0,32}$/; // название команды, клан-тег, ник: без кавычек, «;» и управляющих символов
 const SOUND_PLAY_RE = /^[A-Za-z0-9_./-]{1,160}$/;
 
 const ADMIN_FLAGS = ['@css/root', '@css/generic', '@css/reservation', '@css/ban', '@css/unban', '@css/kick',
@@ -30,6 +31,7 @@ function defaultState({ hostname = 'sandbox-cs-1', admins = [] } = {}) {
     admins: admins.map((a) => ({ name: a.name, steamid: a.steamid, flags: a.flags || ['@css/root'] })),
     maps: [],
     sounds: [],
+    identity: { teams: { ct: { name: '', logo: '', flag: '' }, t: { name: '', logo: '', flag: '' } }, players: [] },
   };
 }
 
@@ -157,6 +159,28 @@ function validateState(input, base = defaultState(), opts = {}) {
     }
   }
 
+  // оформление: названия/логотипы команд и клан-теги/ники игроков (применяет плагин CS2Panel)
+  if (!s.identity || typeof s.identity !== 'object') s.identity = { teams: { ct: { name: '', logo: '', flag: '' }, t: { name: '', logo: '', flag: '' } }, players: [] };
+  if (inp.identity !== undefined) {
+    const src = inp.identity && typeof inp.identity === 'object' ? inp.identity : {};
+    const out = { teams: {}, players: [] }; let okAll = true;
+    for (const side of ['ct', 't']) {
+      const t = (src.teams && src.teams[side]) || {};
+      const name = String(t.name || '').trim(); const logo = String(t.logo || '').trim().toLowerCase(); const flag = String(t.flag || '').trim().toUpperCase();
+      if (!IDENT_TEXT_RE.test(name) || !/^[a-z0-9_]{0,24}$/.test(logo) || !/^[A-Z]{0,2}$/.test(flag)) { bad(`identity: bad team ${side}`); okAll = false; continue; }
+      out.teams[side] = { name, logo, flag };
+    }
+    const list = Array.isArray(src.players) ? src.players : []; const seen = new Set();
+    if (list.length > 64) { bad('identity: up to 64 players'); okAll = false; }
+    for (const x of list.slice(0, 64)) {
+      const steamid = String((x && x.steamid) || ''); const tag = String((x && x.tag) || '').trim(); const name = String((x && x.name) || '').trim();
+      if (!STEAMID64_RE.test(steamid) || seen.has(steamid) || !IDENT_TEXT_RE.test(tag) || tag.length > 16 || !IDENT_TEXT_RE.test(name)) { bad(`identity: bad player ${steamid}`); okAll = false; continue; }
+      if (!tag && !name) continue;
+      seen.add(steamid); out.players.push({ steamid, tag, name });
+    }
+    if (okAll) s.identity = out;
+  }
+
   return { ok: errors.length === 0, errors, state: s };
 }
 
@@ -192,6 +216,13 @@ function renderServerCfg(state, secrets = {}) {
     'exec sandbox/overrides.cfg',
   ];
   return lines.join('\n') + '\n';
+}
+
+/** Оформление для плагина CS2Panel: { teams: { ct, t }, players: { steamid: { tag, name } } }. */
+function renderIdentity(state) {
+  const id = state.identity || {}; const players = {};
+  for (const x of id.players || []) players[x.steamid] = { tag: x.tag, name: x.name };
+  return JSON.stringify({ teams: id.teams || {}, players }, null, 2) + '\n';
 }
 
 /** Библиотека звуков для плагина CS2Panel: { id: { play, title } }. */
@@ -255,11 +286,12 @@ function paths(gameDir = GAME_DIR) {
     cssPluginsDisabled: path.join(css, 'plugins_disabled'),
     wpConfig: path.join(css, 'configs/plugins/WeaponPaints/WeaponPaints.json'),
     cssSounds: path.join(css, 'configs/plugins/CS2Panel/sounds.json'),
+    cssIdentity: path.join(css, 'configs/plugins/CS2Panel/identity.json'),
     matchzyAdmins: path.join(gameDir, 'cfg/MatchZy/admins.json'),
   };
 }
 
 module.exports = {
   ADMIN_FLAGS, PLUGIN_IDS, defaultState, validateState, requiredPlugins, renderOverrides, renderServerCfg,
-  renderCssAdmins, renderSounds, SOUND_ID_RE, SOUND_PLAY_RE, renderMatchzyAdmins, launchArgs, patchCoreJson, paths, registry,
+  renderCssAdmins, renderSounds, renderIdentity, SOUND_ID_RE, SOUND_PLAY_RE, renderMatchzyAdmins, launchArgs, patchCoreJson, paths, registry,
 };

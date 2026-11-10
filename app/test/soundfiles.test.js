@@ -65,7 +65,7 @@ test('панель → агент: загрузка, доставка, заме�
   const base = `http://127.0.0.1:${app.server.address().port}`;
   const login = async (u) => (await fetch(`${base}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u, password: 'hunter2hunter2' }) })).headers.get('set-cookie').split(';')[0];
   const adm = await login('alice'); const ply = await login('tester');
-  const req = (method, p, { cookie = adm, body, csrf = true, json = true } = {}) => fetch(base + p, { method, headers: { cookie, ...(csrf ? { 'X-Requested-With': 'cs2panel' } : {}), ...(json && body && !Buffer.isBuffer(body) ? { 'Content-Type': 'application/json' } : {}) }, body: body === undefined ? undefined : (Buffer.isBuffer(body) ? body : JSON.stringify(body)) });
+  const req = (method, p, { cookie = adm, body, csrf = true, json = true, headers = {} } = {}) => fetch(base + p, { method, headers: { ...headers, cookie, ...(csrf ? { 'X-Requested-With': 'cs2panel' } : {}), ...(json && body && !Buffer.isBuffer(body) ? { 'Content-Type': 'application/json' } : {}) }, body: body === undefined ? undefined : (Buffer.isBuffer(body) ? body : JSON.stringify(body)) });
   const remote = () => fs.readdirSync(path.join(process.env.CS2_ROOT, 'data/custom-sounds')).sort();
   const settle = async () => { for (let i = 0; i < 50 && app.soundStore && (await (await req('GET', '/api/sound-files')).json()).sync.busy; i++) await new Promise((r) => setTimeout(r, 40)); };
   try {
@@ -95,6 +95,13 @@ test('панель → агент: загрузка, доставка, заме�
     assert.match(pv.headers.get('content-disposition'), /^inline/);
     assert.equal(Buffer.compare(Buffer.from(await pv.arrayBuffer()), ogg()), 0);
     assert.match((await req('GET', '/api/sound-files/ding.ogg?dl=1')).headers.get('content-disposition'), /^attachment/);
+    // перемотка в плеере: браузер запрашивает часть файла
+    const part = await req('GET', '/api/sound-files/ding.ogg', { headers: { Range: 'bytes=4-9' } });
+    assert.equal(part.status, 206); assert.equal(part.headers.get('content-range'), `bytes 4-9/${ogg().length}`); assert.equal((await part.arrayBuffer()).byteLength, 6);
+    const tail = await req('GET', '/api/sound-files/ding.ogg', { headers: { Range: 'bytes=-10' } });
+    assert.equal(tail.status, 206); assert.equal((await tail.arrayBuffer()).byteLength, 10);
+    assert.equal((await req('GET', '/api/sound-files/ding.ogg', { headers: { Range: 'bytes=9999-' } })).status, 416);
+    assert.equal(pv.headers.get('accept-ranges'), 'bytes');
     assert.equal((await req('GET', '/api/sound-files/..%2Fx.wav')).status, 400);
     assert.equal((await req('GET', '/api/sound-files/nope.wav')).status, 404);
     // переименование
