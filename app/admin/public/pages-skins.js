@@ -166,6 +166,7 @@ function skinsView(redraw) {
   return h('div', {}, h('h2', {}, 'Скины, ножи, перчатки, агенты'),
     h('div', { class: 'card' }, S.role === 'player' ? null : h('div', { class: 'row' }, 'Игрок:', sel, h('button', { class: 'btn', onclick: act(async () => { await loadPlayers(); await loadLoadout(); redraw(); }, 'Список обновлён') }, 'Обновить')),
       S.role === 'player' ? null : h('div', { class: 'row' }, manual, h('button', { class: 'btn', onclick: openManual }, 'Открыть по SteamID')),
+      K.steamid ? h('div', { class: 'row' }, h('button', { class: 'btn', onclick: act(async () => { const r = await api('POST', `/skins/refresh/${K.steamid}`); if (!r.refreshed) throw new Error('Игрока нет на сервере или плагин CS2Panel ≥ 0.3.0 не включён'); }, 'Скины применены в игре') }, 'Применить в игре сейчас'), h('span', { class: 'muted small' }, 'Если выбранный скин или нож не появился сам — нажмите (игрок должен быть на сервере).')) : null,
       warn() ? h('div', { class: 'warn small' }, warn()) : h('div', { class: 'muted small adm-name' }, K.steamid ? steamAv(K.steamid, 22, (player && player.name) || '?') : null, `${player && player.name ? player.name + ' · ' : ''}${K.steamid}. Скины попадают в базу сразу; в игре игрок пишет !wp (или перезаходит). Новые игроки появляются в списке после первого входа и выбора скина или через ввод SteamID.`)),
     h('div', { class: 'skin-layout' },
       h('div', {}, h('div', { class: 'row' }, searchW), tabs, weaponBar, modelPicker, weaponChips, gridBox),

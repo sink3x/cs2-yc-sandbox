@@ -326,10 +326,11 @@ test('roles: a Steam player gets only own skins/profile; admin-only routes are c
     // разрешено: свои скины, профиль, инфо о сервере
     assert.equal((await t.req('GET', `/api/skins/loadout/${ME}`, undefined, c)).status, 200);
     assert.equal((await t.req('POST', `/api/skins/apply/${ME}`, { ops: [] }, c, CSRF)).status, 200);
+    assert.equal((await t.req('POST', `/api/skins/refresh/${ME}`, {}, c, CSRF)).status, 200);
     assert.equal((await t.req('GET', '/api/public-info', undefined, c)).status, 200);
     assert.equal((await t.req('PUT', '/api/profile', { email: 'p@example.com', links: [{ title: 'x', url: 'https://a.b' }] }, c, CSRF)).json.links.length, 0);
     // запрещено: чужие скины и всё серверное
-    for (const [m, p, b] of [['GET', `/api/skins/loadout/${OTHER}`], ['POST', `/api/skins/apply/${OTHER}`, { ops: [] }], ['GET', '/api/skins/players'], ['GET', '/api/overview'], ['GET', '/api/state'],
+    for (const [m, p, b] of [['GET', `/api/skins/loadout/${OTHER}`], ['POST', `/api/skins/apply/${OTHER}`, { ops: [] }], ['POST', `/api/skins/refresh/${OTHER}`, {}], ['GET', '/api/skins/players'], ['GET', '/api/overview'], ['GET', '/api/state'],
       ['PUT', '/api/state', { state: {} }], ['POST', '/api/rcon', { command: 'status' }], ['POST', '/api/vm/start', {}], ['POST', '/api/vm/stop', {}], ['PUT', '/api/settings', { playerLogin: true }],
       ['POST', '/api/password', { oldPassword: 'x', newPassword: 'yyyyyyyyyyyy' }], ['PUT', '/api/custom-skins', { skins: [] }], ['GET', '/api/audit'], ['PUT', '/api/faceit-key', { key: 'abcdef0123456789' }], ['POST', '/api/service/restart', {}]]) {
       const r = await t.req(m, p, b, c, CSRF); assert.equal(r.status, 403, `${m} ${p}`);

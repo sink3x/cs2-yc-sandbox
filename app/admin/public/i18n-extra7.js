@@ -133,6 +133,10 @@
     ['Часы работы ВМ за 14 дней', 'VM running hours over 14 days', 'VM-Laufzeit der letzten 14 Tage', 'Heures de fonctionnement de la VM sur 14 jours'],
     ['Цена часа работы ВМ, ₽', 'VM price per hour, ₽', 'VM-Preis pro Stunde, ₽', 'Prix de la VM par heure, ₽'],
     ['Считается по статусу ВМ «Работает» (дни по UTC). Диск, адрес и трафик не входят: цену часа возьмите из калькулятора Yandex Cloud.', 'Counted while the VM status is “Running” (days in UTC). Disk, address and traffic are not included: take the hourly price from the Yandex Cloud calculator.', 'Gezählt, solange die VM „Läuft“ (Tage in UTC). Datenträger, Adresse und Traffic sind nicht enthalten: Stundenpreis aus dem Yandex-Cloud-Rechner nehmen.', 'Compté tant que la VM est « En marche » (jours en UTC). Disque, adresse et trafic non inclus : prenez le prix horaire dans le calculateur Yandex Cloud.'],
+    ['Применить в игре сейчас', 'Apply in game now', 'Jetzt im Spiel anwenden', 'Appliquer en jeu maintenant'],
+    ['Скины применены в игре', 'Skins applied in game', 'Skins im Spiel angewendet', 'Skins appliqués en jeu'],
+    ['Игрока нет на сервере или плагин CS2Panel ≥ 0.3.0 не включён', 'The player is not on the server or the CS2Panel plugin (0.3.0+) is not enabled', 'Der Spieler ist nicht auf dem Server oder das Plugin CS2Panel (0.3.0+) ist nicht aktiv', 'Le joueur n’est pas sur le serveur ou le plugin CS2Panel (0.3.0+) n’est pas activé'],
+    ['Если выбранный скин или нож не появился сам — нажмите (игрок должен быть на сервере).', 'If the chosen skin or knife did not show up by itself, press it (the player must be on the server).', 'Falls der gewählte Skin oder das Messer nicht von selbst erscheint, hier drücken (der Spieler muss auf dem Server sein).', 'Si le skin ou le couteau choisi n’apparaît pas tout seul, appuyez ici (le joueur doit être sur le serveur).'],
   ];
   for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
 })();

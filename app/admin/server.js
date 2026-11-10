@@ -69,9 +69,9 @@ function validateCustomSkins(input) {
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
 const PLAYER_OK = new Set(['POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'POST /api/vm/request-start', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
-  'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
+  'POST /api/skins/apply/:steamid', 'POST /api/skins/refresh/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
-const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'GET /api/faceit/:steamid']);
+const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'POST /api/skins/refresh/:steamid', 'GET /api/faceit/:steamid']);
 const MAX_PLAYER_ACCOUNTS = 300;
 const DEFAULT_SETTINGS = { autoStopIdleMinutes: 30, startupGraceMinutes: 20 };
 
@@ -479,6 +479,7 @@ function createApp(deps = {}) {
     ['GET', '/api/skins/players', async () => agent('GET', '/skins/players')],
     ['GET', '/api/skins/loadout/:steamid', async ({ params }) => agent('GET', `/skins/loadout/${encodeURIComponent(params.steamid)}`)],
     ['POST', '/api/skins/apply/:steamid', async ({ params, body, user, ip }) => { audit(user, ip, 'skins.apply', { steamid: params.steamid, ops: (body.ops || []).map((o) => o.op) }); return agent('POST', `/skins/apply/${encodeURIComponent(params.steamid)}`, { ops: body.ops }); }],
+    ['POST', '/api/skins/refresh/:steamid', async ({ params, user, ip }) => { audit(user, ip, 'skins.refresh', { steamid: params.steamid }); return agent('POST', `/skins/refresh/${encodeURIComponent(params.steamid)}`, {}); }],
     ['POST', '/api/skins/reload', async ({ user, ip }) => { audit(user, ip, 'skins.reload'); return agent('POST', '/skins/reload', {}); }],
     ['POST', '/api/practice', async ({ body, user, ip }) => {
       const commands = practice.buildCommands(String(body.action || ''), body);

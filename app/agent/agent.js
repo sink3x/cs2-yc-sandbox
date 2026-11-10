@@ -205,6 +205,10 @@ const routes = [
     const r = await skins.apply(params.steamid, body.ops);
     return { ...r, refreshed: await refreshSkins(params.steamid) };
   }],
+  ['POST', '/skins/refresh/:steamid', async ({ params }) => {
+    if (!isSteamId(params.steamid)) throw Object.assign(new Error('bad steamid'), { status: 400 });
+    return { refreshed: await refreshSkins(params.steamid) };
+  }],
   ['POST', '/skins/reload', async () => ({ output: (await rconRun(['css_plugins reload WeaponPaints'], 10000))[0] })],
   ['POST', '/service/:action', async ({ params }) => systemctl(params.action)],
   ['GET', '/stats', async () => (tracker ? tracker.stats.summary() : { since: null, map: null, players: [], maps: [] })],
