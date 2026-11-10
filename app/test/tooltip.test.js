@@ -12,7 +12,7 @@ const read = (f) => fs.readFileSync(path.join(PUB, f), 'utf8');
 function load() {
   const ctx = vm.createContext({ document: { addEventListener() {}, documentElement: {} }, navigator: { languages: ['ru'] }, localStorage: { getItem() { return null; }, setItem() {} }, location: { reload() {} }, console });
   ctx.window = ctx;
-  for (const f of ['i18n.js', 'i18n-extra.js', 'i18n-extra2.js', 'i18n-extra3.js', 'i18n-extra4.js', 'i18n-extra5.js', 'i18n-extra6.js', 'i18n-extra7.js', 'i18n-extra8.js']) vm.runInContext(read(f), ctx, { filename: f });
+  for (const f of ['i18n.js', 'i18n-extra.js', 'i18n-extra2.js', 'i18n-extra3.js', 'i18n-extra4.js', 'i18n-extra5.js', 'i18n-extra6.js', 'i18n-extra7.js', 'i18n-extra8.js', 'i18n-extra9.js']) vm.runInContext(read(f), ctx, { filename: f });
   vm.runInContext(`var S = {};\n${read('data.js')}\n${read('tooltip.js')}\nglobalThis.__t = { COMMANDS, CHAT_HELP, cmdTipModel, cmdTipFind, cmdTipArgs, CMD_ARG_NUMBER, CMD_ARG_ENUM, D, S };`, ctx, { filename: 'tooltip.js' });
   // h() нужен только для отрисовки, в модели его нет; S задаём здесь
   return ctx.__t;

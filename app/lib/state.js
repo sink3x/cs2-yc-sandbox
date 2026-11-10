@@ -99,6 +99,10 @@ function validateState(input, base = defaultState(), opts = {}) {
 
   if (inp.plugins && typeof inp.plugins === 'object') {
     for (const id of PLUGIN_IDS) if (inp.plugins[id] !== undefined) s.plugins[id] = Boolean(inp.plugins[id]);
+    // режимы игры (Retakes, Deathmatch, HNS…) взаимоисключающие: два сразу ломают раунды друг другу
+    const groups = {};
+    for (const p of registry) if (p.group && s.plugins[p.id]) (groups[p.group] = groups[p.group] || []).push(p.title);
+    for (const list of Object.values(groups)) if (list.length > 1) bad(`plugins: ${list.join(' и ')} — взаимоисключающие режимы игры, включите только один`);
   }
 
   if (inp.admins !== undefined) {

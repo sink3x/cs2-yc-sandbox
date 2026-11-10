@@ -142,12 +142,78 @@ function bundledRelease(p) {
   return { file, rel: { tag_name: tag }, asset: { name: p.bundled } };
 }
 
+const ROOT_DIRS = ['addons', 'cfg', 'game', 'plugins', 'shared', 'gamedata', 'configs'];
+
+/** Проверка путей архива: абсолютные, с «..», с обратными слэшами и «C:» не принимаем вовсе. */
+function cleanEntries(list) {
+  const out = [];
+  for (const raw of list) {
+    const e = String(raw).trim().replace(/^\.\//, '');
+    if (!e) continue;
+    if (e.includes('\\') || e.startsWith('/') || /^[A-Za-z]:/.test(e) || /(^|\/)\.\.(\/|$)/.test(e)) throw new Error(`unsafe path in archive: ${e}`);
+    out.push(e);
+  }
+  return out;
+}
+
+/**
+ * Куда и как распаковать архив плагина. Чистая функция (тестируется без диска).
+ * layout: 'flat' — DLL лежат в корне архива → plugins/<dirs[0]>/; 'strip' — всё обёрнуто в одну папку-версию, её снимаем;
+ * без layout — как раньше: game/ → сервер, addons/ или cfg/ → game/csgo, plugins|shared|gamedata|configs → counterstrikesharp, иначе plugins/.
+ */
+function planExtract(rawEntries, p = {}) {
+  // строго проверяем только закреплённые (из маркетплейса); прежние плагины ставятся как раньше
+  let names = p.pin ? cleanEntries(rawEntries) : rawEntries.map((x) => String(x).trim()).filter(Boolean);
+  let strip = '';
+  if (p.layout === 'strip') {
+    const tops = new Set(names.map((x) => x.split('/')[0]));
+    if (tops.size !== 1) throw new Error(`${p.id}: expected a single top-level folder in the archive, got ${[...tops].join(', ')}`);
+    strip = [...tops][0];
+    names = names.map((x) => x.slice(strip.length + 1)).filter(Boolean);
+  }
+  let dest;
+  if (p.layout === 'flat') {
+    if (!names.some((x) => /^[^/]+\.dll$/i.test(x))) throw new Error(`${p.id}: flat layout but no .dll in the archive root`);
+    dest = 'plugin-dir';
+  } else if (names.some((x) => x.startsWith('game/'))) dest = 'server';
+  else if (names.some((x) => x.startsWith('addons/') || x.startsWith('cfg/'))) dest = 'game';
+  else if (names.some((x) => /^(plugins|shared|gamedata|configs)\//.test(x))) dest = 'css';
+  else dest = 'plugins';
+  return { strip, dest };
+}
+
+/** Закреплённая версия: адрес собирается из тега и имени файла, без запросов к API (лимиты GitHub не тратятся). */
+function pinnedRelease(p) {
+  const { tag, asset } = p.pin;
+  return { tag_name: tag, assets: [{ name: asset, browser_download_url: `https://github.com/${p.repo}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(asset)}` }] };
+}
+
+function sha256File(file) {
+  return new Promise((resolve, reject) => {
+    const h = require('node:crypto').createHash('sha256');
+    fs.createReadStream(file).on('error', reject).on('data', (d) => h.update(d)).on('end', () => resolve(h.digest('hex')));
+  });
+}
+
+async function extractPlan(zip, plan, p, gp) {
+  const dests = { server: E.dirs.server, game: gp.gameDir, css: gp.css, plugins: gp.cssPlugins, 'plugin-dir': path.join(gp.cssPlugins, (p.dirs || [])[0] || p.id) };
+  const dest = dests[plan.dest];
+  if (!plan.strip) return unzipInto(zip, dest);
+  const tmp = fs.mkdtempSync(path.join(E.dirs.cache, `x-${p.id}-`));
+  try {
+    await unzipInto(zip, tmp);
+    fs.mkdirSync(dest, { recursive: true });
+    await run('cp', ['-a', `${path.join(tmp, plan.strip)}/.`, `${dest}/`]);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+  return undefined;
+}
+
 async function installPlugin(p) {
   let rel; let asset; let bundledFile = null;
   if (p.bundled) { const b = bundledRelease(p); rel = b.rel; asset = b.asset; bundledFile = b.file; } else {
-    rel = await ghLatest(p.repo);
+    rel = p.pin ? pinnedRelease(p) : await ghLatest(p.repo);
     const re = new RegExp(p.asset, 'i');
-    asset = rel.assets.find((a) => re.test(a.name)) || rel.assets.find((a) => /\.zip$/i.test(a.name) && !/windows|win64|source/i.test(a.name));
+    asset = rel.assets.find((a) => re.test(a.name)) || (p.pin ? null : rel.assets.find((a) => /\.zip$/i.test(a.name) && !/windows|win64|source/i.test(a.name)));
     if (!asset) throw new Error(`${p.id} ${rel.tag_name}: no matching asset (${rel.assets.map((a) => a.name).join(', ')})`);
   }
   const db = installedDb();
@@ -157,16 +223,17 @@ async function installPlugin(p) {
   if (known && known.tag === rel.tag_name && stillThere) return;
   log('installing plugin', p.id, rel.tag_name, asset.name);
   const zip = bundledFile || await download(asset.browser_download_url, path.join(E.dirs.cache, `${p.id}-${asset.name}`));
-  const entries = (await capture('unzip', ['-Z1', zip])).split('\n').map((x) => x.trim()).filter(Boolean);
+  let sha256;
+  if (p.pin) {
+    sha256 = await sha256File(zip);
+    if (sha256 !== p.pin.sha256) { fs.rmSync(zip, { force: true }); throw new Error(`${p.id} ${rel.tag_name}: sha256 mismatch (got ${sha256.slice(0, 12)}…, expected ${p.pin.sha256.slice(0, 12)}…): not installed`); }
+  }
+  const entries = (await capture('unzip', ['-Z1', zip])).split('\n');
+  const plan = planExtract(entries, p);
   const before = new Set([...lsDirs(gp.cssPlugins), ...lsDirs(gp.cssPluginsDisabled)]);
-  let dest;
-  if (entries.some((x) => x.startsWith('game/'))) dest = E.dirs.server;
-  else if (entries.some((x) => x.startsWith('addons/') || x.startsWith('cfg/'))) dest = gp.gameDir;
-  else if (entries.some((x) => /^(plugins|shared|gamedata|configs)\//.test(x))) dest = gp.css;
-  else dest = gp.cssPlugins;
-  await unzipInto(zip, dest);
+  await extractPlan(zip, plan, p, gp);
   const added = lsDirs(gp.cssPlugins).filter((d) => !before.has(d));
-  db[p.id] = { tag: rel.tag_name, asset: asset.name, installedAt: new Date().toISOString(), dirs: added.length ? added : ((known && known.dirs) || p.dirs) };
+  db[p.id] = { tag: rel.tag_name, asset: asset.name, installedAt: new Date().toISOString(), dirs: added.length ? added : ((known && known.dirs) || p.dirs), ...(sha256 ? { sha256 } : {}) };
   saveInstalled(db);
 }
 
@@ -186,4 +253,4 @@ async function installPlugins(state, setPhase) {
   return errors;
 }
 
-module.exports = { bundledRelease, run, updateGame, gameInstalled, installPlugins, installMetamod, installCss, patchGameInfo, ensureSteamcmd };
+module.exports = { installPlugin, planExtract, cleanEntries, pinnedRelease, sha256File, bundledRelease, run, updateGame, gameInstalled, installPlugins, installMetamod, installCss, patchGameInfo, ensureSteamcmd };

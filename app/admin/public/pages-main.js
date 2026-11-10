@@ -127,28 +127,92 @@ function pagePlugins() {
   const graceMin = h('input', { type: 'number', min: 0, max: 1440, value: sets.startupGraceMinutes, style: 'width:90px' });
   const boxes = {};
   const list = S.pluginsMeta.filter((p) => !p.dependency);
-  const cards = list.map((p) => {
+  const CATS = [['match', 'Матчи'], ['practice', 'Практика'], ['mode', 'Режимы игры'], ['fun', 'Фан'], ['utility', 'Утилиты'], ['skins', 'Скины']];
+  const catOf = (p) => (CATS.find((c) => c[0] === p.category) || [p.category || '', p.category || ''])[1];
+  const pdesc = (p) => (p.i18n && p.i18n[LANG] && p.i18n[LANG].desc) || p.desc;
+  const catRank = (p) => { const i = CATS.findIndex((c) => c[0] === p.category); return i < 0 ? 99 : i; };
+  const sorted = [...list].sort((x, y) => (st.plugins[y.id] ? 1 : 0) - (st.plugins[x.id] ? 1 : 0) || catRank(x) - catRank(y) || x.title.localeCompare(y.title));
+  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const liveBadges = {};
+  const cardEls = {};
+  const cards = sorted.map((p) => {
     const cb = h('input', { type: 'checkbox', checked: st.plugins[p.id] }); boxes[p.id] = cb;
+    cb.addEventListener('change', () => {
+      if (!cb.checked || !p.group) return;
+      const off = list.filter((o) => o.id !== p.id && o.group === p.group && boxes[o.id] && boxes[o.id].checked);
+      for (const o of off) boxes[o.id].checked = false;
+      if (off.length) toast(`${tr('Режимы игры взаимоисключающие')}: ${off.map((o) => o.title).join(', ')} ${tr('выключен')}`);
+    });
     const i = inst[p.id];
-    return h('div', { class: `plg${p.broken ? ' broken' : ''}` },
+    const live = h('span', { class: 'badge', hidden: true }); liveBadges[p.id] = live;
+    const others = p.group ? list.filter((o) => o.id !== p.id && o.group === p.group).map((o) => o.title) : [];
+    const card = h('div', { class: `plg${p.broken ? ' broken' : ''}`, 'data-id': p.id },
       h('label', { class: 'switch plg-h' }, cb, h('b', {}, p.title)),
       h('div', { class: 'plg-b' },
+        p.category ? h('span', { class: 'badge' }, catOf(p)) : null,
         p.risky ? h('span', { class: 'badge warn' }, 'риск блокировки') : null,
         p.broken ? h('span', { class: 'badge bad' }, 'не совместим') : null,
+        p.unverified ? h('span', { class: 'badge warn', title: tr('Новый в каталоге: совместимость с вашей версией CounterStrikeSharp не проверена') }, 'новый') : null,
         p.default && !p.broken ? h('span', { class: 'badge' }, 'по умолчанию') : null,
-        h('span', { class: 'badge' }, i ? i.tag : 'не установлен')),
-      h('div', { class: 'muted small plg-d' }, p.desc, p.risky ? h('div', { class: 'warn small' }, 'может привести к блокировке GSLT-токена (правила Valve для серверов)') : null),
+        h('span', { class: `badge${i ? ' ok' : ''}` }, i ? i.tag : 'не установлен'),
+        p.pin && !i ? h('span', { class: 'badge', title: tr('Версия закреплена: установщик сверяет контрольную сумму файла') }, p.pin.tag) : null,
+        p.license ? h('span', { class: 'badge', title: tr('Лицензия') }, p.license) : null,
+        live),
+      h('div', { class: 'muted small plg-d' }, pdesc(p), p.risky ? h('div', { class: 'warn small' }, 'может привести к блокировке GSLT-токена (правила Valve для серверов)') : null),
+      others.length ? h('div', { class: 'muted small' }, `${tr('Отдельный режим игры: не включайте вместе с')} ${others.join(', ')}`) : null,
+      (p.cmds || []).length ? h('div', { class: 'plg-cmds' }, p.cmds.map((c) => h('code', {}, c))) : null,
       p.repo ? h('a', { class: 'small', href: `https://github.com/${p.repo}`, target: '_blank', rel: 'noopener noreferrer' }, `github.com/${p.repo}`) : null);
+    card.dataset.q = [p.id, p.title, p.desc, pdesc(p), p.repo, p.category, tr(catOf(p)), (p.cmds || []).join(' ')].join(' ').toLowerCase();
+    cardEls[p.id] = card;
+    return card;
   });
-  const bulk = (on) => () => { for (const p of list) if (boxes[p.id]) boxes[p.id].checked = on && !p.risky && !p.broken; };
+  let mkCat = 'all';
+  const q = h('input', { type: 'text', inputmode: 'search', autocomplete: 'off', placeholder: tr('Поиск плагина: название, команда, описание…'), 'aria-label': tr('Поиск плагина'), style: 'flex:1;min-width:200px' });
+  const empty = h('div', { class: 'muted', hidden: true }, 'Ничего не найдено');
+  const catBtns = {};
+  const applyFilter = () => {
+    const needle = q.value.trim().toLowerCase(); let shown = 0;
+    for (const p of sorted) {
+      const el = cardEls[p.id];
+      const okCat = mkCat === 'all' || (mkCat === 'on' ? boxes[p.id].checked : mkCat === 'inst' ? Boolean(inst[p.id]) : p.category === mkCat);
+      const ok = okCat && (!needle || needle.split(/\s+/).every((w) => el.dataset.q.includes(w)));
+      el.hidden = !ok; if (ok) shown += 1;
+    }
+    empty.hidden = shown > 0;
+    for (const [k, b] of Object.entries(catBtns)) b.classList.toggle('on', k === mkCat);
+  };
+  q.addEventListener('input', applyFilter);
+  const catRow = h('div', { class: 'row mk-cats', role: 'group', 'aria-label': tr('Категории плагинов') },
+    [['all', 'Все'], ...CATS, ['on', 'Включены'], ['inst', 'Установлены']].map(([k, t]) => { const b = h('button', { class: `btn mk-cat${k === 'all' ? ' on' : ''}`, onclick: () => { mkCat = k; applyFilter(); } }, t); catBtns[k] = b; return b; }));
+  const bulk = (on) => () => { for (const p of list) if (boxes[p.id]) boxes[p.id].checked = on && Boolean(p.default) && !p.broken; applyFilter(); };
+  const gameBox = h('div');
+  const checkLoaded = act(async () => {
+    const r = await api('POST', '/rcon', { command: 'css_plugins list' });
+    const text = String(r.output || '');
+    const rows = [...text.matchAll(/\[#(\d+):(\w+)\]:\s*"([^"]+)"(?:\s*\(([^)]*)\))?/g)].map((m) => ({ state: m[2], name: m[3], ver: m[4] || '' }));
+    for (const p of list) {
+      const b = liveBadges[p.id]; const keys = [p.dirs && p.dirs[0], p.title, p.id].map(norm).filter((k) => k.length >= 4);
+      const hit = rows.find((e) => { const n = norm(e.name); return n.length >= 4 && keys.some((k) => n === k || n.includes(k) || k.includes(n)); });
+      b.hidden = !rows.length || (!hit && !(st.plugins[p.id] && inst[p.id]));
+      b.className = `badge ${hit ? (hit.state === 'LOADED' ? 'ok' : 'bad') : 'warn'}`;
+      b.textContent = hit ? `${tr('в игре')}: ${hit.state === 'LOADED' ? tr('загружен') : hit.state}` : tr('нет в списке игры');
+    }
+    gameBox.replaceChildren(rows.length
+      ? h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Плагин'), h('th', {}, 'Состояние'), h('th', {}, 'Версия'))), h('tbody', {}, rows.map((e) => h('tr', {}, h('td', {}, e.name), h('td', {}, e.state), h('td', {}, e.ver)))))
+      : h('pre', { class: 'small' }, text.trim() || tr('Пустой ответ игры')));
+  }, 'Список обновлён');
   const flags = {};
   const flagDefs = [['autoUpdateGame', 'Обновлять CS2 при каждом запуске ВМ'], ['autoUpdatePlugins', 'Обновлять Metamod/CounterStrikeSharp/плагины при запуске'], ['insecure', 'Запуск с -insecure (отключает VAC на сервере)'], ['dotChat', 'Команды в чате с точкой (.команда) — вместе с «!» и «/»; нужен рестарт CS2']];
   const flagRows = flagDefs.map(([k, t]) => { flags[k] = h('input', { type: 'checkbox', checked: st.flags[k] }); return h('div', { class: 'row' }, h('label', { class: 'switch' }, flags[k], t)); });
   return h('div', {}, h('h2', {}, 'Плагины и фича-флаги'),
-    h('div', { class: 'card' }, h('h3', {}, 'Плагины'),
-      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: bulk(true) }, 'Включить все безопасные'), h('button', { class: 'btn', onclick: bulk(false) }, 'Выключить все'), h('span', { class: 'muted small' }, 'Рискованные и несовместимые не включаются; после выбора нажмите «Сохранить».')),
-      h('div', { class: 'plg-grid' }, cards),
-      h('div', { class: 'muted small' }, 'Включение и выключение применяется после перезапуска CS2. Зависимости (MenuManager и др.) ставятся автоматически.')),
+    h('div', { class: 'card' }, h('h3', {}, 'Маркетплейс плагинов'),
+      h('div', { class: 'muted small' }, 'Каталог подобран вручную: у новых плагинов версия закреплена, а контрольная сумма файла проверяется при установке. Отметьте нужные и нажмите «Сохранить» — скачивание и включение произойдут при запуске CS2.'),
+      h('div', { class: 'row' }, q, h('button', { class: 'btn', onclick: bulk(true) }, 'Рекомендованные'), h('button', { class: 'btn', onclick: bulk(false) }, 'Выключить все')),
+      catRow,
+      h('div', { class: 'plg-grid' }, cards), empty,
+      h('div', { class: 'muted small' }, 'Включение и выключение применяется после перезапуска CS2. Зависимости (MenuManager и др.) ставятся автоматически. Плагины работают с правами игрового сервера: ставьте только то, чему доверяете. Совместимость новых плагинов с вашей версией CounterStrikeSharp заранее не проверена: не загрузившийся плагин просто не заработает, остальные не пострадают.'),
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: checkLoaded }, 'Что загружено в игре'), h('span', { class: 'muted small' }, 'Спрашивает у запущенного сервера css_plugins list')),
+      gameBox),
     h('div', { class: 'card' }, h('h3', {}, 'Флаги'), flagRows),
     h('div', { class: 'row' },
       h('button', { class: 'btn primary', onclick: act(async () => {

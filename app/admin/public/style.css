@@ -542,7 +542,10 @@ nav button.mob-more { display: none; }
 .plg-b { display: flex; flex-wrap: wrap; gap: 6px; }
 .plg-d { overflow-wrap: anywhere; }
 .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-.badge.warn { border-color: #e6b34a; color: #e6b34a; } .badge.bad { border-color: #e5484d; color: #e5484d; }
+.badge.warn { border-color: #e6b34a; color: #e6b34a; } .badge.bad { border-color: #e5484d; color: #e5484d; } .badge.ok { border-color: #3fb27f; color: #3fb27f; }
+.plg[hidden], .badge[hidden] { display: none; }
+.plg-cmds { display: flex; flex-wrap: wrap; gap: 6px; } .plg-cmds code { font-size: 12px; padding: 1px 7px; border: 1px solid var(--line); border-radius: 6px; }
+.mk-cats { flex-wrap: wrap; gap: 6px; } .mk-cat { padding: 4px 12px; font-size: 13px; } .mk-cat.on { border-color: var(--accent); color: var(--accent); }
 
 /* страна и язык игрока (geoTag) */
 .geo{display:inline-flex;align-items:center;gap:5px;margin-left:8px;font-size:11px;color:var(--muted,#8a93a3);white-space:nowrap}

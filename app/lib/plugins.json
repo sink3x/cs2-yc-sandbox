@@ -8,7 +8,9 @@
     "dirs": [
       "MatchZy"
     ],
-    "default": true
+    "default": true,
+    "category": "match",
+    "license": "MIT"
   },
   {
     "id": "weaponpaints",
@@ -25,7 +27,8 @@
       "anybaselib"
     ],
     "risky": true,
-    "default": true
+    "default": true,
+    "category": "skins"
   },
   {
     "id": "menumanager",
@@ -36,7 +39,8 @@
     "dirs": [
       "MenuManagerCore"
     ],
-    "dependency": true
+    "dependency": true,
+    "category": "library"
   },
   {
     "id": "playersettings",
@@ -47,7 +51,8 @@
     "dirs": [
       "PlayerSettingsCore"
     ],
-    "dependency": true
+    "dependency": true,
+    "category": "library"
   },
   {
     "id": "anybaselib",
@@ -58,7 +63,8 @@
     "dirs": [
       "AnyBaseLib"
     ],
-    "dependency": true
+    "dependency": true,
+    "category": "library"
   },
   {
     "id": "rockthevote",
@@ -70,7 +76,8 @@
       "RockTheVote"
     ],
     "broken": true,
-    "default": false
+    "default": false,
+    "category": "utility"
   },
   {
     "id": "openprefireprac",
@@ -81,7 +88,9 @@
     "dirs": [
       "OpenPrefirePrac"
     ],
-    "default": false
+    "default": false,
+    "category": "practice",
+    "license": "MIT"
   },
   {
     "id": "cs2panel",
@@ -93,6 +102,354 @@
       "CS2Panel"
     ],
     "default": true,
-    "bundled": "CS2Panel.zip"
+    "bundled": "CS2Panel.zip",
+    "category": "utility"
+  },
+  {
+    "id": "thirdperson",
+    "title": "ThirdPerson Revamped",
+    "category": "fun",
+    "repo": "KKNecmi/ThirdPerson-Revamped",
+    "license": "GPL-3.0",
+    "dirs": [
+      "ThirdPersonRevamped"
+    ],
+    "layout": "strip",
+    "cmds": [
+      "!tp",
+      "!thirdperson"
+    ],
+    "default": true,
+    "desc": "Вид от третьего лица по команде !tp (или !thirdperson): удобно разглядывать скины, ножи и перчатки",
+    "i18n": {
+      "en": {
+        "desc": "Third-person camera with !tp (or !thirdperson): handy for looking at skins, knives and gloves"
+      },
+      "de": {
+        "desc": "Third-Person-Kamera mit !tp (oder !thirdperson): praktisch, um Skins, Messer und Handschuhe zu betrachten"
+      },
+      "fr": {
+        "desc": "Caméra à la troisième personne avec !tp (ou !thirdperson) : pratique pour admirer skins, couteaux et gants"
+      }
+    },
+    "asset": "^ThirdPersonRevamped\\.zip$",
+    "pin": {
+      "tag": "v1.1.3",
+      "asset": "ThirdPersonRevamped.zip",
+      "sha256": "f0b6a7b40c56f851d48afbf2f8c4b522ad590f21ad217a0793935cf5ceeb9858"
+    },
+    "unverified": true
+  },
+  {
+    "id": "bhop",
+    "title": "Bhop Command",
+    "category": "practice",
+    "repo": "LeqenddC/CS2-BhopCommand",
+    "license": "GPL-3.0",
+    "dirs": [
+      "CS2-BhopCommand"
+    ],
+    "cmds": [
+      "!bhop"
+    ],
+    "default": true,
+    "desc": "!bhop включает и выключает банихоп на сервере (airaccelerate, без лимита скорости). Меняет настройки сервера для всех игроков",
+    "i18n": {
+      "en": {
+        "desc": "!bhop toggles bunnyhop on the server (airaccelerate, no speed cap). It changes server settings for all players"
+      },
+      "de": {
+        "desc": "!bhop schaltet Bunnyhop auf dem Server ein und aus (airaccelerate, kein Tempolimit). Ändert die Servereinstellungen für alle Spieler"
+      },
+      "fr": {
+        "desc": "!bhop active ou désactive le bunnyhop sur le serveur (airaccelerate, sans limite de vitesse). Modifie les réglages du serveur pour tous les joueurs"
+      }
+    },
+    "asset": "^CS2-BhopCommand\\.zip$",
+    "pin": {
+      "tag": "v1.1.0",
+      "asset": "CS2-BhopCommand.zip",
+      "sha256": "984e4a3267955690ff5e77624c8ea6f5ca618cc57d6429e357b38281256f7088"
+    },
+    "unverified": true
+  },
+  {
+    "id": "onlyhs",
+    "title": "Only HS",
+    "category": "practice",
+    "repo": "LeqenddC/CS2-OnlyHS",
+    "license": "GPL-3.0",
+    "dirs": [
+      "CS2-OnlyHS"
+    ],
+    "cmds": [
+      "!onlyhs"
+    ],
+    "default": true,
+    "desc": "Режим «только в голову»: !onlyhs включает и выключает урон только по голове — для тренировки хедшотов",
+    "i18n": {
+      "en": {
+        "desc": "Headshot-only mode: !onlyhs toggles damage to the head only, for headshot practice"
+      },
+      "de": {
+        "desc": "Nur-Kopfschuss-Modus: !onlyhs schaltet Schaden nur am Kopf ein oder aus, zum Üben von Headshots"
+      },
+      "fr": {
+        "desc": "Mode « tête uniquement » : !onlyhs active ou désactive les dégâts à la tête seule, pour s’entraîner aux headshots"
+      }
+    },
+    "asset": "^CS2-OnlyHS\\.zip$",
+    "pin": {
+      "tag": "v1.0.1",
+      "asset": "CS2-OnlyHS.zip",
+      "sha256": "9dbcffa8e47a8f1fd1d5d9dd47861f21ba4ae1a94745db868bac8e08f9cac473"
+    },
+    "unverified": true
+  },
+  {
+    "id": "radarcolorfix",
+    "title": "Radar Color Fix",
+    "category": "utility",
+    "repo": "srwiruwiru/RadarColorFix-CS2",
+    "license": "MIT",
+    "dirs": [
+      "RadarColorFix"
+    ],
+    "layout": "flat",
+    "default": true,
+    "desc": "Исправляет одинаковые цвета игроков на радаре. Ничего не добавляет в чат, работает сама",
+    "i18n": {
+      "en": {
+        "desc": "Fixes duplicate player colours on the radar. Adds nothing to the chat, works on its own"
+      },
+      "de": {
+        "desc": "Behebt doppelte Spielerfarben auf dem Radar. Fügt nichts zum Chat hinzu und arbeitet selbstständig"
+      },
+      "fr": {
+        "desc": "Corrige les couleurs de joueurs en double sur le radar. N’ajoute rien au chat et agit seul"
+      }
+    },
+    "asset": "^RadarColorFix\\.zip$",
+    "pin": {
+      "tag": "build-3",
+      "asset": "RadarColorFix.zip",
+      "sha256": "30f542934d8a1764209fd5b583284ee97c3ea2d8f28461e5ca0bb649c9717bc4"
+    },
+    "unverified": true
+  },
+  {
+    "id": "customvotes",
+    "title": "Custom Votes",
+    "category": "utility",
+    "repo": "imi-tat0r/CS2-CustomVotes",
+    "license": "MIT",
+    "dirs": [
+      "CS2-CustomVotes"
+    ],
+    "desc": "Голосования игроков за настройки сервера: команды, варианты ответа и права задаются в конфиге плагина",
+    "i18n": {
+      "en": {
+        "desc": "Player votes on server settings: commands, answer options and permissions are set in the plugin config"
+      },
+      "de": {
+        "desc": "Spielerabstimmungen über Servereinstellungen: Befehle, Antwortoptionen und Rechte stehen in der Plugin-Konfiguration"
+      },
+      "fr": {
+        "desc": "Votes des joueurs sur les réglages du serveur : commandes, options de réponse et droits se définissent dans la config du plugin"
+      }
+    },
+    "asset": "^CS2-CustomVotes-1\\.1\\.4-c494e8a\\.zip$",
+    "pin": {
+      "tag": "v1.1.4",
+      "asset": "CS2-CustomVotes-1.1.4-c494e8a.zip",
+      "sha256": "e9d25c7ebcdb60a001687c02d664175e089d8e95e6b197fd126f1119018c54c2"
+    },
+    "unverified": true
+  },
+  {
+    "id": "automaticads",
+    "title": "Automatic Ads",
+    "category": "utility",
+    "repo": "wiruwiru/AutomaticAds-CS2",
+    "license": "GPL-3.0",
+    "dirs": [
+      "AutomaticAds"
+    ],
+    "desc": "Объявления в чате по таймеру: подсказки по командам, правила, ссылки. Тексты правятся в конфиге плагина; экранные объявления автор пока не советует",
+    "i18n": {
+      "en": {
+        "desc": "Timed chat announcements: command tips, rules, links. Texts are edited in the plugin config; the author does not recommend on-screen ads for now"
+      },
+      "de": {
+        "desc": "Zeitgesteuerte Chat-Ankündigungen: Befehlstipps, Regeln, Links. Texte werden in der Plugin-Konfiguration bearbeitet; Bildschirm-Anzeigen rät der Autor derzeit ab"
+      },
+      "fr": {
+        "desc": "Annonces programmées dans le chat : astuces de commandes, règles, liens. Les textes se modifient dans la config du plugin ; l’auteur déconseille pour l’instant les annonces à l’écran"
+      }
+    },
+    "asset": "^AutomaticAds-v1\\.2\\.9b\\.zip$",
+    "pin": {
+      "tag": "v1.2.9b",
+      "asset": "AutomaticAds-v1.2.9b.zip",
+      "sha256": "2a3d326607f5489d846fc1da3e986be76243e2cfd3e37f5dc25e97eccb8ef01d"
+    },
+    "unverified": true
+  },
+  {
+    "id": "afkmanager",
+    "title": "AFK Manager",
+    "category": "utility",
+    "repo": "srwiruwiru/AFKManager",
+    "license": "GPL-3.0",
+    "dirs": [
+      "AFKManager"
+    ],
+    "layout": "flat",
+    "desc": "Кикает или переводит в наблюдатели тех, кто стоит AFK; админы с нужными флагами пропускаются. На практике-сервере может мешать, поэтому по умолчанию выключен",
+    "i18n": {
+      "en": {
+        "desc": "Kicks or moves idle (AFK) players to spectators; admins with the right flags are skipped. It can get in the way on a practice server, so it is off by default"
+      },
+      "de": {
+        "desc": "Wirft untätige (AFK) Spieler raus oder setzt sie auf Zuschauer; Admins mit passenden Flags werden übersprungen. Auf einem Übungsserver kann es stören, daher standardmäßig aus"
+      },
+      "fr": {
+        "desc": "Expulse ou passe en spectateur les joueurs inactifs (AFK) ; les admins avec les bons flags sont ignorés. Peut gêner sur un serveur d’entraînement, donc désactivé par défaut"
+      }
+    },
+    "asset": "^AFKManager\\.zip$",
+    "pin": {
+      "tag": "build-16",
+      "asset": "AFKManager.zip",
+      "sha256": "aa5c6882a6ce4a80965dd7497b266a9407476018859f445d3789c5d0a0e1c098"
+    },
+    "unverified": true
+  },
+  {
+    "id": "rolldice",
+    "title": "Roll the Dice",
+    "category": "fun",
+    "repo": "Kandru/cs2-roll-the-dice",
+    "license": "GPL-3.0",
+    "dirs": [
+      "RollTheDice"
+    ],
+    "cmds": [
+      "!rtd",
+      "!dice"
+    ],
+    "desc": "Хаотичный фан-режим: !rtd бросает кубик и даёт случайный эффект. Окно !dice info требует Workshop-аддон автора плагина",
+    "i18n": {
+      "en": {
+        "desc": "Chaotic fun mode: !rtd rolls a dice and applies a random effect. The !dice info window needs the plugin author’s Workshop addon"
+      },
+      "de": {
+        "desc": "Chaos-Spaßmodus: !rtd würfelt und gibt einen zufälligen Effekt. Das Fenster !dice info benötigt das Workshop-Addon des Plugin-Autors"
+      },
+      "fr": {
+        "desc": "Mode fun chaotique : !rtd lance un dé et applique un effet aléatoire. La fenêtre !dice info nécessite l’addon Workshop de l’auteur"
+      }
+    },
+    "asset": "^cs2-roll-the-dice-release-26\\.10\\.12\\.zip$",
+    "pin": {
+      "tag": "26.10.12",
+      "asset": "cs2-roll-the-dice-release-26.10.12.zip",
+      "sha256": "590bb8c88d3183651f928a47d4f1c709e9ee58c2c74ec97fdfdbfd9f4812455f"
+    },
+    "unverified": true
+  },
+  {
+    "id": "deathmatch",
+    "title": "Deathmatch",
+    "category": "mode",
+    "repo": "NockyCZ/CS2-Deathmatch",
+    "license": "MIT",
+    "dirs": [
+      "Deathmatch"
+    ],
+    "cmds": [
+      "!dm",
+      "!gun"
+    ],
+    "group": "mode",
+    "desc": "Deathmatch: свои точки спавна, выбор оружия (!gun), защита после возрождения и меню режима (!dm). Это отдельный режим игры",
+    "i18n": {
+      "en": {
+        "desc": "Deathmatch: custom spawn points, weapon selection (!gun), spawn protection and a mode menu (!dm). This is a dedicated game mode"
+      },
+      "de": {
+        "desc": "Deathmatch: eigene Spawnpunkte, Waffenwahl (!gun), Spawn-Schutz und Modusmenü (!dm). Ein eigener Spielmodus"
+      },
+      "fr": {
+        "desc": "Deathmatch : points d’apparition personnalisés, choix d’arme (!gun), protection au spawn et menu du mode (!dm). C’est un mode de jeu à part"
+      }
+    },
+    "asset": "^Deathmatch\\.zip$",
+    "pin": {
+      "tag": "v1.3.6",
+      "asset": "Deathmatch.zip",
+      "sha256": "85d0bb3b0edc1615fa5b32df112e54795cdba36da5643115fd0cb07c03bb5404"
+    },
+    "unverified": true
+  },
+  {
+    "id": "retakes",
+    "title": "Retakes",
+    "category": "mode",
+    "repo": "B3none/cs2-retakes",
+    "license": "GPL-3.0",
+    "dirs": [
+      "RetakesPlugin"
+    ],
+    "group": "mode",
+    "desc": "Режим Retakes: защитники отбивают сайт с уже установленной бомбой, оружие выдаётся автоматически. Заменяет обычные раунды — включайте как отдельный режим",
+    "i18n": {
+      "en": {
+        "desc": "Retakes mode: CTs retake a bombsite where the bomb is already planted, weapons are handed out automatically. It replaces normal rounds, so use it as a dedicated mode"
+      },
+      "de": {
+        "desc": "Retakes-Modus: CTs erobern einen Bombenplatz mit bereits gelegter Bombe zurück, Waffen werden automatisch verteilt. Ersetzt normale Runden – als eigenen Modus nutzen"
+      },
+      "fr": {
+        "desc": "Mode Retakes : les CT reprennent un site où la bombe est déjà plantée, les armes sont distribuées automatiquement. Remplace les rounds normaux : à utiliser comme mode dédié"
+      }
+    },
+    "asset": "^RetakesPlugin-3\\.1\\.1\\.zip$",
+    "pin": {
+      "tag": "3.1.1",
+      "asset": "RetakesPlugin-3.1.1.zip",
+      "sha256": "ccb5dade7a5d445d0a172e68f19cb262de0c2a75639be18f3d892db10be93dff"
+    },
+    "unverified": true
+  },
+  {
+    "id": "chasemod",
+    "title": "ChaseMod (HNS)",
+    "category": "mode",
+    "repo": "ipsvn/ChaseMod",
+    "license": "GPL-3.0",
+    "dirs": [
+      "ChaseMod"
+    ],
+    "group": "mode",
+    "desc": "Прятки и догонялки (HNS): заморозка в фризтайме, антифлеш, урон ножом, смена команд по серии побед. Для точного урона ножом задайте mp_max_armor 0",
+    "i18n": {
+      "en": {
+        "desc": "Hide and seek / chase (HNS): freezetime freeze, anti-flash, knife damage, team switching on win streaks. For exact knife damage set mp_max_armor 0"
+      },
+      "de": {
+        "desc": "Verstecken und Jagen (HNS): Einfrieren in der Freezetime, Anti-Flash, Messerschaden, Teamwechsel nach Siegesserien. Für exakten Messerschaden mp_max_armor 0 setzen"
+      },
+      "fr": {
+        "desc": "Cache-cache / poursuite (HNS) : gel pendant le freezetime, anti-flash, dégâts au couteau, changement d’équipe selon les séries de victoires. Pour des dégâts exacts, réglez mp_max_armor 0"
+      }
+    },
+    "asset": "^ChaseMod-v2\\.3\\.0\\.zip$",
+    "pin": {
+      "tag": "v2.3.0",
+      "asset": "ChaseMod-v2.3.0.zip",
+      "sha256": "f9ff7f2957d69b797b5d7b274e563f2fb8fdfda9259ec16b3832e2b4d764123b"
+    },
+    "unverified": true
   }
 ]

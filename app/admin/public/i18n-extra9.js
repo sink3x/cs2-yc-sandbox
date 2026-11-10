@@ -1,0 +1,41 @@
+'use strict';
+// Перевод интерфейса, часть 9: маркетплейс плагинов. Подключается после extra8 и сам вливается в словарь.
+(function () {
+  const R = [
+    ["Маркетплейс плагинов", "Plugin marketplace", "Plugin-Marktplatz", "Marché de plugins"],
+    ["Каталог подобран вручную: у новых плагинов версия закреплена, а контрольная сумма файла проверяется при установке. Отметьте нужные и нажмите «Сохранить» — скачивание и включение произойдут при запуске CS2.", "The catalogue is hand-picked: new plugins are pinned to a version and the file checksum is verified on install. Tick what you need and press “Save” — download and activation happen when CS2 starts.", "Der Katalog ist handverlesen: neue Plugins sind auf eine Version festgelegt und die Datei-Prüfsumme wird bei der Installation geprüft. Gewünschtes ankreuzen und „Speichern“ drücken – Download und Aktivierung erfolgen beim Start von CS2.", "Le catalogue est trié à la main : les nouveaux plugins sont figés sur une version et la somme de contrôle du fichier est vérifiée à l’installation. Cochez ce qu’il faut et cliquez sur « Enregistrer » — le téléchargement et l’activation se font au démarrage de CS2."],
+    ["Поиск плагина: название, команда, описание…", "Search plugins: name, command, description…", "Plugin suchen: Name, Befehl, Beschreibung…", "Rechercher un plugin : nom, commande, description…"],
+    ["Поиск плагина", "Search plugins", "Plugin suchen", "Rechercher un plugin"],
+    ["Категории плагинов", "Plugin categories", "Plugin-Kategorien", "Catégories de plugins"],
+    ["Рекомендованные", "Recommended", "Empfohlene", "Recommandés"],
+    ["Все", "All", "Alle", "Tous"],
+    ["Включены", "Enabled", "Aktiviert", "Activés"],
+    ["Установлены", "Installed", "Installiert", "Installés"],
+    ["Матчи", "Matches", "Matches", "Matchs"],
+    ["Практика", "Practice", "Training", "Entraînement"],
+    ["Режимы игры", "Game modes", "Spielmodi", "Modes de jeu"],
+    ["Фан", "Fun", "Spaß", "Fun"],
+    ["Утилиты", "Utilities", "Werkzeuge", "Utilitaires"],
+    ["Скины", "Skins", "Skins", "Skins"],
+    ["Ничего не найдено", "Nothing found", "Nichts gefunden", "Rien trouvé"],
+    ["Режимы игры взаимоисключающие", "Game modes are mutually exclusive", "Spielmodi schließen sich gegenseitig aus", "Les modes de jeu s’excluent mutuellement"],
+    ["выключен", "switched off", "ausgeschaltet", "désactivé"],
+    ["новый", "new", "neu", "nouveau"],
+    ["Новый в каталоге: совместимость с вашей версией CounterStrikeSharp не проверена", "New in the catalogue: compatibility with your CounterStrikeSharp version has not been verified", "Neu im Katalog: Kompatibilität mit Ihrer CounterStrikeSharp-Version ist nicht geprüft", "Nouveau dans le catalogue : la compatibilité avec votre version de CounterStrikeSharp n’est pas vérifiée"],
+    ["Версия закреплена: установщик сверяет контрольную сумму файла", "Version is pinned: the installer verifies the file checksum", "Version ist festgelegt: Der Installer prüft die Prüfsumme der Datei", "Version figée : l’installateur vérifie la somme de contrôle du fichier"],
+    ["Лицензия", "License", "Lizenz", "Licence"],
+    ["Отдельный режим игры: не включайте вместе с", "A separate game mode: do not enable together with", "Eigener Spielmodus: nicht zusammen aktivieren mit", "Mode de jeu à part : ne pas activer avec"],
+    ["в игре", "in game", "im Spiel", "en jeu"],
+    ["загружен", "loaded", "geladen", "chargé"],
+    ["нет в списке игры", "not in the game’s list", "nicht in der Liste des Spiels", "absent de la liste du jeu"],
+    ["Пустой ответ игры", "Empty reply from the game", "Leere Antwort des Spiels", "Réponse vide du jeu"],
+    ["Список обновлён", "List updated", "Liste aktualisiert", "Liste mise à jour"],
+    ["Что загружено в игре", "What is loaded in the game", "Was im Spiel geladen ist", "Ce qui est chargé en jeu"],
+    ["Спрашивает у запущенного сервера css_plugins list", "Asks the running server with css_plugins list", "Fragt den laufenden Server mit css_plugins list", "Interroge le serveur en marche avec css_plugins list"],
+    ["Плагин", "Plugin", "Plugin", "Plugin"],
+    ["Состояние", "State", "Zustand", "État"],
+    ["Версия", "Version", "Version", "Version"],
+    ["Включение и выключение применяется после перезапуска CS2. Зависимости (MenuManager и др.) ставятся автоматически. Плагины работают с правами игрового сервера: ставьте только то, чему доверяете. Совместимость новых плагинов с вашей версией CounterStrikeSharp заранее не проверена: не загрузившийся плагин просто не заработает, остальные не пострадают.", "Enabling and disabling takes effect after CS2 restarts. Dependencies (MenuManager etc.) are installed automatically. Plugins run with the game server’s privileges: install only what you trust. Compatibility of new plugins with your CounterStrikeSharp version is not verified in advance: a plugin that fails to load simply will not work, the others are unaffected.", "Aktivieren und Deaktivieren gilt nach einem Neustart von CS2. Abhängigkeiten (MenuManager usw.) werden automatisch installiert. Plugins laufen mit den Rechten des Spielservers: nur installieren, was Sie vertrauen. Die Kompatibilität neuer Plugins mit Ihrer CounterStrikeSharp-Version wird nicht vorab geprüft: Ein Plugin, das nicht lädt, funktioniert einfach nicht, die anderen bleiben unberührt.", "L’activation et la désactivation s’appliquent après le redémarrage de CS2. Les dépendances (MenuManager, etc.) s’installent automatiquement. Les plugins s’exécutent avec les droits du serveur de jeu : n’installez que ce qui est fiable. La compatibilité des nouveaux plugins avec votre version de CounterStrikeSharp n’est pas vérifiée à l’avance : un plugin qui ne se charge pas ne fonctionnera simplement pas, les autres ne sont pas touchés."],
+  ];
+  for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
+})();
