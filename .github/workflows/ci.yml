@@ -16,7 +16,24 @@ concurrency:
 
 jobs:
   app:
-    name: Тесты и сборка бандла
+    name: Tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Unit and integration tests (zero dependencies, node:test)
+        working-directory: app
+        run: node --test
+
+  bundle:
+    name: Build the VM bundle
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -24,10 +41,9 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-      - name: Тесты
-        working-directory: app
-        run: node --test
-      - name: Сборка бандла (проверка лимита метаданных)
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Bundle (checks the instance-metadata size limit)
         run: scripts/pack.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -36,7 +52,7 @@ jobs:
           retention-days: 14
 
   web:
-    name: Интерфейс (Preact + TypeScript)
+    name: Frontend (Preact + TypeScript)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -48,13 +64,13 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - working-directory: web
         run: npm ci --no-audit --no-fund
-      - name: Проверка типов
+      - name: Type check
         working-directory: web
         run: npm run typecheck
-      - name: Сборка
+      - name: Build
         working-directory: web
         run: npm run build
-      - name: Публичный фронт (минификация, чанки, без комментариев)
+      - name: Public frontend (minified, chunked, no comments)
         working-directory: web
         run: npm run build:public
 
@@ -64,15 +80,33 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
-      - name: Бандлы нужны модулю (filebase64)
+      - name: The module needs the bundles (filebase64)
         run: scripts/pack.sh
       - name: fmt
         working-directory: terraform
         run: tofu fmt -check -recursive -diff
-      - name: init без бэкенда
+      - name: init without a backend
         working-directory: terraform
         run: tofu init -backend=false -input=false
       - name: validate
         working-directory: terraform
         run: tofu validate
+
+  secrets-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks detect --source . --no-banner --redact --config .gitleaks.toml

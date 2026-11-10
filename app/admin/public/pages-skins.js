@@ -146,7 +146,7 @@ function skinsView(redraw) {
     gridBox.replaceChildren(h('div', { class: 'skin-grid' }, nodes));
   }
   function card({ img, title, sub, color, eq, sel: s, onclick, badge }) {
-    return h('button', { class: `skin ${s ? 'sel' : ''} ${eq ? 'eq' : ''}`, style: color ? `--rar:${color}` : '', onclick }, h('div', { class: 'img' }, skinImg(img, title)), h('div', { class: 'nm' }, title, h('small', {}, sub), badge ? h('small', { style: 'color:var(--accent)' }, badge) : null));
+    return h('button', { class: `skin ${s ? 'sel' : ''} ${eq ? 'eq' : ''}`, 'data-eq': eq ? tr('надето') : null, style: color ? `--rar:${color}` : '', onclick }, h('div', { class: 'img' }, skinImg(img, title)), h('div', { class: 'nm' }, title, h('small', {}, sub), badge ? h('small', { style: 'color:var(--accent)' }, badge) : null));
   }
   gridUpdate();
 

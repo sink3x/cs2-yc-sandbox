@@ -269,6 +269,7 @@
     ["Модели персонажей настраиваются на странице «Скины» (агенты): свои модели требуют Workshop-аддон.", "Character models are set on the “Skins” page (agents): custom models require a Workshop addon.", "Charaktermodelle werden auf der Seite „Skins“ (Agenten) eingestellt: eigene Modelle brauchen ein Workshop-Addon.", "Les modèles de personnages se règlent sur la page « Skins » (agents) : les modèles personnalisés exigent un addon Workshop."],
     ["Команда $1: в названии нельзя кавычки и «;», флаг — две латинские буквы", "Team $1: no quotes or “;” in the name, the flag is two Latin letters", "Team $1: keine Anführungszeichen oder „;“ im Namen, Flagge aus zwei Buchstaben", "Équipe $1 : pas de guillemets ni de « ; » dans le nom, drapeau en deux lettres"],
     ["Игрок $1: тег до 16 символов, ник до 32, без кавычек и «;»", "Player $1: tag up to 16 characters, nickname up to 32, no quotes or “;”", "Spieler $1: Tag bis 16 Zeichen, Nickname bis 32, ohne Anführungszeichen und „;“", "Joueur $1 : tag jusqu’à 16 caractères, pseudo jusqu’à 32, sans guillemets ni « ; »"],
+    ['надето', 'equipped', 'angelegt', 'équipé'],
   ];
   for (const r of R) { if (r.length >= 4 && !D[r[0]]) D[r[0]] = [r[1], r[2], r[3]]; }
 })();

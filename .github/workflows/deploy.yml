@@ -1,6 +1,10 @@
 name: Deploy
 
-# Деплой в Yandex Cloud после зелёного CI на main (или вручную). Игровую ВМ не трогает: её перезапуск — только вручную, когда на сервере 0 игроков.
+# Optional: continuous deployment to YOUR Yandex Cloud after a green CI on main (or by hand).
+# Disabled by default: it runs only when the repository variable DEPLOY_ENABLED is "true" (forks do not inherit variables),
+# only for pushes to main of this very repository (never for pull requests from forks), and reads everything else from the
+# GitHub environment "production" (see docs/installation.md#continuous-deployment-github-actions).
+# It never touches the game VM: restart it by hand when nobody is playing.
 on:
   workflow_run:
     workflows: [CI]
@@ -9,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       restart_panel:
-        description: Перезапустить ВМ админки после деплоя (она подхватит новый код, ~2 мин недоступна)
+        description: Restart the panel VM after the deploy (it picks up the new code; unavailable for ~2 minutes)
         type: boolean
         default: true
 
@@ -17,34 +21,45 @@ permissions:
   contents: read
 
 env:
-  FOLDER_ID: b1gxxxxxxxxxxxxxxxxx
-  PANEL_INSTANCE_ID: fhmxxxxxxxxxxxxxxxxx
-  PANEL_URL: https://panel.example.com
   TF: tofu
 
 jobs:
   deploy:
-    name: tofu apply и перезапуск админки
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    name: tofu apply and panel restart
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
-    # в Object Storage нет блокировок состояния: два apply одновременно запускать нельзя.
-    # Группа на уровне задачи: пропущенные (skipped) запуски не занимают очередь и не вытесняют настоящий деплой.
+    # Object Storage has no state locking: two applies must never run at once.
+    # The group is on the job level, so skipped runs do not occupy the queue or push out a real deploy.
     concurrency:
       group: deploy
       cancel-in-progress: false
     env:
+      # environment variables (Settings -> Environments -> production -> Variables); no ids are hard-coded in the repository
+      FOLDER_ID: ${{ vars.FOLDER_ID }}
+      PANEL_INSTANCE_ID: ${{ vars.PANEL_INSTANCE_ID }}
+      PANEL_URL: ${{ vars.PANEL_URL }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      CS2_ADMINS: ${{ vars.CS2_ADMINS }}
+      # environment secrets
       AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_KEY }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          # always the commit CI has just tested on main (guarded by the job condition above)
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 2
       - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
 
-      - name: Нужна ли перезагрузка админки
+      - name: Does the panel VM need a restart
         id: need
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -55,18 +70,20 @@ jobs:
             echo "restart=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Файлы переменных и ключ (из секретов окружения production)
+      - name: Variable files and key (from the production environment)
         run: |
           umask 077
           printf '%s' "$TFVARS_MAIN" > terraform/terraform.tfvars
           printf '%s' "$TFVARS_SECRETS" > terraform/secrets.auto.tfvars
           printf '%s' "$YC_SA_KEY" > "$RUNNER_TEMP/yc-key.json"
+          # optional list of server admins (HCL), e.g. [{ name = "you", steamid = "7656119..." }]
+          if [ -n "$CS2_ADMINS" ]; then echo "TF_VAR_cs2_admins=$CS2_ADMINS" >> "$GITHUB_ENV"; fi
         env:
           TFVARS_MAIN: ${{ secrets.TFVARS_MAIN }}
           TFVARS_SECRETS: ${{ secrets.TFVARS_SECRETS }}
           YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
 
-      - name: Yandex Cloud CLI и токен
+      - name: Yandex Cloud CLI and token
         run: |
           curl -fsSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -a -i "$HOME/yc"
           echo "$HOME/yc/bin" >> "$GITHUB_PATH"
@@ -78,32 +95,32 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "YC_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Деплой (pack → tofu apply)
+      - name: Deploy (pack -> tofu apply)
         run: scripts/deploy.sh --yes
 
-      - name: Перезапуск ВМ админки
+      - name: Restart the panel VM
         if: steps.need.outputs.restart == 'true'
         run: |
           yc compute instance restart "$PANEL_INSTANCE_ID" --folder-id "$FOLDER_ID"
           for i in $(seq 1 20); do
             sleep 10
             code="$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$PANEL_URL/api/brand" || true)"
-            echo "попытка $i: HTTP $code"
+            echo "attempt $i: HTTP $code"
             [ "$code" = "200" ] && break
           done
-          [ "$code" = "200" ] || { echo "::warning::Панель не ответила за 200 с после перезапуска"; }
-          # панель должна отдавать именно собранный сейчас фронтенд: иначе ВМ не подхватила новый код
+          [ "$code" = "200" ] || { echo "::warning::The panel did not answer within 200 s after the restart"; }
+          # the panel must serve the frontend that was just built: otherwise the VM did not pick up the new code
           want="$(grep -o 'loader\.[0-9a-f]*\.js' build/public/index.html | head -1)"
           for i in $(seq 1 6); do
             got="$(curl -s -m 8 "$PANEL_URL/" | grep -o 'loader\.[0-9a-f]*\.js' | head -1 || true)"
-            echo "фронтенд: ждём $want, отдаётся $got"
+            echo "frontend: expecting $want, served $got"
             [ -n "$want" ] && [ "$want" = "$got" ] && exit 0
             sleep 10
           done
-          echo "::error::Панель работает на старом коде: загрузка нового не прошла. Конец вывода консоли ВМ:"
+          echo "::error::The panel is running old code: the new bundle was not loaded. Tail of the VM console:"
           yc compute instance get-serial-port-output --id "$PANEL_INSTANCE_ID" --folder-id "$FOLDER_ID" 2>/dev/null | grep -aiE "bootstrap|install-admin|cs2-admin|FAILED|No space|error" | tail -40 | cut -c1-300 || true
           exit 1
 
-      - name: Убрать ключи с раннера
+      - name: Remove keys from the runner
         if: always()
-        run: rm -f terraform/terraform.tfvars terraform/secrets.auto.tfvars "$RUNNER_TEMP/yc-key.json"
+        run: rm -f terraform/terraform.tfvars terraform/secrets.auto.tfvars terraform/backend.tf "$RUNNER_TEMP/yc-key.json"

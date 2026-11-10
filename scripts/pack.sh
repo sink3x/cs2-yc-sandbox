@@ -21,7 +21,7 @@ python3 - <<'PY'
 import gzip, io, os, tarfile
 
 SKIP_DIRS = {"node_modules"}
-SKIP_PREFIX = ("app/test",)
+SKIP_PREFIX = ("app/test", "app/dev")
 PUBLIC = "build/public"  # minified frontend (build-public.mjs), shipped separately (admin VM only): its own metadata value keeps both under the 256 KB limit
 
 def keep(path):

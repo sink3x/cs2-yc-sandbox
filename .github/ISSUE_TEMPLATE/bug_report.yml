@@ -1,0 +1,37 @@
+name: Bug report
+description: Something in the panel, the agent, the deploy scripts or the Terraform module does not work
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Never paste secrets** (GSLT, agent token, RCON password, `secrets.auto.tfvars`, Terraform state).
+        Security problems: please use a private security advisory instead (see SECURITY.md).
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where does it happen?
+      options: [Admin panel (UI), Admin panel (API), Agent on the game VM, Deploy scripts / Terraform, CI / release, Documentation, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If it also happens in demo mode (`npm run demo`), say so: it makes the bug much easier to fix.
+  - type: input
+    id: version
+    attributes:
+      label: Version (release tag or commit)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Panel -> Backups & logs, or `journalctl -u cs2 -u cs2-agent -u cs2-bootstrap`. Remove anything private first.
+      render: text

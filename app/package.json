@@ -4,10 +4,13 @@
   "private": true,
   "description": "Agent (runs on the CS2 VM) and admin panel (runs on the small always-on VM). Zero dependencies, Node >= 18.",
   "license": "MIT",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "test": "node --test",
     "agent": "node agent/agent.js",
-    "admin": "node admin/server.js"
+    "admin": "node admin/server.js",
+    "demo": "node dev/demo.js"
   }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Generates terraform/secrets.auto.tfvars (mode 0600, git-ignored) with random secrets.
-# Optional env: GSLT=<token>  STEAM_WEB_API_KEY=<key>  PANEL_USERS="alice friend"
+# Optional env: GSLT=<token>  STEAM_WEB_API_KEY=<key>  PANEL_USERS="admin friend"
 set -euo pipefail
 cd "$(dirname "$0")/../terraform"
 OUT=secrets.auto.tfvars
@@ -18,7 +18,7 @@ umask 077
   echo "gslt              = \"${GSLT:-}\""
   echo "steam_web_api_key = \"${STEAM_WEB_API_KEY:-}\""
   echo "panel_users = {"
-  for u in ${PANEL_USERS:-alice friend}; do
+  for u in ${PANEL_USERS:-admin}; do
     pw=$(alnum 16 || true)
     echo "  ${u} = \"${pw}\""
     echo "panel login: ${u} / ${pw}" >&2

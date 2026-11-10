@@ -1,0 +1,70 @@
+name: Release
+
+# Push a tag like v1.2.3 (or run the workflow by hand for an existing tag) to publish a GitHub Release:
+# the tested VM bundle, the minified frontend, SHA256SUMS and build provenance attestations.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build a release for (for example v1.0.0)
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Tests
+        working-directory: app
+        run: node --test
+
+      - name: Build bundle and frontend
+        run: scripts/pack.sh
+
+      - name: Collect release files
+        run: |
+          mkdir -p release
+          cp build/bundle.tgz "release/cs2-panel-bundle-${TAG}.tgz"
+          cp build/public.tgz "release/cs2-panel-public-${TAG}.tgz"
+          (cd release && sha256sum ./*.tgz > SHA256SUMS && cat SHA256SUMS)
+
+      - name: Build provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/*.tgz
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          v="${TAG#v}"
+          awk -v v="$v" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "See the commit history for changes." > notes.md; fi
+          cat notes.md
+
+      - name: Publish
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" release/* --title "$TAG" --notes-file notes.md --verify-tag
+          fi

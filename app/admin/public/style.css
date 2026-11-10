@@ -104,7 +104,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .skin-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(330px, 36vw, 540px); gap: 14px; align-items: start; }
 .skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .skin { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; overflow: hidden; position: relative; text-align: left; padding: 0; }
-.skin:hover { border-color: var(--accent); } .skin.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); } .skin.eq::after { content: '✔ надето'; position: absolute; top: 6px; right: 6px; font-size: 10px; background: var(--ok); color: #fff; border-radius: 999px; padding: 1px 7px; }
+.skin:hover { border-color: var(--accent); } .skin.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); } .skin.eq::after { content: '✔ ' attr(data-eq); position: absolute; top: 6px; right: 6px; font-size: 10px; background: var(--ok); color: #fff; border-radius: 999px; padding: 1px 7px; }
 .skin .img { height: 96px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 40%, var(--panel2), var(--panel)); } .skin img { max-width: 100%; max-height: 92px; object-fit: contain; }
 .skin .nm { padding: 6px 8px 8px; font-size: 12.5px; border-top: 3px solid var(--rar, var(--line)); } .skin .nm small { display: block; color: var(--muted); }
 .preview { position: sticky; top: 12px; } .preview .big { height: 190px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: radial-gradient(circle at 50% 40%, var(--panel2), var(--console)); border-bottom: 3px solid var(--rar, var(--line)); } .preview .big img { max-width: 100%; max-height: 180px; }
@@ -114,7 +114,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 
 /* ---------- уточнения под монохром ---------- */
 .mapart:not(.has-img) { filter: grayscale(1) contrast(1.05); }
-.skin.eq::after { content: 'надето'; background: var(--text); color: var(--bg); }
+.skin.eq::after { content: attr(data-eq); background: var(--text); color: var(--bg); }
 .tabs button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
 .seg button.on { background: var(--text); color: var(--bg); }
 .sticky-bar { border-color: var(--text); box-shadow: var(--shadow); }

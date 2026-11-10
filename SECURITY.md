@@ -1,49 +1,45 @@
-# Безопасность
+# Security policy
 
-Итоги аудита (ноябрь 2026) и то, что осталось сознательным риском. Репозитории приватные; секреты в git не хранятся
-(`secrets.auto.tfvars`, `terraform.tfvars`, `*.tfstate` в `.gitignore`; значения лежат в GitHub Secrets окружения `production`).
+## Reporting a vulnerability
 
-## Модель угроз
+Please **do not open a public issue** for a security problem. Use GitHub's private reporting:
+**Security tab > Report a vulnerability** on this repository
+(<https://github.com/sink3x/cs2-yc-sandbox/security/advisories/new>).
 
-| Граница | Что защищает |
+Include what you found, how to reproduce it and the affected version or commit. You will get an answer within a few days; fixes are released as a patch version and credited in the changelog unless you prefer otherwise.
+
+Supported versions: the latest release and `main`.
+
+## Threat model
+
+| Boundary | Protection |
 |---|---|
-| Интернет → панель (Caddy, HTTPS, HSTS) | вход по паролю (scrypt) или Steam OpenID; лимит неудачных входов; сессии в cookie `HttpOnly; SameSite=Strict; Secure`; CSRF-заголовок на все не-GET |
-| Игрок → админ | роль `player` пускает только на белый список маршрутов (`PLAYER_OK`), чужой SteamID закрыт (`SELF_ONLY`) |
-| Панель → агент на игровой ВМ | Bearer-токен, порт 8081 открыт только для группы безопасности панели |
-| Игровой процесс (user `steam`, сторонние плагины) → остальное | нет доступа к метаданным ВМ (`vm-cs2/block-metadata.sh`), секреты агента и S3 — root-only |
+| Internet to panel (Caddy, HTTPS, HSTS) | Password login (scrypt) or Steam OpenID; failed-login rate limiting; session cookie `HttpOnly; SameSite=Strict; Secure`; CSRF header required on every non-GET request |
+| Player to admin | The `player` role is limited to an allow-list of routes (`PLAYER_OK`) and to its own SteamID (`SELF_ONLY`) |
+| Panel to agent on the game VM | Bearer token; port 8081 is open only to the panel's security group |
+| Game process (user `steam`, third-party plugins) to everything else | No access to the VM metadata service (`vm-cs2/block-metadata.sh`); agent and S3 secrets are root-only files |
+| Deploy from CI | Off unless `DEPLOY_ENABLED=true`; only for pushes to `main` of the same repository; secrets in a protected `production` environment; never from pull requests |
 
-## Что закрыто в аудите
+## Hardening already in place
 
-- Steam-админ больше не «автопривязывается» к единственному свободному аккаунту панели и не берёт аккаунт по нику Steam
-  (ник меняет сам игрок): привязка по имени из списка админов сервера или вручную («Игроки сервера»).
-- Имена пользователей из запроса не находят `Object.prototype` (`__proto__`, `constructor`): список пользователей без прототипа.
-- Статика: неизвестные пути не кэшируются (рост памяти от неавторизованных запросов), проверка выхода из каталога строже.
-- CSP: добавлены `base-uri 'none'`, `form-action 'self'`, `object-src 'none'`.
-- Steam OpenID: подпись обязана покрывать `claimed_id`, `identity`, `return_to`, `response_nonce`, `op_endpoint`; проверяется `openid.ns`.
-- Журнал аудита не хранит секреты из RCON-команд (`sv_password …` → `sv_password [скрыто]`).
-- Восстановление из бэкапа (от root): архив проверяется до распаковки — только файлы и каталоги, без `..`, абсолютных путей и ссылок.
-- Игровая ВМ: `steam` не может обращаться к `169.254.169.254` (токен агента, S3-ключи, токен сервисного аккаунта).
-- Панель: `publicUrl` задан в конфиге, адрес Steam-возврата не зависит от заголовка `Host`; файл с начальными паролями удаляется с диска после создания аккаунтов.
-- Фронт публикуется минифицированным, без комментариев и исходной структуры.
+- Steam logins never auto-link to a panel account by nickname or "the only free account"; linking is explicit.
+- User lookup is prototype-safe (`__proto__`, `constructor` are ordinary names).
+- Static files: unknown paths are not cached; directory traversal is checked strictly.
+- CSP includes `base-uri 'none'`, `form-action 'self'`, `object-src 'none'`.
+- Steam OpenID: the signature must cover `claimed_id`, `identity`, `return_to`, `response_nonce` and `op_endpoint`; `openid.ns` is verified.
+- The audit log never stores secrets from RCON commands (`sv_password ...` becomes `sv_password [hidden]`).
+- Restoring a backup validates the archive first: only files and directories, no `..`, absolute paths or links.
+- The panel's public URL comes from the config, not from the `Host` header; the initial password file is removed from disk after the accounts are created.
+- CI runs CodeQL and gitleaks; Dependabot watches npm, Actions and Terraform providers; GitHub Actions are pinned by commit SHA (CodeQL and attestation actions by tag).
 
-## Принятые риски и рекомендации
+## Known and accepted risks
 
-- **Сторонние плагины** (CounterStrikeSharp, MetaMod, WeaponPaints, MatchZy) скачиваются с GitHub (`releases/latest`) без проверки подписи
-  и работают внутри процесса игры. Блокировка метаданных ограничивает ущерб, но не заменяет закрепление версий и контрольных сумм.
-- **Начальные пароли** остаются в метаданных панельной ВМ и в состоянии OpenTofu. После смены паролей в панели очистите `panel_users`
-  в секрете `TFVARS_SECRETS` (существующие аккаунты это не затронет).
-- **Права сервисных аккаунтов** выданы на каталог (`storage.editor`, `compute.operator`), а не на отдельные ресурсы. При появлении
-  других бакетов/ВМ в этом каталоге сузьте их.
-- **Агент** слушает HTTP (не HTTPS) внутри приватной подсети; защита — токен и группа безопасности.
-- **GitHub Actions** закреплены по тегам (`@v4`), а не по SHA; `deploy.yml` ставит `yc` через `curl | bash`.
-- **Блокировка входа по имени** (`user:<имя>`) позволяет постороннему на 10 минут заблокировать вход конкретному пользователю; вход
-  с другого IP при этом тоже блокируется. Это осознанный компромисс против подбора паролей.
-- **Админ панели = доверенный**: может отправлять произвольные RCON-команды и менять параметры запуска (`extraArgs`).
-- Включите в GitHub: Dependabot alerts, secret scanning и защиту ветки `main` (на бесплатном плане для приватных репозиториев недоступны
-  защита веток и часть сканеров).
+- **Third-party game plugins** (Metamod, CounterStrikeSharp, WeaponPaints, MatchZy, ...) are downloaded from GitHub releases at install time and run inside the game process. The metadata block limits the damage but does not replace pinning versions (`pin` in `app/lib/plugins.json`) and checking checksums.
+- **Initial passwords** stay in the panel VM's metadata and in the Terraform state. After you change them in the panel, clear `panel_users` from your secrets (existing accounts are not affected). Protect the Terraform state: it contains every secret of the deployment.
+- **Service account scope**: roles (`storage.editor`, `compute.operator`, `storage.viewer`) are granted on the folder, not on single resources. Run the stack in a dedicated folder.
+- **The agent speaks plain HTTP** inside the private subnet; protection is the token and the security group.
+- **`deploy.yml` installs the `yc` CLI with `curl | bash`** from Yandex Cloud's storage.
+- **Login lockout by user name** (`user:<name>`) lets an outsider block one user's logins for 10 minutes. This is a deliberate trade-off against password guessing.
+- **Skin changers** (WeaponPaints) violate Valve's server guidelines; see [docs/plugins.md](docs/plugins.md#skins-read-this-before-you-enable-weaponpaints).
 
-## Если секрет мог утечь
-
-1. Новые значения: `scripts/init-secrets.sh` (удалите `terraform/secrets.auto.tfvars`) либо правка секрета `TFVARS_SECRETS`.
-2. Деплой через GitHub Actions; перезапуск ВМ панели; игровую ВМ — когда на ней 0 игроков.
-3. Ключ GSLT — перевыпустить на steamcommunity.com/dev/managegameservers, Steam Web API key — на steamcommunity.com/dev/apikey.
+The audit notes from November 2026 in Russian: [docs/ru/security-audit.md](docs/ru/security-audit.md).

@@ -1,0 +1,14 @@
+# gitleaks configuration: the default rules plus an allow-list for test fixtures that look like keys.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "test fixtures with throw-away values"
+paths = [
+  '''app/test/.*''',
+  '''app/dev/demo\.js''',
+]
+regexTarget = "line"
+regexes = [
+  '''secrets\.S3_(ACCESS|SECRET)_KEY''',
+]

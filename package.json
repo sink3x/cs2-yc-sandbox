@@ -1,0 +1,19 @@
+{
+  "name": "cs2-yc-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Open-source CS2 practice server on Yandex Cloud: Terraform, admin panel, CounterStrikeSharp plugin glue",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "demo": "npm --prefix app run demo",
+    "test": "npm --prefix app test",
+    "build": "scripts/pack.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sink3x/cs2-yc-sandbox.git"
+  }
+}

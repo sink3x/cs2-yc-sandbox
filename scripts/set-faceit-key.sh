@@ -4,7 +4,7 @@
 # Спросит логин и пароль админа (пароль не показывается и нигде не сохраняется).
 set -euo pipefail
 
-PANEL="${PANEL_URL:-https://panel.example.com}"
+PANEL="${PANEL_URL:?set PANEL_URL=https://<your panel host> (terraform output panel_url)}"
 
 command -v pbpaste >/dev/null || { echo "Нужен macOS (pbpaste). На Linux: xclip -o -selection clipboard" >&2; exit 1; }
 KEY="$(pbpaste | tr -d '[:space:]')"
@@ -15,8 +15,8 @@ if [[ ! "$KEY" =~ ^[A-Za-z0-9-]{16,80}$ ]]; then
 fi
 echo "Ключ из буфера: ${KEY:0:4}…${KEY: -4} (${#KEY} символов)"
 
-read -r -p "Логин админа [alice]: " USER_NAME
-USER_NAME="${USER_NAME:-alice}"
+read -r -p "Логин админа [admin]: " USER_NAME
+USER_NAME="${USER_NAME:-admin}"
 read -r -s -p "Пароль: " PASS; echo
 
 JAR="$(mktemp)"; trap 'rm -f "$JAR"' EXIT
