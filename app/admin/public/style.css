@@ -101,7 +101,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 
 /* ---------- скины ---------- */
-.skin-layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+.skin-layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(330px, 36vw, 540px); gap: 14px; align-items: start; }
 .skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
 .skin { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; overflow: hidden; position: relative; text-align: left; padding: 0; }
 .skin:hover { border-color: var(--accent); } .skin.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); } .skin.eq::after { content: '✔ надето'; position: absolute; top: 6px; right: 6px; font-size: 10px; background: var(--ok); color: #fff; border-radius: 999px; padding: 1px 7px; }
@@ -590,3 +590,20 @@ td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .modal.modal-sm { width: min(440px, 100%); }
 .confirm-text { margin: 0; white-space: pre-line; overflow-wrap: anywhere; line-height: 1.5; }
 @media (max-width: 700px) { .modal.modal-sm { width: 100%; } }
+
+/* 3D-просмотр скинов и плеер музыкальных наборов */
+.v3d { margin: 8px 0; }
+.v3d-stage { position: relative; aspect-ratio: 4 / 3; min-height: 260px; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #0d0f12; }
+.v3d-agent .v3d-stage { aspect-ratio: 4 / 5; max-height: 54vh; }
+.v3d-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.v3d-status { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; pointer-events: none; text-align: center; }
+.v3d-status[hidden] { display: none; }
+.v3d-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+.v3d-bar .btn, .v3d-bar select { height: 32px; padding: 0 10px; font-size: 13px; }
+.v3d-btn.on { border-color: var(--accent); color: var(--accent); }
+.v3d-seg { margin: 0 0 6px; }
+.modal .v3d-stage { aspect-ratio: 16 / 10; }
+.mk-player { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.mk-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 10px; }
+.mk-row.on { border-color: var(--accent); }
+.mk-play { width: 38px; padding: 0; flex: none; }

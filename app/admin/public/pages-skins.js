@@ -206,7 +206,7 @@ function stickerEditor() {
   const numIn = (label, key, min, max, step) => {
     const st = E.stickers[STK.slot];
     const inp = h('input', { type: 'number', min, max, step, value: st[key], style: 'width:84px' });
-    inp.addEventListener('input', () => { const v = Number(inp.value); if (Number.isFinite(v)) st[key] = Math.min(Math.max(v, min), max); });
+    inp.addEventListener('input', () => { const v = Number(inp.value); if (Number.isFinite(v)) st[key] = Math.min(Math.max(v, min), max); if (E.onStickers) E.onStickers(); });
     return h('label', { class: 'stk-num' }, label, inp);
   };
   const paintSlots = () => {
@@ -221,6 +221,12 @@ function stickerEditor() {
     if (!st) { detail.replaceChildren(h('div', { class: 'muted small' }, `Слот ${STK.slot + 1} пуст: выберите стикер ниже.`)); return; }
     const info = STK.known[st.id];
     detail.replaceChildren(h('div', { class: 'row' }, h('b', {}, info ? info.name : `Стикер #${st.id}`), info ? h('span', { class: 'small', style: `color:${info.color}` }, info.rarity) : null,
+      h('button', { class: 'btn', title: 'Наклейка отдельно, в 3D, с её потёртостью', onclick: () => {
+        const v = viewer3d({ sticker: st.id, sticker_wear: st.wear || 0, sticker_card: 1 }, 'sticker');
+        const w = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: st.wear || 0 }); const wl = h('span', { class: 'mono' }, Number(st.wear || 0).toFixed(2));
+        w.addEventListener('input', () => { st.wear = Number(w.value); wl.textContent = st.wear.toFixed(2); v.set({ sticker_wear: st.wear }); });
+        modal(info ? info.name : `#${st.id}`, h('div', {}, v.el, h('div', { class: 'row' }, 'Потёртость', w, wl)), [], { onClose: () => { paintDetail(); if (E.onStickers) E.onStickers(); } });
+      } }, '3D'),
       h('button', { class: 'btn danger', onclick: () => { E.stickers[STK.slot] = null; paintAll(); } }, 'Убрать')),
       h('div', { class: 'row' }, numIn('Потёртость 0–1', 'wear', 0, 1, 0.01), numIn('Размер', 'scale', 0.05, 5, 0.05), numIn('Поворот °', 'rotation', -360, 360, 1)),
       h('div', { class: 'row' }, numIn('Смещение X', 'x', -3, 3, 0.05), numIn('Смещение Y', 'y', -3, 3, 0.05)),
@@ -250,15 +256,122 @@ function stickerEditor() {
       more.style.display = (STK.page + 1) * 60 < r.total ? '' : 'none';
     } catch (e) { status.textContent = e.message; } finally { STK.busy = false; }
   }
-  function paintAll() { paintSlots(); paintDetail(); }
+  function paintAll() { paintSlots(); paintDetail(); if (E.onStickers) E.onStickers(); }
   picker.append(h('div', { class: 'row' }, qIn, typeSel, effSel, evSel), status, grid, more);
   root.append(h('h4', {}, 'Стикеры'), slotsRow, detail, picker);
   paintAll(); stkLoadKnown().then(paintAll); load();
   return root;
 }
 
+// ---------------------------------------------------------------- 3D-просмотр (встроенный просмотрщик ChainSkins: шейдеры игры в WebGL)
+const V3D_ORIGIN = 'https://3d.chainskins.net';
+const V3D_MAPS = ['studio', 'de_mirage', 'de_dust2', 'de_inferno', 'de_ancient', 'de_anubis', 'de_nuke', 'de_overpass', 'de_vertigo', 'de_train', 'cs_italy', 'cs_office', 'warehouse'];
+const v3dOn = () => { try { return localStorage.getItem('cs2ui.view3d') !== '0'; } catch { return true; } };
+const v3dSave = (on) => { try { localStorage.setItem('cs2ui.view3d', on ? '1' : '0'); } catch { /* нет хранилища */ } };
+const v3dMap = () => { try { const m = localStorage.getItem('cs2ui.view3dMap'); return V3D_MAPS.includes(m) ? m : 'studio'; } catch { return 'studio'; } };
+const v3dSeed = (n) => Math.min(1000, Math.max(1, Math.round(Number(n) || 1)));
+/** Наклейки редактора в формате просмотрщика: id~slot~wear~x~y~rotation~scale. */
+const v3dStickers = (list) => (list || []).map((st, i) => (st ? [st.id, i, st.wear || 0, st.x || 0, st.y || 0, st.rotation || 0, st.scale || 1].join('~') : '')).filter(Boolean).join(',');
+const v3dUrl = (params) => `${V3D_ORIGIN}/embed?${Object.entries(params).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`;
+/**
+ * Окно 3D. params — параметры адреса /embed (def+paint | character | sticker, float, seed, stickers…).
+ * tools: 'weapon' | 'knife' | 'glove' | 'agent' | 'sticker'. Возвращает { el, set(options), reload(params) }.
+ * set() шлёт cs3d:set без перезагрузки (float, seed, вид, карта); наклейки меняются только перезагрузкой — reload().
+ */
+function viewer3d(params, tools = 'weapon') {
+  let ready = false; let pending = null; let raf = 0; let cur = { map: v3dMap(), ...params }; let view = 'orbit'; let side = 'front'; let spin = false; let failTimer = null;
+  const frame = h('iframe', { class: 'v3d-frame', src: v3dUrl(cur), allow: 'fullscreen', referrerpolicy: 'no-referrer', loading: 'lazy', title: tr('3D-просмотр') });
+  const status = h('div', { class: 'v3d-status' }, 'Загрузка 3D…');
+  const send = (msg) => { if (frame.contentWindow) frame.contentWindow.postMessage(msg, V3D_ORIGIN); };
+  const flush = () => { raf = 0; if (ready && pending) { send({ type: 'cs3d:set', options: pending }); pending = null; } };
+  const set = (options) => { pending = { ...(pending || {}), ...options }; Object.assign(cur, options); if (!raf) raf = requestAnimationFrame(flush); };
+  const arm = () => { clearTimeout(failTimer); failTimer = setTimeout(() => { if (!ready && status.isConnected) { status.hidden = false; status.textContent = tr('3D-просмотрщик не отвечает. Проверьте интернет или переключитесь на 2D.'); } }, 20000); };
+  const onMsg = (e) => {
+    if (!frame.isConnected) { window.removeEventListener('message', onMsg); clearTimeout(failTimer); return; }
+    if (e.origin !== V3D_ORIGIN || e.source !== frame.contentWindow || !e.data) return;
+    const t = e.data.type;
+    if (t === 'cs3d:ready') { ready = true; flush(); }
+    else if (t === 'cs3d:loading') { status.hidden = false; status.textContent = tr('Загрузка 3D…'); }
+    else if (t === 'cs3d:loaded') { status.hidden = true; clearTimeout(failTimer); }
+    else if (t === 'cs3d:error') { status.hidden = false; status.textContent = `${tr('3D недоступно для этого предмета')}: ${String(e.data.message || '').slice(0, 140)}`; }
+  };
+  window.addEventListener('message', onMsg); arm();
+  const reload = (next) => { cur = { map: cur.map, view: view === 'fpv' ? 'fpv' : null, ...next }; ready = false; pending = null; status.hidden = false; status.textContent = tr('Загрузка 3D…'); frame.src = v3dUrl(cur); arm(); };
+  const btn = (text, title, fn) => h('button', { class: 'btn v3d-btn', title, onclick: fn }, text);
+  const mapSel = h('select', { class: 'v3d-map', 'aria-label': tr('Сцена') }, V3D_MAPS.map((m) => h('option', { value: m, selected: m === cur.map }, m === 'studio' ? tr('Студия') : m)));
+  mapSel.addEventListener('change', () => { try { localStorage.setItem('cs2ui.view3dMap', mapSel.value); } catch { /* ok */ } cur.map = mapSel.value; send({ type: 'cs3d:setMap', map: mapSel.value }); });
+  const fpvBtn = btn('От первого лица', 'Оружие в руках, как в игре', () => { view = view === 'fpv' ? 'orbit' : 'fpv'; fpvBtn.classList.toggle('on', view === 'fpv'); set({ view }); });
+  const spinBtn = btn('Вращение', 'Автоматическое вращение', () => { spin = !spin; spinBtn.classList.toggle('on', spin); set({ auto_rotate: spin ? 1 : 0 }); });
+  const poseSel = h('select', { 'aria-label': tr('Положение ножа') }, [['tilted', 'Наклонно'], ['vertical', 'Вертикально'], ['horizontal', 'Горизонтально']].map(([v, t]) => h('option', { value: v }, t)));
+  poseSel.addEventListener('change', () => set({ knife_pose: poseSel.value }));
+  const hand = tools === 'weapon' || tools === 'knife';
+  const bar = h('div', { class: 'v3d-bar' },
+    hand ? btn('▶ Осмотр', 'Анимация осмотра от первого лица (как клавиша F)', () => { if (view !== 'fpv') { view = 'fpv'; fpvBtn.classList.add('on'); set({ view }); setTimeout(() => send({ type: 'cs3d:inspect' }), 900); } else send({ type: 'cs3d:inspect' }); }) : null,
+    hand ? fpvBtn : null,
+    tools === 'glove' ? btn('▶ Осмотр перчаток', 'Посмотреть на перчатки', () => send({ type: 'cs3d:inspectGloves' })) : null,
+    tools === 'knife' ? poseSel : null,
+    tools !== 'agent' ? btn('Другая сторона', 'Развернуть предмет', () => { side = side === 'front' ? 'back' : 'front'; set({ side }); }) : null,
+    spinBtn, mapSel,
+    btn('Сброс вида', 'Вернуть камеру', () => { side = 'front'; send({ type: 'cs3d:resetView' }); }),
+    btn('⛶', 'На весь экран', () => { const p = frame.requestFullscreen && frame.requestFullscreen(); if (p && p.catch) p.catch(() => {}); }));
+  const el = h('div', { class: `v3d v3d-${tools}` }, h('div', { class: 'v3d-stage' }, frame, status), bar,
+    h('div', { class: 'hint' }, 'Мышь: вращать и приближать. 3D рисует просмотрщик ChainSkins шейдерами самой игры; у части перчаток износ может отличаться от игры.'));
+  return { el, set, reload };
+}
+/** Переключатель 3D / 2D над предпросмотром. */
+function viewSwitch(redraw) {
+  const on = v3dOn();
+  return h('div', { class: 'seg v3d-seg', role: 'group', 'aria-label': tr('Вид предпросмотра') },
+    h('button', { class: on ? 'on' : '', onclick: () => { v3dSave(true); redraw(); } }, '3D'), h('button', { class: on ? '' : 'on', onclick: () => { v3dSave(false); redraw(); } }, '2D'));
+}
+
+// ---------------------------------------------------------------- прослушивание музыкальных наборов (звук из файлов игры, через игровую ВМ)
+const MUSIC_PLAYER = { audio: null, key: '' };
+function musicStop() { if (MUSIC_PLAYER.audio) { MUSIC_PLAYER.audio.pause(); MUSIC_PLAYER.audio = null; MUSIC_PLAYER.key = ''; } }
+/** Событие по имени файла: startround_02 → «Начало раунда 2». */
+function musicTrackLabel(file) {
+  const base = String(file).replace(/\.(mp3|wav)$/i, '');
+  const m = /^(.*?)(?:_(\d+))?$/.exec(base); const ev = MUSIC_EVENTS.find((e) => e[0] === m[1]);
+  return ev ? `${tr(ev[1])}${m[2] ? ` ${Number(m[2])}` : ''}` : base;
+}
+function musicPlayer(m) {
+  const box = h('div', { class: 'mk-player' }, h('div', { class: 'muted small' }, 'Загрузка списка треков… В первый раз звук извлекается из файлов игры — до минуты.'));
+  let rows = [];
+  const paint = () => { for (const r of rows) { const on = MUSIC_PLAYER.key === r.key; r.btn.textContent = on ? '⏸' : '▶'; r.el.classList.toggle('on', on); } };
+  const play = (r, chain) => {
+    if (MUSIC_PLAYER.key === r.key) { musicStop(); paint(); return; }
+    musicStop();
+    const a = new Audio(`/api/music-kit/${m.id}/${encodeURIComponent(r.file)}`); MUSIC_PLAYER.audio = a; MUSIC_PLAYER.key = r.key;
+    a.addEventListener('ended', () => { if (MUSIC_PLAYER.audio !== a) return; MUSIC_PLAYER.audio = null; MUSIC_PLAYER.key = ''; paint(); const next = chain && rows[rows.indexOf(r) + 1]; if (next && box.isConnected) play(next, true); });
+    a.addEventListener('timeupdate', () => { if (MUSIC_PLAYER.audio === a && !box.isConnected && !document.querySelector('.mk-player')) musicStop(); });
+    a.addEventListener('error', () => { if (MUSIC_PLAYER.audio !== a) return; musicStop(); paint(); toast(tr('Не удалось загрузить трек: игровая ВМ выключена или файл не извлёкся'), 'e'); });
+    a.play().catch(() => {}); paint();
+  };
+  api('GET', `/music-kit?id=${m.id}`).then((r) => {
+    if (!box.isConnected) return;
+    const order = (f) => { const i = MUSIC_EVENTS.findIndex((e) => f.startsWith(e[0])); return i < 0 ? 99 : i; };
+    const tracks = [...(r.tracks || [])].sort((x, y) => order(x.file) - order(y.file) || x.file.localeCompare(y.file));
+    if (!tracks.length) { box.replaceChildren(h('div', { class: 'warn small' }, 'В файлах игры не нашлось треков этого набора.')); return; }
+    rows = tracks.map((t) => {
+      const ev = MUSIC_EVENTS.find((e) => t.file.startsWith(e[0]));
+      const row = { file: t.file, key: `${m.id}/${t.file}` };
+      row.btn = h('button', { class: 'btn mk-play', 'aria-label': tr('Слушать'), onclick: () => play(row, false) }, '▶');
+      row.el = h('div', { class: 'mk-row' }, row.btn, h('div', {}, h('b', {}, musicTrackLabel(t.file)), ev ? h('div', { class: 'muted small' }, ev[2], ' · ', ev[3] === 'all' ? 'слышат все игроки' : 'слышите только вы') : null));
+      return row;
+    });
+    box.replaceChildren(h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => { musicStop(); play(rows[0], true); } }, '▶ Весь набор подряд'), h('button', { class: 'btn', onclick: () => { musicStop(); paint(); } }, '■ Стоп'),
+      r.cached ? null : h('span', { class: 'muted small' }, 'Треки загружаются с игровой ВМ и остаются в кэше панели.')), ...rows.map((x) => x.el));
+    paint();
+  }).catch((e) => {
+    if (!box.isConnected) return;
+    box.replaceChildren(h('div', { class: 'warn small' }, `${tr('Прослушивание недоступно')}: ${e.message}`), h('div', { class: 'hint' }, 'Звук берётся из файлов игры на игровой ВМ: включите её и откройте набор ещё раз. Уже прослушанные наборы играют из кэша панели и при выключенной ВМ.'));
+  });
+  return box;
+}
+
 function previewPanel(redraw, L) {
   const sel = K.sel;
+  E.onStickers = null; if (!sel || !sel.music) musicStop();
   if (!sel) return h('div', { class: 'card preview' }, h('h3', {}, 'Предпросмотр'), h('div', { class: 'muted' }, 'Выберите скин слева: здесь появятся картинка, настройки износа, паттерна и кнопка «Надеть».'));
   const need = () => { if (!K.steamid || !L) throw new Error(warn2()); };
   const warn2 = () => (!K.steamid ? 'Сначала выберите игрока' : (K.err || (K.loadout && K.loadout.reason) || 'База скинов недоступна'));
@@ -267,34 +380,17 @@ function previewPanel(redraw, L) {
 
   if (sel.agent) {
     const a = sel.agent;
-    return h('div', { class: 'card preview' }, h('h3', {}, 'Агент'), h('div', { class: 'big', style: `--rar:${K.cat.rarities[a.rarity].c}` }, skinImg(a.img, a.name)), h('b', {}, a.name), h('div', { class: 'muted small' }, `Команда: ${a.team === 'ct' ? 'CT' : 'T'} · модель ${a.model.split('/').pop()}`),
+    return h('div', { class: 'card preview' }, h('h3', {}, 'Агент'), viewSwitch(redraw), v3dOn() ? viewer3d({ character: `customplayer_${a.model.split('/').pop().replace(/\.vmdl$/, '')}` }, 'agent').el : h('div', { class: 'big', style: `--rar:${K.cat.rarities[a.rarity].c}` }, skinImg(a.img, a.name)), h('b', {}, a.name), h('div', { class: 'muted small' }, `Команда: ${a.team === 'ct' ? 'CT' : 'T'} · модель ${a.model.split('/').pop()}`),
       h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: act(async () => { need(); await applyOps([{ op: 'agents', [a.team]: a.model }], 'Агент надет'); redraw(); }) }, 'Надеть агента'),
         h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'agents', [a.team]: null }], 'Агент снят'); redraw(); }) }, `Снять (${a.team === 'ct' ? 'CT' : 'T'})`)),
-      h('div', { class: 'viewlinks' }, h('b', {}, 'Посмотреть агента'),
-        h('div', { class: 'row' },
-          extLink(`https://www.google.com/search?q=${encodeURIComponent(`"${a.name}" CS2 agent 3D viewer`)}`, '🧍 3D, в полный рост'),
-          extLink(`https://www.google.com/search?q=${encodeURIComponent(`"${a.name}" CS2 agent first person sleeves arms`)}`, '✋ Руки от первого лица'),
-          extLink(`https://steamcommunity.com/market/listings/730/${encodeURIComponent(a.name)}`, 'Steam Market')),
-        h('div', { class: 'hint' }, 'В каталоге у агента только портрет. Полноростовая 3D-модель и вид рук от первого лица есть у сторонних просмотрщиков (поиск откроется в новой вкладке); собственный 3D-просмотр потребует вытащить модели из файлов игры на сервере.')),
       h('div', { class: 'hint' }, 'Модель агента сохраняется как путь agents/models/…; если после надевания агент не сменился, откройте /agents в игре один раз — это подскажет формат вашей версии плагина.'));
   }
   if (sel.music) {
     const m = sel.music;
-    const ev = MUSIC_EVENTS.find((e) => e[0] === (K.musicEvent || 'wonround')) || MUSIC_EVENTS[0];
-    const q = (extra) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${m.name} CS2 music kit ${extra}`.trim())}`;
-    const info = h('div', { class: 'muted small' });
-    const chips = h('div', { class: 'chips' });
-    const paintEv = () => {
-      chips.replaceChildren(...MUSIC_EVENTS.map(([id, label]) => h('button', { class: `chip ${id === ev[0] ? 'on' : ''}`, onclick: () => { K.musicEvent = id; redraw(); } }, label)));
-      info.replaceChildren(h('b', {}, ev[1]), ' — ', ev[2], ' ', h('span', { class: ev[3] === 'all' ? 'tag okc' : 'tag' }, ev[3] === 'all' ? 'слышат все игроки' : 'слышите только вы'));
-    };
-    paintEv();
     return h('div', { class: 'card preview' }, h('h3', {}, 'Музыкальный набор'), h('div', { class: 'big' }, skinImg(m.img, m.name)), h('b', {}, m.name),
       h('div', { class: 'row' }, teamSel, h('button', { class: 'btn primary', onclick: act(async () => { need(); await applyOps([{ op: 'music', id: m.id, teams: teamList() }], 'Музыка выбрана'); redraw(); }) }, 'Выбрать'),
         h('button', { class: 'btn', onclick: act(async () => { need(); await applyOps([{ op: 'music', id: 0 }], 'Музыка сброшена'); redraw(); }) }, 'Сбросить')),
-      h('div', { class: 'viewlinks' }, h('b', {}, 'Прослушать и выбрать момент'), chips, info,
-        h('div', { class: 'row' }, extLink(q(ev[4]), `▶ Слушать: ${ev[1]}`), extLink(q(''), '▶ Весь набор'), extLink(`https://steamcommunity.com/market/listings/730/${encodeURIComponent(`Music Kit | ${m.name}`)}`, 'Steam Market')),
-        h('div', { class: 'hint' }, 'Звук набора Valve не публикует, поэтому прослушивание открывается на YouTube в новой вкладке (по выбранному моменту).')),
+      h('div', { class: 'viewlinks' }, h('b', {}, 'Прослушать'), musicPlayer(m)),
       h('div', { class: 'hint' }, 'Набор применяется целиком: выбрать звук для отдельного события (MVP, конец раунда) нельзя — это ограничение игры и плагина WeaponPaints. StatTrak™ для музыкальных наборов плагин не поддерживает (в базе нет поля для счётчика MVP), поэтому дубли «StatTrak» убраны из списка, а переключателя нет.'));
   }
   const s = sel.skin; const kind = s.weapon.kind;
@@ -306,6 +402,12 @@ function previewPanel(redraw, L) {
   const scratch = h('div', { class: 'wear-scratch' });
   const stack = h('div', { class: 'wear-stack' });
   const bigImg = h('div', { class: 'big', style: `--rar:${s.rar.c}` }, skinImg(s.img, s.name), s.paint === 0 ? null : stack, s.paint === 0 ? null : scratch);
+  const stk3 = () => (kind === 'weapon' ? v3dStickers(E.stickers) : '');
+  let stkShown = stk3();
+  const v3 = v3dOn() ? viewer3d({ def: s.weapon.def, paint: s.paint, float: Math.min(Math.max(E.wear, s.min), s.max), seed: v3dSeed(E.seed), stickers: stkShown }, kind) : null;
+  let stkTimer = null;
+  // наклейки просмотрщик принимает только при загрузке: после правки перезагружаем сцену (с паузой, чтобы не дёргать на каждое нажатие)
+  E.onStickers = v3 ? () => { clearTimeout(stkTimer); stkTimer = setTimeout(() => { const n = stk3(); if (n === stkShown || !v3.el.isConnected) return; stkShown = n; v3.reload({ def: s.weapon.def, paint: s.paint, float: E.wear, seed: v3dSeed(E.seed), stickers: n }); }, 600); } : null;
   const wearNote = h('div', { class: 'hint' }, 'Вид износа на картинке приблизительный: в каталоге одна картинка на скин. Точный вид покажет осмотр в игре.');
   let wearLayers = null; // { imgs: [<img>], anchors: [float] } — настоящие рендеры износа из Steam Market, когда загрузились
   const meta = h('div', { class: 'muted small' });
@@ -313,10 +415,11 @@ function previewPanel(redraw, L) {
     E.wear = Number(wearNum.value); E.seed = Number(seedIn.value); E.nametag = tagIn.value; E.stattrak = stIn.checked; E.count = Number(cntIn.value);
     if (s.paint !== 0 && wearLayers) { SkinLinks.wearBlend(wearLayers.anchors, E.wear).forEach((o, i) => { wearLayers.imgs[i].style.opacity = o.toFixed(3); }); }
     else if (s.paint !== 0) { const lk = SkinLinks.wearLook(E.wear); const im = bigImg.querySelector('img'); if (im) im.style.filter = lk.filter; scratch.style.opacity = lk.scratch; }
+    if (v3) v3.set({ float: E.wear, seed: v3dSeed(E.seed) });
     meta.textContent = tr(`${wearName(E.wear)} · float ${E.wear.toFixed(3)} · паттерн ${E.seed}${E.nametag ? ` · «${E.nametag}»` : ''}${E.stattrak ? ` · StatTrak™ ${E.count}` : ''}`);
   };
   // Настоящие картинки износа (FN…BS) с сервера панели: между ними плавный кроссфейд по положению ползунка. Пока не загрузились — запасной вариант (фильтр).
-  if (s.paint !== 0) {
+  if (s.paint !== 0 && !v3) {
     const hashName = `${kind === 'weapon' ? '' : '★ '}${s.weapon.name.replace(/^★\s*/, '')} | ${s.name}`;
     K.wearCache = K.wearCache || new Map();
     const got = K.wearCache.get(hashName) ? Promise.resolve(K.wearCache.get(hashName)) : api('GET', `/skin-wears?name=${encodeURIComponent(hashName)}`).then((r) => { if (Object.values(r.wears).some(Boolean)) K.wearCache.set(hashName, r.wears); return r.wears; });
@@ -343,13 +446,13 @@ function previewPanel(redraw, L) {
     if (kind === 'glove') return [{ op: 'gloves', teams: teamList(), def: s.weapon.def }, base];
     return [base];
   };
-  return h('div', { class: 'card preview' }, h('h3', {}, kind === 'knife' ? 'Нож' : kind === 'glove' ? 'Перчатки' : 'Оружие'), bigImg,
+  return h('div', { class: 'card preview' }, h('h3', {}, kind === 'knife' ? 'Нож' : kind === 'glove' ? 'Перчатки' : 'Оружие'), viewSwitch(redraw), v3 ? v3.el : bigImg,
     h('div', { style: 'margin-top:8px' }, h('b', {}, s.paint === 0 ? `${s.weapon.name} (ваниль)` : `${s.weapon.name} | ${s.name}`), h('div', { class: 'small', style: `color:${s.rar.c}` }, s.rar.n)),
     s.paint === 0 ? h('div', { class: 'hint' }, 'Ваниль — нож без скина.') : h('div', {},
       h('div', { class: 'row' }, 'Износ', wearIn, wearNum), h('div', { class: 'chips' }, WEAR_PRESETS.map(([t, w]) => h('span', { class: 'chip', onclick: () => { const v = Math.min(Math.max(w, s.min), s.max); wearIn.value = v; wearNum.value = v.toFixed(3); upd(); } }, t))),
       h('div', { class: 'row' }, 'Паттерн', seedIn, h('button', { class: 'btn', title: 'Случайный', onclick: () => { seedIn.value = Math.floor(Math.random() * 1001); upd(); } }, 'Случайный')),
       kind === 'weapon' ? h('div', {}, h('div', { class: 'row' }, tagIn), s.st ? h('div', { class: 'row' }, h('label', { class: 'switch' }, stIn, 'StatTrak™'), cntIn, 'убийств') : null) : null),
-    s.paint === 0 ? null : wearNote,
+    s.paint === 0 || v3 ? null : wearNote,
     kind === 'weapon' ? stickerEditor() : null,
     meta, h('div', { class: 'row' }, teamSel),
     s.paint === 0 ? null : skinLinksBlock(s),

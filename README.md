@@ -89,3 +89,8 @@ part. Current prices: <https://yandex.cloud/ru/prices>. Auto-stop (default 30 mi
   Restrict `panel_allowed_cidrs` if you have a fixed IP.
 * Secrets travel as instance metadata (visible to folder viewers and in Terraform state). Keep the state private.
 * Third-party plugins run as unprivileged user `steam`; root-only secrets (agent token, S3 keys) are not readable by it.
+
+## Благодарности
+
+- 3D-просмотр скинов, ножей, перчаток, агентов и наклеек — встроенный просмотрщик [ChainSkins 3D Viewer](https://github.com/ChainSkins/cs2-3d-viewer) (iframe `3d.chainskins.net/embed`).
+- Звук музыкальных наборов извлекается из файлов игры. Powered by [Source 2 Viewer](https://s2v.app) ([ValveResourceFormat](https://github.com/ValveResourceFormat/ValveResourceFormat)).

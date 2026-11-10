@@ -253,4 +253,4 @@ async function installPlugins(state, setPhase) {
   return errors;
 }
 
-module.exports = { installPlugin, planExtract, cleanEntries, pinnedRelease, sha256File, bundledRelease, run, updateGame, gameInstalled, installPlugins, installMetamod, installCss, patchGameInfo, ensureSteamcmd };
+module.exports = { download, installPlugin, planExtract, cleanEntries, pinnedRelease, sha256File, bundledRelease, run, updateGame, gameInstalled, installPlugins, installMetamod, installCss, patchGameInfo, ensureSteamcmd };

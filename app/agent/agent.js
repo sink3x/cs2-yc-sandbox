@@ -21,6 +21,10 @@ const skins = require('./skins').createSkinsService();
 const { parseOnlinePlayers, isSteamId } = require('./skins');
 
 const log = makeLogger('agent');
+const music = require('./music').createMusic({
+  pak: require('node:path').join(E.dirs.server, 'game/csgo/pak01_dir.vpk'), cacheDir: require('node:path').join(E.dirs.cache, 'music'), toolsDir: require('node:path').join(E.dirs.data, 'tools'),
+  exec: (...a) => exec(...a), download: (...a) => require('./install').download(...a), sha256File: (...a) => require('./install').sha256File(...a), log: makeLogger('music'),
+});
 const secrets = E.loadSecrets();
 const config = E.loadConfig();
 const TOKEN = secrets.AGENT_TOKEN || process.env.AGENT_TOKEN;
@@ -247,6 +251,9 @@ const routes = [
     return out;
   }],
   // Свои аудиофайлы: копия того, что загружено в панель (панель — источник правды, сверяет и досылает сама).
+  // музыкальные наборы: звук из файлов игры (первое обращение к набору извлекает его из VPK)
+  ['GET', '/music/kit', async ({ query }) => { const r = await music.kit(String(query.id || '')); return { id: r.id, kit: r.kit, tracks: r.tracks.map(({ file, size }) => ({ file, size })) }; }],
+  ['GET', '/music/track', async ({ query }) => music.track(String(query.id || ''), query.file)],
   ['GET', '/sound-files', async () => ({ files: sounds.list().map(({ name, size, sha1 }) => ({ name, size, sha1 })) })],
   ['PUT', '/sound-files/:name', async ({ params, raw }) => sounds.put(params.name, raw)],
   ['DELETE', '/sound-files/:name', async ({ params }) => { sounds.remove(params.name); return { ok: true }; }],

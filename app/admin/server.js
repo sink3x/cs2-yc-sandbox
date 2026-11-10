@@ -70,7 +70,7 @@ function validateCustomSkins(input) {
 }
 // Что разрешено роли «игрок»: только свои скины, профиль и общая информация о сервере.
 const AUDIT_SCAN = 20000; // сколько последних записей журнала просматриваем при поиске
-const PLAYER_OK = new Set(['GET /api/skin-wears', 'POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'POST /api/vm/request-start', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
+const PLAYER_OK = new Set(['GET /api/skin-wears', 'GET /api/music-kit', 'GET /api/music-kit/:id/:file', 'POST /api/link-account', 'GET /api/me', 'GET /api/public-info', 'POST /api/vm/request-start', 'GET /api/profile', 'PUT /api/profile', 'GET /api/skins/catalog', 'GET /api/stickers', 'GET /api/callouts', 'GET /api/steam-profiles', 'GET /api/vote', 'POST /api/vote/cast', 'GET /api/skins/loadout/:steamid',
   'POST /api/skins/apply/:steamid', 'POST /api/skins/refresh/:steamid', 'GET /api/faceit/:steamid', 'GET /api/custom-skins', 'GET /api/stats/:steamid',
   'GET /api/users/:slug', 'GET /api/people', 'GET /api/setups', 'GET /api/setups/:ref', 'POST /api/setups', 'PUT /api/setups/:ref', 'DELETE /api/setups/:ref', 'POST /api/setups/:ref/copy']);
 const SELF_ONLY = new Set(['GET /api/stats/:steamid', 'GET /api/skins/loadout/:steamid', 'POST /api/skins/apply/:steamid', 'POST /api/skins/refresh/:steamid', 'GET /api/faceit/:steamid']);
@@ -211,6 +211,18 @@ function createApp(deps = {}) {
   };
 
   // ---- agent client ---------------------------------------------------------------------------
+  // кэш прослушанных треков музыкальных наборов: не больше MUSIC_CACHE_MAX, старые (давно не слушали) удаляются первыми
+  const musicDir = deps.musicDir || path.join(VAR, 'music');
+  const MUSIC_FILE_RE = /^[a-z0-9_.-]{1,80}\.(mp3|wav)$/; const MUSIC_MAX_TRACK = 24 << 20; const MUSIC_CACHE_MAX = deps.musicCacheMax || (400 << 20);
+  function trimMusicCache() {
+    try {
+      const files = [];
+      for (const d of fs.readdirSync(musicDir)) { const dd = path.join(musicDir, d); if (!fs.statSync(dd).isDirectory()) continue; for (const f of fs.readdirSync(dd)) { if (!MUSIC_FILE_RE.test(f)) continue; const st = fs.statSync(path.join(dd, f)); files.push({ p: path.join(dd, f), size: st.size, at: st.mtimeMs }); } }
+      let total = files.reduce((a, f) => a + f.size, 0);
+      for (const f of files.sort((a, b) => a.at - b.at)) { if (total <= MUSIC_CACHE_MAX) break; fs.rmSync(f.p, { force: true }); total -= f.size; }
+    } catch { /* кэш необязателен */ }
+  }
+
   const agent = deps.agent || (async (method, apiPath, body, timeoutMs = 20000) => {
     // ВМ только что описана как не RUNNING → не ждём 20 с таймаута у закрытого порта, сразу «агент недоступен» (без status: так её считает выключенной вся остальная логика)
     if (vmState.lastStatus && vmState.lastStatus !== 'RUNNING' && now() - vmState.lastStatusAt < 20_000) throw new Error(`fetch failed: VM is ${vmState.lastStatus}`);
@@ -700,6 +712,30 @@ function createApp(deps = {}) {
       const us = usersWithSlugs(); const ig = inGameAdminIds(); backfillAvatars(us, Object.keys(us));
       return people.listUsers(Object.entries(us).map(([n, u]) => people.publicUser(n, u, { inGameAdmin: ig.has(String(u.steamid)) })), query);
     }],
+    // ---- музыкальные наборы: список треков и сам звук. Источник — файлы игры на игровой ВМ; прослушанное остаётся в кэше панели ----
+    ['GET', '/api/music-kit', async ({ query }) => {
+      const id = String(query.id || '');
+      if (!/^\d{1,6}$/.test(id)) throw Object.assign(new Error('music-kit: bad id'), { status: 400 });
+      const dir = path.join(musicDir, id); const meta = readJson(path.join(dir, 'index.json'), null);
+      if (meta && Array.isArray(meta.tracks) && meta.tracks.length) return { ...meta, cached: true };
+      const r = await agent('GET', `/music/kit?id=${id}`, null, 150000);
+      const tracks = (r.tracks || []).filter((t) => MUSIC_FILE_RE.test(String(t.file))).map((t) => ({ file: String(t.file), size: Number(t.size) || 0 }));
+      const out = { id: Number(id), kit: String(r.kit || ''), tracks };
+      if (tracks.length) { fs.mkdirSync(dir, { recursive: true }); writeJsonAtomic(path.join(dir, 'index.json'), out); }
+      return { ...out, cached: false };
+    }],
+    ['GET', '/api/music-kit/:id/:file', async ({ params }) => {
+      const id = String(params.id); const file = String(params.file).toLowerCase();
+      if (!/^\d{1,6}$/.test(id) || !MUSIC_FILE_RE.test(file)) throw Object.assign(new Error('music-kit: bad name'), { status: 400 });
+      const dir = path.join(musicDir, id); const p = path.join(dir, file);
+      const type = file.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg';
+      if (fs.existsSync(p)) { const t = new Date(); try { fs.utimesSync(p, t, t); } catch { /* ok */ } return { __file: { buf: fs.readFileSync(p), type, name: file, download: false } }; }
+      const r = await agent('GET', `/music/track?id=${id}&file=${encodeURIComponent(file)}`, null, 150000);
+      const buf = Buffer.from(String(r.b64 || ''), 'base64');
+      if (!buf.length || buf.length > MUSIC_MAX_TRACK) throw Object.assign(new Error('music-kit: empty or too large track'), { status: 502 });
+      fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(p, buf); trimMusicCache();
+      return { __file: { buf, type, name: file, download: false } };
+    }],
     ['GET', '/api/skin-wears', async ({ query }) => {
       const name = String(query.name || '').trim();
       if (!WEAR_NAME_RE.test(name)) throw Object.assign(new Error('skin-wears: bad name'), { status: 400 });
@@ -901,7 +937,7 @@ function createApp(deps = {}) {
 
   const SEC_HEADERS = {
     'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://avatars.fastly.steamstatic.com https://avatars.cloudflare.steamstatic.com https://raw.githubusercontent.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
+    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://community.akamai.steamstatic.com https://cdn.steamstatic.com https://avatars.steamstatic.com https://avatars.akamai.steamstatic.com https://avatars.fastly.steamstatic.com https://avatars.cloudflare.steamstatic.com https://raw.githubusercontent.com; frame-src https://3d.chainskins.net; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
   };
 
   function clientIp(req) {
