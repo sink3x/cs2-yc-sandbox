@@ -28,16 +28,17 @@ function parseVpkList(text) {
 
 /** items_game.txt → { defIndex: имя папки набора }. Берём только блок music_definitions. */
 function parseMusicDefs(text) {
-  const src = String(text); const at = src.indexOf('"music_definitions"');
-  if (at < 0) return {};
-  // блок заканчивается закрывающей скобкой на своём уровне
-  let depth = 0; let end = src.length; let started = false;
-  for (let i = at; i < src.length; i += 1) {
-    const c = src[i];
-    if (c === '{') { depth += 1; started = true; } else if (c === '}') { depth -= 1; if (started && depth === 0) { end = i; break; } }
+  const src = String(text); const out = {};
+  // секция может встречаться в файле несколько раз (игра склеивает одноимённые блоки) — читаем все
+  for (let at = src.indexOf('"music_definitions"'); at >= 0; at = src.indexOf('"music_definitions"', at + 1)) {
+    let depth = 0; let end = -1; let started = false;
+    for (let i = at; i < src.length; i += 1) {
+      const c = src[i];
+      if (c === '{') { depth += 1; started = true; } else if (c === '}') { depth -= 1; if (started && depth === 0) { end = i; break; } } else if (!started && c === '\n' && i > at + 40) break; // это не заголовок блока
+    }
+    if (end < 0) continue;
+    for (const m of src.slice(at, end).matchAll(/"(\d+)"\s*\{[^{}]*?"name"\s+"([^"]+)"/g)) out[m[1]] = m[2].toLowerCase();
   }
-  const out = {};
-  for (const m of src.slice(at, end).matchAll(/"(\d+)"\s*\{[^{}]*?"name"\s+"([^"]+)"/g)) out[m[1]] = m[2].toLowerCase();
   return out;
 }
 
@@ -98,13 +99,8 @@ function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log 
         fs.mkdirSync(cacheDir, { recursive: true });
         const kits = parseVpkList(await run(['--input', pak, '--vpk_list', '--vpk_filepath', 'sounds/music/', '--vpk_extensions', 'vsnd_c']));
         if (!Object.keys(kits).length) throw fail('в pak01_dir.vpk не найдено sounds/music/*.vsnd_c');
-        const tmp = path.join(cacheDir, '.items');
-        fs.rmSync(tmp, { recursive: true, force: true });
-        await run(['--input', pak, '--vpk_filepath', 'scripts/items/items_game.txt', '--output', tmp]);
-        const ig = findFile(tmp, 'items_game.txt');
-        const defs = ig ? parseMusicDefs(fs.readFileSync(ig, 'utf8')) : {};
-        fs.rmSync(tmp, { recursive: true, force: true });
-        if (!Object.keys(defs).length) throw fail('не удалось прочитать music_definitions из items_game.txt');
+        const { defs, why } = await readDefs();
+        if (!Object.keys(defs).length) throw fail(`не удалось прочитать music_definitions из items_game.txt (${why})`);
         const c = { stamp, tool: TOOL.tag, kits, defs };
         // наборы из старой версии игры больше не актуальны
         for (const e of fs.readdirSync(cacheDir, { withFileTypes: true })) if (e.isDirectory()) fs.rmSync(path.join(cacheDir, e.name), { recursive: true, force: true });
@@ -114,6 +110,22 @@ function createMusic({ pak, cacheDir, toolsDir, exec, download, sha256File, log 
     }
     return indexBusy;
   };
+
+  /** items_game.txt из VPK: пробуем выгрузку в каталог (с декомпиляцией и без) и печать в stdout; why — что именно не получилось. */
+  async function readDefs() {
+    const why = []; const tmp = path.join(cacheDir, '.items');
+    for (const extra of [[], ['--vpk_decompile']]) {
+      fs.rmSync(tmp, { recursive: true, force: true });
+      const r = await exec(bin, ['--input', pak, '--vpk_filepath', 'scripts/items/items_game.txt', '--output', tmp, ...extra], { env, timeout: 180000, maxBuffer: 64 << 20 });
+      const ig = findFile(tmp, 'items_game.txt');
+      if (ig) { const text = fs.readFileSync(ig, 'utf8'); const defs = parseMusicDefs(text); fs.rmSync(tmp, { recursive: true, force: true }); if (Object.keys(defs).length) return { defs, why: '' }; why.push(`файл ${text.length} б, секций ${text.split('"music_definitions"').length - 1}, начало: ${text.slice(0, 80).replace(/\s+/g, ' ')}`); } else why.push(`файл не выгружен${extra.length ? ' (-d)' : ''}: ${tail(r)}`);
+    }
+    fs.rmSync(tmp, { recursive: true, force: true });
+    const r = await exec(bin, ['--input', pak, '--vpk_filepath', 'scripts/items/items_game.txt', '--output', '-'], { env, timeout: 180000, maxBuffer: 128 << 20 });
+    const defs = parseMusicDefs(r.stdout);
+    if (!Object.keys(defs).length) why.push(`stdout ${r.stdout.length} б: ${tail(r)}`);
+    return { defs, why: why.join(' | ').slice(0, 900) };
+  }
 
   const kitBusy = new Map();
   /** Треки набора по номеру из каталога (def_index). Первый вызов извлекает звук из VPK. */

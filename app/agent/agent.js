@@ -34,7 +34,8 @@ const exec = (cmd, args, opts = {}) => new Promise((resolve) => {
   execFile(cmd, args, { maxBuffer: 8 << 20, timeout: 120000, ...opts }, (err, stdout, stderr) => resolve({ ok: !err, stdout: String(stdout), stderr: String(stderr), code: err && err.code }));
 });
 
-const loadState = () => readJson(E.files.state, null) || S.defaultState();
+// плагины, появившиеся в реестре после создания state.json, получают значение по умолчанию (уже выбранное пользователем не трогаем)
+const loadState = () => { const st = readJson(E.files.state, null); if (!st) return S.defaultState(); st.plugins = { ...S.defaultState().plugins, ...(st.plugins || {}) }; return st; };
 function saveState(state) { writeJsonAtomic(E.files.state, state); }
 
 /** Ask CS2Panel (>= 0.3.0) to press !wp for the player so new skins show up without a reconnect.
