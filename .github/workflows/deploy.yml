@@ -57,7 +57,7 @@ jobs:
           # always the commit CI has just tested on main (guarded by the job condition above)
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 2
-      - uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
 
       - name: Does the panel VM need a restart
         id: need
