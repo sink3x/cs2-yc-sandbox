@@ -49,7 +49,7 @@ jobs:
           (cd release && sha256sum ./*.tgz > SHA256SUMS && cat SHA256SUMS)
 
       - name: Build provenance attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: release/*.tgz
 
