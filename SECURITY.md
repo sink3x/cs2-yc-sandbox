@@ -30,7 +30,7 @@ Supported versions: the latest release and `main`.
 - The audit log never stores secrets from RCON commands (`sv_password ...` becomes `sv_password [hidden]`).
 - Restoring a backup validates the archive first: only files and directories, no `..`, absolute paths or links.
 - The panel's public URL comes from the config, not from the `Host` header; the initial password file is removed from disk after the accounts are created.
-- CI runs CodeQL and gitleaks; Dependabot watches npm, Actions and Terraform providers; GitHub Actions are pinned by commit SHA (CodeQL and attestation actions by tag).
+- CI runs CodeQL and gitleaks; GitHub Actions are pinned by commit SHA (CodeQL and attestation actions by tag); dependencies are reviewed and updated by hand.
 
 ## Known and accepted risks
 

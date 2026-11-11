@@ -44,7 +44,7 @@ flowchart LR
 | Данные | **JSON-файлы** + **MariaDB** (скины) + **Object Storage** (бэкапы) | Отдельной БД для самой панели нет |
 | TLS / обратный прокси | **Caddy** (автоматический Let's Encrypt на `<ip>.sslip.io`) | `vm-admin/install.sh` |
 | Доставка | Детерминированный `tar.gz` в **метаданных ВМ** + фронтенд в **Object Storage** | `scripts/pack.sh` |
-| CI/CD | **GitHub Actions**: CI, Release, Deploy (OpenTofu), CodeQL, Dependabot | `.github/` |
+| CI/CD | **GitHub Actions**: CI, Release, Deploy (OpenTofu), CodeQL | `.github/` |
 | Тесты | **`node:test`** (160+ тестов), xUnit для плагина, `unittest` для callouts | см. раздел 7 |
 
 ## 2. Где что работает
@@ -142,7 +142,6 @@ CS2 (SteamCMD, app 730) -> **Metamod:Source** -> **CounterStrikeSharp** (хос�
 | `release.yml` | тег `v*` | тесты, архивы бандла и фронтенда, `SHA256SUMS`, аттестация происхождения, GitHub Release |
 | `deploy.yml` | после зелёного CI на `main` (по желанию) | `tofu apply`, перезапуск ВМ панели, проверка, что отдаётся новый фронтенд |
 | `codeql.yml` | push / раз в неделю | статический анализ |
-| `dependabot.yml` | раз в неделю | обновления npm-пакетов `web/`, Actions, провайдеров Terraform |
 
 ## 7. Качество и тесты
 
@@ -173,7 +172,7 @@ cs2-server-admin-panel/
 |- vm-admin/, vm-cs2/   идемпотентные установщики и юниты systemd для каждой роли ВМ
 |- scripts/             deploy.sh, pack.sh, init-secrets.sh, вспомогательные set-*.sh
 |- docs/                документация, ADR, скриншоты
-`- .github/             workflows, шаблоны issue и PR, Dependabot
+`- .github/             workflows, шаблоны issue и PR
 ```
 
 ## 9. «Хочу изменить X: куда смотреть?»

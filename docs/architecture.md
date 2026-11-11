@@ -69,7 +69,7 @@ Game VM extras: `cs2-block-metadata.service` adds a firewall rule that rejects t
 | Panel to agent | Private network only, port 8081 reachable from the panel's security group, bearer token. The agent is never exposed to the internet; the panel offers its own typed routes (role-checked) and calls the agent from them. RCON batches are limited to 25 commands of at most 500 characters, without line breaks |
 | Game to cloud | The game VM's service account has `storage.editor` on the folder and nothing else (no Compute access); the metadata endpoint is blocked for the game user. Use a dedicated folder |
 | Secrets | Terraform variables to VM metadata to root-only files; never in the repository, logs or the frontend |
-| Supply chain | Node backend has no npm dependencies; frontend build dependencies are pinned and watched by Dependabot; CI runs CodeQL and gitleaks; third-party game plugins can be version-pinned |
+| Supply chain | Node backend has no npm dependencies; frontend build dependencies are pinned and updated by hand; CI runs CodeQL and gitleaks; third-party game plugins can be version-pinned |
 | CI deploy | Off by default; runs only for pushes to `main` of the same repository, secrets in a protected environment |
 
 The threat model and how to report a vulnerability are in [SECURITY.md](../SECURITY.md).

@@ -44,7 +44,7 @@ flowchart LR
 | Data | **JSON files** + **MariaDB** (skins) + **Object Storage** (backups) | No database server for the panel itself |
 | TLS / reverse proxy | **Caddy** (automatic Let's Encrypt on `<ip>.sslip.io`) | `vm-admin/install.sh` |
 | Delivery | Deterministic `tar.gz` bundle in **instance metadata** + frontend in **Object Storage** | `scripts/pack.sh` |
-| CI/CD | **GitHub Actions**: CI, Release, Deploy (OpenTofu), CodeQL, Dependabot | `.github/` |
+| CI/CD | **GitHub Actions**: CI, Release, Deploy (OpenTofu), CodeQL | `.github/` |
 | Tests | **`node:test`** (160+ tests), xUnit for the plugin, `unittest` for callouts | see section 7 |
 
 ## 2. Where each thing runs
@@ -142,7 +142,6 @@ A built copy is bundled in `app/plugins-bundled/CS2Panel.zip`. See [cs2-server-a
 | `release.yml` | tag `v*` | tests, bundle + frontend archives, `SHA256SUMS`, provenance attestation, GitHub Release |
 | `deploy.yml` | after green CI on `main` (opt-in) | `tofu apply`, restart of the panel VM, verification that the new frontend is served |
 | `codeql.yml` | push / weekly | static analysis |
-| `dependabot.yml` | weekly | updates for `web/` npm packages, Actions, Terraform providers |
 
 ## 7. Quality and tests
 
@@ -173,7 +172,7 @@ cs2-server-admin-panel/
 |- vm-admin/, vm-cs2/   idempotent installers and systemd units per VM role
 |- scripts/             deploy.sh, pack.sh, init-secrets.sh, set-*.sh helpers
 |- docs/                documentation, ADRs, screenshots
-`- .github/             workflows, issue and PR templates, Dependabot
+`- .github/             workflows, issue and PR templates
 ```
 
 ## 9. "I want to change X: where do I look?"
