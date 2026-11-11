@@ -10,7 +10,7 @@ const S = require('../lib/state');
 const { readJson, writeJsonAtomic, makeLogger, sleep } = require('../lib/util');
 
 const log = makeLogger('install');
-const UA = { 'User-Agent': 'cs2-yc-sandbox-agent', Accept: 'application/vnd.github+json' };
+const UA = { 'User-Agent': 'cs2-server-admin-panel-agent', Accept: 'application/vnd.github+json' };
 
 function run(cmd, args, { cwd, env, timeoutMs = 0, quiet = false } = {}) {
   return new Promise((resolve, reject) => {

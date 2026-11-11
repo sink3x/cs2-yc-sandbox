@@ -1,5 +1,5 @@
 {
-  "name": "cs2-yc-sandbox-app",
+  "name": "cs2-server-admin-panel-app",
   "version": "1.0.0",
   "private": true,
   "description": "Agent (runs on the CS2 VM) and admin panel (runs on the small always-on VM). Zero dependencies, Node >= 18.",

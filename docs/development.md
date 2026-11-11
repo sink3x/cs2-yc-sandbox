@@ -3,7 +3,7 @@
 You need **Node.js 18+** and a POSIX shell. Terraform is only needed to work on `terraform/`.
 
 ```bash
-git clone https://github.com/sink3x/cs2-yc-sandbox.git && cd cs2-yc-sandbox
+git clone https://github.com/sink3x/cs2-server-admin-panel.git && cd cs2-server-admin-panel
 npm test           # backend, agent, state, i18n, security, demo: node:test, no dependencies
 npm run demo       # the real panel on a mock game server: http://127.0.0.1:8080
 ```
@@ -61,4 +61,4 @@ scripts/pack.sh      # build/bundle.tgz (+ build/public/): deterministic, prints
 2. Commit, then `git tag vX.Y.Z && git push --tags`.
 3. The **Release** workflow runs the tests, builds `bundle.tgz` and the public frontend archive, writes `SHA256SUMS`, attaches a build provenance attestation and publishes a GitHub Release with the changelog section as the notes. It can also be started by hand from the Actions tab with a tag.
 
-Verify a download: `sha256sum -c SHA256SUMS` and `gh attestation verify <file> -R sink3x/cs2-yc-sandbox`.
+Verify a download: `sha256sum -c SHA256SUMS` and `gh attestation verify <file> -R sink3x/cs2-server-admin-panel`.

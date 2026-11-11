@@ -40,7 +40,7 @@ flowchart LR
 | Фронтенд панели | Страницы на **чистом JS** + «острова» на **Preact 11 / TypeScript 7 / Vite 8** | `app/admin/public/`, `web/` |
 | Агент (на игровой ВМ) | **Node.js**, без зависимостей | `app/agent/` |
 | Игровой сервер | **Выделенный сервер CS2** + **Metamod:Source** + **CounterStrikeSharp** | ставится агентом через SteamCMD |
-| Плагины игры | **C# / .NET** (CounterStrikeSharp) | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) наш; MatchZy, WeaponPaints и другие сторонние |
+| Плагины игры | **C# / .NET** (CounterStrikeSharp) | [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) наш; MatchZy, WeaponPaints и другие сторонние |
 | Данные | **JSON-файлы** + **MariaDB** (скины) + **Object Storage** (бэкапы) | Отдельной БД для самой панели нет |
 | TLS / обратный прокси | **Caddy** (автоматический Let's Encrypt на `<ip>.sslip.io`) | `vm-admin/install.sh` |
 | Доставка | Детерминированный `tar.gz` в **метаданных ВМ** + фронтенд в **Object Storage** | `scripts/pack.sh` |
@@ -101,7 +101,7 @@ CS2 (SteamCMD, app 730) -> **Metamod:Source** -> **CounterStrikeSharp** (хос�
 
 ### 3.5 Плагин CS2Panel (отдельный репозиторий)
 **C# на .NET 10**, `CounterStrikeSharp.API` 1.0.379. Меню в игре, звуки, оформление команд и игроков, животные, очистка карты.
-Собранная копия лежит в `app/plugins-bundled/CS2Panel.zip`. См. [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin).
+Собранная копия лежит в `app/plugins-bundled/CS2Panel.zip`. См. [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin).
 
 ### 3.6 Инфраструктура: `terraform/`, `common/`, `vm-admin/`, `vm-cs2/`
 - Файлы Terraform: `network.tf`, `iam.tf`, `storage.tf`, `compute.tf`, `variables.tf`, `outputs.tf`, `versions.tf`.
@@ -110,7 +110,7 @@ CS2 (SteamCMD, app 730) -> **Metamod:Source** -> **CounterStrikeSharp** (хос�
 - **Юниты systemd** лежат в `vm-*/systemd/`. Повторный bootstrap никогда не перезапускает игровой процесс.
 
 ### 3.7 Данные callouts (отдельный репозиторий)
-`callouts.json` (названия мест на четырёх языках и позиции) собран скриптами на **Python 3** из данных навигационной сетки ([awpy](https://github.com/pnxenopoulos/awpy), MIT) и рисуется поверх радаров [Boltobserv](https://github.com/boltgolt/boltobserv) (копии WebP в `app/admin/public/callouts/`, происхождение в `NOTICE.md`). См. [cs2-callouts](https://github.com/sink3x/cs2-callouts); там же есть вариант со схемами и чистой лицензией.
+`callouts.json` (названия мест на четырёх языках и позиции) собран скриптами на **Python 3** из данных навигационной сетки ([awpy](https://github.com/pnxenopoulos/awpy), MIT) и рисуется поверх радаров [Boltobserv](https://github.com/boltgolt/boltobserv) (копии WebP в `app/admin/public/callouts/`, происхождение в `NOTICE.md`). См. [cs2-server-admin-callouts](https://github.com/sink3x/cs2-server-admin-callouts); там же есть вариант со схемами и чистой лицензией.
 
 ## 4. Где хранится состояние
 
@@ -152,14 +152,14 @@ CS2 (SteamCMD, app 730) -> **Metamod:Source** -> **CounterStrikeSharp** (хос�
 | Типы фронтенда | `tsc --noEmit` | `web/` |
 | Инфраструктура | `tofu fmt -check`, `tofu validate` | `terraform/` |
 | Секреты в git | gitleaks | CI |
-| Плагин | xUnit-тесты чистой логики | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) |
-| Данные callouts | проверки схемы на Python `unittest` | [cs2-callouts](https://github.com/sink3x/cs2-callouts) |
+| Плагин | xUnit-тесты чистой логики | [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) |
+| Данные callouts | проверки схемы на Python `unittest` | [cs2-server-admin-callouts](https://github.com/sink3x/cs2-server-admin-callouts) |
 | Вручную / демо | `npm run demo`: настоящая панель на имитации игрового сервера | `app/dev/demo.js` |
 
 ## 8. Карта репозитория
 
 ```
-cs2-yc-sandbox/
+cs2-server-admin-panel/
 |- app/
 |  |- admin/            бэкенд панели (server.js) и классический фронтенд (public/)
 |  |- agent/            агент, работает на игровой ВМ
@@ -189,7 +189,7 @@ cs2-yc-sandbox/
 | Изменить размер ВМ, диски, сеть | `terraform/variables.tf`, `compute.tf`, `network.tf` |
 | Изменить, что происходит при загрузке ВМ | `common/bootstrap.sh`, `vm-*/install.sh` |
 | Добавить перевод | `app/admin/public/i18n-extra*.js` |
-| Изменить меню в игре | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin), `src/Plugin.cs` |
+| Изменить меню в игре | [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin), `src/Plugin.cs` |
 
 ## 10. Честные замечания
 

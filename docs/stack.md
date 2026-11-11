@@ -40,7 +40,7 @@ flowchart LR
 | Panel frontend | **Vanilla JS** pages + **Preact 11 / TypeScript 7 / Vite 8** islands | `app/admin/public/`, `web/` |
 | Agent (on the game VM) | **Node.js**, no dependencies | `app/agent/` |
 | Game server | **CS2 dedicated server** + **Metamod:Source** + **CounterStrikeSharp** | installed by the agent via SteamCMD |
-| Game plugins | **C# / .NET** (CounterStrikeSharp) | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) is ours; MatchZy, WeaponPaints etc. are third-party |
+| Game plugins | **C# / .NET** (CounterStrikeSharp) | [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) is ours; MatchZy, WeaponPaints etc. are third-party |
 | Data | **JSON files** + **MariaDB** (skins) + **Object Storage** (backups) | No database server for the panel itself |
 | TLS / reverse proxy | **Caddy** (automatic Let's Encrypt on `<ip>.sslip.io`) | `vm-admin/install.sh` |
 | Delivery | Deterministic `tar.gz` bundle in **instance metadata** + frontend in **Object Storage** | `scripts/pack.sh` |
@@ -101,7 +101,7 @@ releases are downloaded from GitHub on install, with optional version pins.
 
 ### 3.5 CS2Panel plugin (separate repository)
 **C# on .NET 10**, `CounterStrikeSharp.API` 1.0.379. In-game menu, sounds, team / player identity, animals, cleanup.
-A built copy is bundled in `app/plugins-bundled/CS2Panel.zip`. See [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin).
+A built copy is bundled in `app/plugins-bundled/CS2Panel.zip`. See [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin).
 
 ### 3.6 Infrastructure: `terraform/`, `common/`, `vm-admin/`, `vm-cs2/`
 - Terraform files: `network.tf`, `iam.tf`, `storage.tf`, `compute.tf`, `variables.tf`, `outputs.tf`, `versions.tf`.
@@ -110,7 +110,7 @@ A built copy is bundled in `app/plugins-bundled/CS2Panel.zip`. See [cs2-panel-pl
 - **Systemd units** live in `vm-*/systemd/`. The game process is never restarted by a re-bootstrap.
 
 ### 3.7 Callouts data (separate repository)
-`callouts.json` (place names in four languages and positions) is built from navigation-mesh data ([awpy](https://github.com/pnxenopoulos/awpy), MIT) with **Python 3** scripts and drawn on the radars of [Boltobserv](https://github.com/boltgolt/boltobserv) (WebP copies in `app/admin/public/callouts/`, origin in its `NOTICE.md`). See [cs2-callouts](https://github.com/sink3x/cs2-callouts), which also has a licence-clean schematic variant.
+`callouts.json` (place names in four languages and positions) is built from navigation-mesh data ([awpy](https://github.com/pnxenopoulos/awpy), MIT) with **Python 3** scripts and drawn on the radars of [Boltobserv](https://github.com/boltgolt/boltobserv) (WebP copies in `app/admin/public/callouts/`, origin in its `NOTICE.md`). See [cs2-server-admin-callouts](https://github.com/sink3x/cs2-server-admin-callouts), which also has a licence-clean schematic variant.
 
 ## 4. Where state lives
 
@@ -152,14 +152,14 @@ A built copy is bundled in `app/plugins-bundled/CS2Panel.zip`. See [cs2-panel-pl
 | Frontend types | `tsc --noEmit` | `web/` |
 | Infrastructure | `tofu fmt -check`, `tofu validate` | `terraform/` |
 | Secrets in git | gitleaks | CI |
-| Plugin | xUnit tests of the pure logic | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) |
-| Callouts data | Python `unittest` schema checks | [cs2-callouts](https://github.com/sink3x/cs2-callouts) |
+| Plugin | xUnit tests of the pure logic | [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) |
+| Callouts data | Python `unittest` schema checks | [cs2-server-admin-callouts](https://github.com/sink3x/cs2-server-admin-callouts) |
 | Manual / demo | `npm run demo`: the real panel on a mock game server | `app/dev/demo.js` |
 
 ## 8. Repository map
 
 ```
-cs2-yc-sandbox/
+cs2-server-admin-panel/
 |- app/
 |  |- admin/            panel backend (server.js) and the classic frontend (public/)
 |  |- agent/            agent that runs on the game VM
@@ -189,7 +189,7 @@ cs2-yc-sandbox/
 | Change VM size, disks, network | `terraform/variables.tf`, `compute.tf`, `network.tf` |
 | Change what happens at VM boot | `common/bootstrap.sh`, `vm-*/install.sh` |
 | Add a translation | `app/admin/public/i18n-extra*.js` |
-| Change the in-game menu | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) `src/Plugin.cs` |
+| Change the in-game menu | [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) `src/Plugin.cs` |
 
 ## 10. Honest notes
 

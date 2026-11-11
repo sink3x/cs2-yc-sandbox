@@ -23,7 +23,7 @@ flowchart TB
 
 - **Admin panel** (`app/admin/server.js`): authentication, roles, the JSON API, VM control, audit log, auto-stop. It is the only thing exposed to the internet besides the game port.
 - **Agent** (`app/agent/`): runs on the game VM next to the game. It owns everything that touches the game: configs, RCON, plugins, skins, backups.
-- **Game server**: CS2 with Metamod:Source and CounterStrikeSharp. Plugins are normal CounterStrikeSharp plugins; the first-party one is [CS2Panel](https://github.com/sink3x/cs2-panel-plugin).
+- **Game server**: CS2 with Metamod:Source and CounterStrikeSharp. Plugins are normal CounterStrikeSharp plugins; the first-party one is [CS2Panel](https://github.com/sink3x/cs2-server-admin-plugin).
 
 ## One source of truth: `state.json`
 

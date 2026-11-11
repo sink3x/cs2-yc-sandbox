@@ -4,7 +4,7 @@
 
 Please **do not open a public issue** for a security problem. Use GitHub's private reporting:
 **Security tab > Report a vulnerability** on this repository
-(<https://github.com/sink3x/cs2-yc-sandbox/security/advisories/new>).
+(<https://github.com/sink3x/cs2-server-admin-panel/security/advisories/new>).
 
 Include what you found, how to reproduce it and the affected version or commit. You will get an answer within a few days; fixes are released as a patch version and credited in the changelog unless you prefer otherwise.
 

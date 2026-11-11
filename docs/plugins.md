@@ -6,7 +6,7 @@ The panel has a **plugin catalogue** (`app/lib/plugins.json`). Each entry is a C
 
 | Plugin | Upstream | On by default | What it gives you |
 |---|---|---|---|
-| **CS2Panel** | [sink3x/cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | yes | `!menu` in-game menu, sounds, animals, map cleanup, `css_refreshskins`, team and player identity. Installed from the copy bundled with the panel |
+| **CS2Panel** | [sink3x/cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) | yes | `!menu` in-game menu, sounds, animals, map cleanup, `css_refreshskins`, team and player identity. Installed from the copy bundled with the panel |
 | MatchZy | shobhit-pathak/MatchZy | yes | Practice commands (`.prac`, `.bot`, `.spawn`, `.rethrow`, `.timer`, `.savenade`), scrims and pugs |
 | WeaponPaints | Nereziel/cs2-WeaponPaints | yes | Skins, knives, gloves, agents via `!ws` / `!skins`. **Against Valve's server rules, see below** |
 | ThirdPerson | KKNecmi/ThirdPerson-Revamped | yes | `!tp` third person view |
@@ -56,7 +56,7 @@ You use this at your own risk; the maintainers are not responsible for banned to
 
 ## CS2Panel in the game
 
-The first-party plugin ([source](https://github.com/sink3x/cs2-panel-plugin)):
+The first-party plugin ([source](https://github.com/sink3x/cs2-server-admin-plugin)):
 
 | Command | Permission | What |
 |---|---|---|
@@ -67,6 +67,6 @@ The first-party plugin ([source](https://github.com/sink3x/cs2-panel-plugin)):
 | `css_cleanup [grenades\|fire\|weapons\|decals\|all]` | `@css/cheats` | Clean the map |
 | `css_spawnanimal [chicken\|pig\|cow] [1-30] [target]`, `css_killanimals` | `@css/cheats` | Decorative animals in front of a living player (at most 60) |
 
-Built-in game sounds play at once; your own files need a Workshop addon on the clients. Full reference, file formats and build instructions: [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin).
+Built-in game sounds play at once; your own files need a Workshop addon on the clients. Full reference, file formats and build instructions: [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin).
 
 Team names, logos, flags, clan tags and nicknames are set on the **Teams & tags** page of the panel and applied by this plugin. What the game does not allow a server to change (the side icons at the bottom of the screen, the layout of the TAB scoreboard) stays as is, see the [FAQ](faq.md).

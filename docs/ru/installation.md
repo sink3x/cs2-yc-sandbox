@@ -21,8 +21,8 @@
 ## 2. Развёртывание
 
 ```bash
-git clone https://github.com/sink3x/cs2-yc-sandbox.git
-cd cs2-yc-sandbox
+git clone https://github.com/sink3x/cs2-server-admin-panel.git
+cd cs2-server-admin-panel
 
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 $EDITOR terraform/terraform.tfvars        # cloud_id, folder_id, ваш SteamID64 в cs2_admins

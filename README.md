@@ -1,13 +1,13 @@
 <div align="center">
 
-# cs2-yc-sandbox
+# cs2-server-admin-panel
 
 **A persistent Counter-Strike 2 practice server on Yandex Cloud with a web admin panel.**
 Pay only for the hours you play: the panel starts and stops the game VM for you.
 
-[![CI](https://github.com/sink3x/cs2-yc-sandbox/actions/workflows/ci.yml/badge.svg)](https://github.com/sink3x/cs2-yc-sandbox/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/sink3x/cs2-yc-sandbox/actions/workflows/codeql.yml/badge.svg)](https://github.com/sink3x/cs2-yc-sandbox/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/sink3x/cs2-yc-sandbox)](https://github.com/sink3x/cs2-yc-sandbox/releases)
+[![CI](https://github.com/sink3x/cs2-server-admin-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/sink3x/cs2-server-admin-panel/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/sink3x/cs2-server-admin-panel/actions/workflows/codeql.yml/badge.svg)](https://github.com/sink3x/cs2-server-admin-panel/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/sink3x/cs2-server-admin-panel)](https://github.com/sink3x/cs2-server-admin-panel/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 English · [Русский](README.ru.md)
@@ -16,7 +16,7 @@ English · [Русский](README.ru.md)
 
 </div>
 
-> **Try it in one minute, no cloud account needed:** `git clone https://github.com/sink3x/cs2-yc-sandbox && cd cs2-yc-sandbox && npm run demo`
+> **Try it in one minute, no cloud account needed:** `git clone https://github.com/sink3x/cs2-server-admin-panel && cd cs2-server-admin-panel && npm run demo`
 > opens the real panel on a mock game server at <http://127.0.0.1:8080> (`admin` / `demo-admin-pass`). Needs Node.js 18+.
 
 ## What you get
@@ -27,7 +27,7 @@ English · [Русский](README.ru.md)
   start / stop the VM, live status, RCON console, ~60 grouped cvars, game modes and map presets, map vote, 120+ Workshop maps with previews and tags,
   practice tools and callouts for 10 maps, skins / knives / gloves / agents, a sound player (also *on the server, for everybody at once*),
   per-player statistics and heatmaps, team names / logos / clan tags, plugin switches, backups and restore, audit log, auto-stop when nobody is online.
-- **An in-game menu** (`!menu`) from the bundled [CS2Panel plugin](https://github.com/sink3x/cs2-panel-plugin).
+- **An in-game menu** (`!menu`) from the bundled [CS2Panel plugin](https://github.com/sink3x/cs2-server-admin-plugin).
 - **Infrastructure as code** (OpenTofu / Terraform), a deterministic deploy bundle, optional continuous deployment from GitHub Actions.
 - **Zero npm dependencies on the servers.** The backend is plain Node.js; only the frontend build tooling uses npm.
 
@@ -41,7 +41,7 @@ English · [Русский](README.ru.md)
 1. **Look around** (no cloud needed): `npm run demo`, see above.
 2. **Deploy your own server** (about 20 minutes plus the first 60 GB game download):
    - open [Yandex Cloud Shell](https://shell.yandex.cloud/) (it has `yc` and Terraform),
-   - `git clone https://github.com/sink3x/cs2-yc-sandbox && cd cs2-yc-sandbox`,
+   - `git clone https://github.com/sink3x/cs2-server-admin-panel && cd cs2-server-admin-panel`,
    - put your cloud / folder ids and your SteamID64 into `terraform/terraform.tfvars` (start from `terraform.tfvars.example`),
    - `scripts/deploy.sh`.
 
@@ -66,9 +66,9 @@ English · [Русский](README.ru.md)
 
 | Repository | Purpose |
 |---|---|
-| **[cs2-yc-sandbox](https://github.com/sink3x/cs2-yc-sandbox)** (this one) | Infrastructure, admin panel, agent, deploy scripts |
-| [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | CounterStrikeSharp plugin: `!menu`, sounds, team names / logos / clan tags, animals, cleanup |
-| [cs2-callouts](https://github.com/sink3x/cs2-callouts) | Callout positions for 10 maps (ru / en / de / fr), the data behind the panel's Callouts page |
+| **[cs2-server-admin-panel](https://github.com/sink3x/cs2-server-admin-panel)** (this one) | Infrastructure, admin panel, agent, deploy scripts |
+| [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) | CounterStrikeSharp plugin: `!menu`, sounds, team names / logos / clan tags, animals, cleanup |
+| [cs2-server-admin-callouts](https://github.com/sink3x/cs2-server-admin-callouts) | Callout positions for 10 maps (ru / en / de / fr), the data behind the panel's Callouts page |
 
 The panel ships a copy of the CS2Panel plugin (`app/plugins-bundled/CS2Panel.zip`) and the callouts data (`app/lib/callouts.json`);
 they are updated from the other repositories' releases.

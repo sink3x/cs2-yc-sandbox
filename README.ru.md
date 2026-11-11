@@ -1,13 +1,13 @@
 <div align="center">
 
-# cs2-yc-sandbox
+# cs2-server-admin-panel
 
 **Постоянный сервер Counter-Strike 2 для тренировок в Yandex Cloud и веб-панель управления им.**
 Платите только за часы игры: панель сама включает и выключает игровую ВМ.
 
-[![CI](https://github.com/sink3x/cs2-yc-sandbox/actions/workflows/ci.yml/badge.svg)](https://github.com/sink3x/cs2-yc-sandbox/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/sink3x/cs2-yc-sandbox/actions/workflows/codeql.yml/badge.svg)](https://github.com/sink3x/cs2-yc-sandbox/actions/workflows/codeql.yml)
-[![Release](https://img.shields.io/github/v/release/sink3x/cs2-yc-sandbox)](https://github.com/sink3x/cs2-yc-sandbox/releases)
+[![CI](https://github.com/sink3x/cs2-server-admin-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/sink3x/cs2-server-admin-panel/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/sink3x/cs2-server-admin-panel/actions/workflows/codeql.yml/badge.svg)](https://github.com/sink3x/cs2-server-admin-panel/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/sink3x/cs2-server-admin-panel)](https://github.com/sink3x/cs2-server-admin-panel/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [English](README.md) · Русский
@@ -16,7 +16,7 @@
 
 </div>
 
-> **Попробовать за минуту, без облака:** `git clone https://github.com/sink3x/cs2-yc-sandbox && cd cs2-yc-sandbox && npm run demo`
+> **Попробовать за минуту, без облака:** `git clone https://github.com/sink3x/cs2-server-admin-panel && cd cs2-server-admin-panel && npm run demo`
 > откроет настоящую панель с имитацией игрового сервера: <http://127.0.0.1:8080> (`admin` / `demo-admin-pass`). Нужен Node.js 18+.
 
 ## Что внутри
@@ -28,7 +28,7 @@
   больше 120 карт Workshop с превью и тегами, тренировка и callouts для 10 карт, скины, ножи, перчатки, агенты, плеер звуков
   (в том числе *на сервере, сразу у всех игроков*), статистика игроков и тепловые карты, названия команд, логотипы и клан-теги,
   переключатели плагинов, бэкапы и восстановление, журнал действий, автовыключение, когда на сервере никого нет.
-- **Меню прямо в игре** (`!menu`) из плагина [CS2Panel](https://github.com/sink3x/cs2-panel-plugin).
+- **Меню прямо в игре** (`!menu`) из плагина [CS2Panel](https://github.com/sink3x/cs2-server-admin-plugin).
 - **Инфраструктура как код** (OpenTofu / Terraform), детерминированная сборка для деплоя, необязательный автодеплой из GitHub Actions.
 - **На серверах нет npm-зависимостей.** Бэкенд — чистый Node.js; npm нужен только для сборки фронтенда.
 
@@ -42,7 +42,7 @@
 1. **Посмотреть** (облако не нужно): `npm run demo`, см. выше.
 2. **Развернуть свой сервер** (около 20 минут и ещё время на первую загрузку игры, ~60 ГБ):
    - откройте [Yandex Cloud Shell](https://shell.yandex.cloud/) (в нём есть `yc` и Terraform),
-   - `git clone https://github.com/sink3x/cs2-yc-sandbox && cd cs2-yc-sandbox`,
+   - `git clone https://github.com/sink3x/cs2-server-admin-panel && cd cs2-server-admin-panel`,
    - впишите идентификаторы облака и каталога и свой SteamID64 в `terraform/terraform.tfvars` (за основу возьмите `terraform.tfvars.example`),
    - `scripts/deploy.sh`.
 
@@ -67,9 +67,9 @@
 
 | Репозиторий | Назначение |
 |---|---|
-| **[cs2-yc-sandbox](https://github.com/sink3x/cs2-yc-sandbox)** (этот) | Инфраструктура, админ-панель, агент, скрипты деплоя |
-| [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | Плагин CounterStrikeSharp: `!menu`, звуки, названия и логотипы команд, клан-теги, животные, очистка карты |
-| [cs2-callouts](https://github.com/sink3x/cs2-callouts) | Позиции callouts для 10 карт (ru / en / de / fr): данные для страницы «Callouts» |
+| **[cs2-server-admin-panel](https://github.com/sink3x/cs2-server-admin-panel)** (этот) | Инфраструктура, админ-панель, агент, скрипты деплоя |
+| [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) | Плагин CounterStrikeSharp: `!menu`, звуки, названия и логотипы команд, клан-теги, животные, очистка карты |
+| [cs2-server-admin-callouts](https://github.com/sink3x/cs2-server-admin-callouts) | Позиции callouts для 10 карт (ru / en / de / fr): данные для страницы «Callouts» |
 
 Панель содержит копию плагина CS2Panel (`app/plugins-bundled/CS2Panel.zip`) и данные callouts (`app/lib/callouts.json`);
 они обновляются из релизов соседних репозиториев.

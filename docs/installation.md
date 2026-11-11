@@ -21,8 +21,8 @@ Costs depend on the current Yandex Cloud price list, so check it before you star
 ## 2. Deploy
 
 ```bash
-git clone https://github.com/sink3x/cs2-yc-sandbox.git
-cd cs2-yc-sandbox
+git clone https://github.com/sink3x/cs2-server-admin-panel.git
+cd cs2-server-admin-panel
 
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 $EDITOR terraform/terraform.tfvars        # cloud_id, folder_id, your SteamID64 in cs2_admins

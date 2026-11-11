@@ -17,9 +17,9 @@ This repository is [MIT](LICENSE) licensed. It does **not** contain the software
 
 | Item | Source | License |
 |---|---|---|
-| Callout positions and place names (`app/lib/callouts.json`) | [cs2-callouts](https://github.com/sink3x/cs2-callouts), from navigation data processed with [awpy](https://github.com/pnxenopoulos/awpy) | MIT |
+| Callout positions and place names (`app/lib/callouts.json`) | [cs2-server-admin-callouts](https://github.com/sink3x/cs2-server-admin-callouts), from navigation data processed with [awpy](https://github.com/pnxenopoulos/awpy) | MIT |
 | **Map radar images** (`app/admin/public/callouts/*.webp`) | [Boltobserv](https://github.com/boltgolt/boltobserv) `src/maps/<map>/radar.png`, resized, transparent background filled with the panel's dark colour; Ancient and Anubis from Lexogrine | GPL-3.0 as distributed by Boltobserv (Ancient and Anubis: MIT). **The underlying artwork is Valve's**; see `app/admin/public/callouts/NOTICE.md`. To remove them, delete the directory; the Callouts page then shows an error for the missing images |
-| CS2Panel plugin build (`app/plugins-bundled/CS2Panel.zip`) | [cs2-panel-plugin](https://github.com/sink3x/cs2-panel-plugin) | MIT |
+| CS2Panel plugin build (`app/plugins-bundled/CS2Panel.zip`) | [cs2-server-admin-plugin](https://github.com/sink3x/cs2-server-admin-plugin) | MIT |
 | Preact (frontend build dependency) | preactjs/preact | MIT |
 | Vite, TypeScript, esbuild (build tools) | their projects | MIT / Apache-2.0 |
 | Map names and place names | Valve | Names only |

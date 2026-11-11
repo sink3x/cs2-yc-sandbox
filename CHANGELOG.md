@@ -4,6 +4,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+- Repository renamed from `cs2-yc-sandbox` (old GitHub URLs redirect).
+
 ## [1.0.0] - 2026-11-10
 
 First public release.

@@ -96,7 +96,7 @@
     "id": "cs2panel",
     "title": "CS2Panel (звуки из панели)",
     "desc": "Команды css_playsound (звуки из панели), css_spawnanimal / css_killanimals (животные), css_refreshskins (скины сразу) и меню !menu в чате. Ставится из бандла панели. Свои файлы звука игрокам нужен Workshop-аддон; встроенные звуки игры играют сразу",
-    "repo": "sink3x/cs2-panel-plugin",
+    "repo": "sink3x/cs2-server-admin-plugin",
     "asset": "^CS2Panel\\.zip$",
     "dirs": [
       "CS2Panel"

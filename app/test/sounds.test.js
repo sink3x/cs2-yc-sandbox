@@ -31,7 +31,7 @@ test('состояние: библиотека звуков валидирует
 
 test('плагин cs2panel есть в реестре и включён по умолчанию', () => {
   const p = S.registry.find((x) => x.id === 'cs2panel');
-  assert.ok(p && p.default && p.repo === 'sink3x/cs2-panel-plugin' && new RegExp(p.asset).test('CS2Panel.zip'));
+  assert.ok(p && p.default && p.repo === 'sink3x/cs2-server-admin-plugin' && new RegExp(p.asset).test('CS2Panel.zip'));
   assert.equal(S.defaultState().plugins.cs2panel, true);
 });
 

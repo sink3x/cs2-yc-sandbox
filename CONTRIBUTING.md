@@ -5,7 +5,7 @@ Thanks for helping! Issues, ideas, translations, docs and code are all welcome. 
 ## Quick start
 
 ```bash
-git clone https://github.com/sink3x/cs2-yc-sandbox.git && cd cs2-yc-sandbox
+git clone https://github.com/sink3x/cs2-server-admin-panel.git && cd cs2-server-admin-panel
 npm test          # no dependencies to install
 npm run demo      # real panel + mock game server on http://127.0.0.1:8080
 ```
